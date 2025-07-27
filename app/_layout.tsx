@@ -1,36 +1,42 @@
+// _layout.tsx
+
 import React, { useState, useEffect } from 'react';
-import { Slot } from 'expo-router';
+import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuthContext } from '../context/AuthContext';
 import AnimatedSplash from '../app/AnimatedSplash';
-import { View, ActivityIndicator } from 'react-native';
-import { useRouter } from 'expo-router';
-
+import { View, ActivityIndicator, Text } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-
-// Gesture Handler
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
-// Kreiraj QueryClient
 const queryClient = new QueryClient();
 
-function AppContent() {
+function AuthNavigator() {
   const { user, loading } = useAuthContext();
+  const segments = useSegments();
   const router = useRouter();
 
-  useEffect(() => {
-    if (!loading) {
-      if (user) {
-        router.replace('/home'); // ili '/profile'
-      } else {
-        router.replace('/login');
-      }
-    }
-  }, [user, loading, router]);
+  const currentSegment = segments[0];
+  const inAuthGroup = currentSegment === '(auth)' || currentSegment === 'login' || currentSegment === 'signup' || currentSegment === 'forgot-password' || currentSegment === 'resetPassword';
 
-  if (loading) {
+  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+
+  useEffect(() => {
+    if (loading) return;
+
+    if (!user && !inAuthGroup) {
+      router.replace('/login');
+    } else if (user && inAuthGroup) {
+      router.replace('/home');
+    }
+
+    setInitialCheckComplete(true);
+  }, [user, loading]);
+
+  if (loading || !initialCheckComplete) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#ff7f00" />
+        <Text style={{ marginTop: 10, color: '#666' }}>Učitavanje aplikacije...</Text>
       </View>
     );
   }
@@ -54,7 +60,7 @@ export default function Layout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <QueryClientProvider client={queryClient}>
         <AuthProvider>
-          <AppContent />
+          <AuthNavigator />
         </AuthProvider>
       </QueryClientProvider>
     </GestureHandlerRootView>

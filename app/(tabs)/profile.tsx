@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { useRouter } from 'expo-router';
-import { useAuthContext } from '@/context/AuthContext';
+import { useAuthContext } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -36,43 +36,76 @@ export default function ProfileScreen() {
     avatar?: string | null;
     profilePictures?: string[];
   }>(null);
-  const [loading, setLoading] = useState(false);
-  const { user } = useAuthContext();
+  const [internalLoading, setInternalLoading] = useState(false);
+  const { user, updateUser, logout, loading: authContextLoading } = useAuthContext();
   const router = useRouter();
 
-  useEffect(() => {
-    if (user?.token) {
-      fetchProfile();
+  // Koristimo useCallback da stabilizujemo fetchProfile funkciju
+  const fetchProfile = useCallback(async () => {
+    if (internalLoading || !user?.token) {
+      return;
     }
-  }, [user]);
 
-  const fetchProfile = async () => {
-    setLoading(true);
+    setInternalLoading(true);
     try {
       const response = await axios.get(`${API_BASE_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${user?.token}` },
       });
-      setProfile(response.data);
+      const fetchedProfileData = response.data;
+      setProfile(fetchedProfileData);
+      updateUser(fetchedProfileData);
     } catch (error) {
       console.error('Greška pri dohvaćanju profila:', error);
       Alert.alert('Greška', 'Nije moguće učitati profil.');
     } finally {
-      setLoading(false);
+      setInternalLoading(false);
     }
-  };
+  }, [user, internalLoading, updateUser]);
 
-  if (loading) {
+  // useEffect za inicijalno učitavanje ili kada se korisnik promeni
+  useEffect(() => {
+    // 1. Čekaj dok AuthContext ne završi učitavanje (loading je false).
+    if (authContextLoading) {
+      return;
+    }
+
+    // 2. Ako korisnik postoji, i profil još nije učitan, dohvati ga.
+    // Proveravamo !profile da se ne bi ponavljalo
+    if (user?.token && !profile) {
+      fetchProfile();
+    }
+  }, [authContextLoading, user, profile, fetchProfile]);
+
+  // --- RENDERING LOGIKA ---
+
+  // Prikazuj globalni loading spinner dok AuthContext učitava
+  if (authContextLoading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ color: '#555', marginTop: 10 }}>Učitavanje aplikacije...</Text>
       </View>
     );
   }
 
+  // Nakon što je AuthContext učitan, prikaži interni loading spinner dok se dohvaća profil
+  if (internalLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3B82F6" />
+        <Text style={{ color: '#555', marginTop: 10 }}>Učitavanje profila...</Text>
+      </View>
+    );
+  }
+
+  // Ako nema profila nakon učitavanja, znači da nešto nije uspelo
   if (!profile) {
     return (
       <View style={styles.loadingContainer}>
-        <Text style={{ color: '#555' }}>Profil nije učitan.</Text>
+        <Text style={{ color: '#555' }}>Profil nije učitan ili još uvek nije dostupan.</Text>
+        <TouchableOpacity style={{ marginTop: 20, padding: 10, backgroundColor: '#eee', borderRadius: 5 }} onPress={fetchProfile}>
+          <Text>Pokušaj ponovo</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -81,7 +114,7 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-
+      {/* Ostatak tvog render koda je isti */}
       <View style={styles.topSection}>
         {profile.avatar ? (
           <Image source={{ uri: profile.avatar }} style={styles.avatar} />
@@ -92,7 +125,6 @@ export default function ProfileScreen() {
             </Text>
           </View>
         )}
-
         <View style={styles.nameAgeContainer}>
           <Text style={styles.name}>
             {profile.fullName}{age !== null ? `, ${age}` : ''}
@@ -125,7 +157,7 @@ export default function ProfileScreen() {
         style={styles.logoutButton}
         onPress={async () => {
           try {
-            await (await import('@/context/AuthContext')).useAuthContext().logout();
+            await logout();
             router.replace('/login');
           } catch (e) {
             Alert.alert('Greška', 'Logout nije uspeo.');
@@ -134,11 +166,11 @@ export default function ProfileScreen() {
       >
         <Text style={styles.logoutButtonText}>Odjavi se</Text>
       </TouchableOpacity>
-
     </ScrollView>
   );
 }
 
+// ... styles
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
@@ -198,7 +230,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     borderRadius: 30,
     marginBottom: 130,
-    alignItems: 'center',  
+    alignItems: 'center',
     shadowColor: '',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.4,
