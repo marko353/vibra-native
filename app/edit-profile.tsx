@@ -11,6 +11,7 @@ import {
   SafeAreaView,
   Dimensions,
 } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient'; // Pretpostavljam da je ovo već uvezeno i instalirano
 import * as ImagePicker from 'expo-image-picker';
 import { useAuthContext } from '../context/AuthContext';
 import { useRouter } from 'expo-router';
@@ -22,6 +23,30 @@ import Carousel from 'react-native-reanimated-carousel';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
+// Funkcija za izračunavanje godina
+const calculateAge = (birthDateString?: string | null): number | null => {
+  console.log('calculateAge: Input birthDateString:', birthDateString); // LOG 1
+  if (!birthDateString) {
+    console.log('calculateAge: birthDateString is null or undefined, returning null.'); // LOG 2
+    return null;
+  }
+  const birthDate = new Date(birthDateString);
+  console.log('calculateAge: Parsed birthDate object:', birthDate); // LOG 3
+  if (isNaN(birthDate.getTime())) {
+    console.log('calculateAge: Parsed birthDate is Invalid Date (NaN), returning null.'); // LOG 4
+    return null;
+  }
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  console.log('calculateAge: Calculated age:', age); // LOG 5
+  return age;
+};
+
+// Funkcija za kompresiju niza slika (uklanja null vrednosti i dopunjava ih)
 function compressImagesArray(images: (string | null)[]) {
   const filtered = images.filter((img) => img !== null);
   const nullsCount = images.length - filtered.length;
@@ -36,6 +61,13 @@ export default function EditProfileScreen() {
   const queryClient = useQueryClient();
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
+
+  // Izračunaj godine korisnika na osnovu podataka iz AuthContext-a
+  const userAge = calculateAge(user?.birthDate);
+
+  console.log('EditProfileScreen: User object from context:', user); // LOG 6
+  console.log('EditProfileScreen: User birthDate from context:', user?.birthDate); // LOG 7
+  console.log('EditProfileScreen: Calculated userAge:', userAge); // LOG 8
 
   const { data: images = Array(9).fill(null), isLoading } = useQuery({
     queryKey: ['userProfilePhotos', user?.id],
@@ -156,7 +188,7 @@ export default function EditProfileScreen() {
               </TouchableOpacity>
             </>
           ) : (
-            <>
+            <View style={{ flex: 1, width: '100%', height: '100%', justifyContent: 'center', alignItems: 'center' }}>
               <View style={styles.placeholder}>
                 {isUploading ? (
                   <ActivityIndicator size="large" color="#FF4081" />
@@ -172,7 +204,7 @@ export default function EditProfileScreen() {
                   <Ionicons name="add-circle" size={35} color="#ff2f06" />
                 </TouchableOpacity>
               )}
-            </>
+            </View>
           )}
         </TouchableOpacity>
       );
@@ -191,8 +223,16 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.fixedHeader}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={28} color="#333" />
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => {
+            console.log('--- Back button pressed on EditProfileScreen ---');
+            console.log('Navigating explicitly to /tabs/profile');
+            // Zadržano na router.replace('./profile') po tvom zahtevu.
+            router.replace('./profile');
+          }}
+        >
+          <Ionicons name="arrow-back" size={28} color="#240909ff" />
         </TouchableOpacity>
 
         <View style={styles.headerContentContainer}>
@@ -246,19 +286,38 @@ export default function EditProfileScreen() {
           <View style={styles.carouselContainer}>
             <Carousel
               loop
-              width={windowWidth - 15}
+              width={windowWidth - 5}
               height={540}
               autoPlay={false}
               data={images.filter((img): img is string => img !== null)}
               renderItem={({ item }) => (
-                <Image
-                  source={{ uri: item }}
-                  style={{ width: '100%', height: '100%', borderRadius: 20 }}
-                />
+                <View style={styles.carouselItem}>
+                  <Image
+                    source={{ uri: item }}
+                    style={styles.carouselImage}
+                  />
+                  {/* Izmenjen LinearGradient za niže i diskretnije zatamnjenje */}
+                  <LinearGradient
+                    colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.6)']} // Prilagođene boje za blaži gradijent
+                    locations={[0.7, 0.9, 1.0]} // Prilagođene lokacije za niži gradijent (počinje niže)
+                    style={styles.gradientOverlay}
+                  />
+
+                  {/* Tekst sa imenom i godinama */}
+                  <View style={styles.overlayTextContainer}>
+                    <Text style={styles.overlayNameText}>
+                      {user?.fullName}
+                    </Text>
+                    {userAge !== null && (
+                      <Text style={styles.overlayAgeText}>
+                        , {userAge}
+                      </Text>
+                    )}
+                  </View>
+                </View>
               )}
               customConfig={() => ({ type: 'positive', setting: 'width' })}
               onProgressChange={(_, absoluteProgress) => {}}
-              // renderPagination je izbačen
             />
           </View>
         )}
@@ -273,8 +332,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   fixedHeader: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
+    paddingHorizontal: 40,
     backgroundColor: '#fff',
     zIndex: 1,
     elevation: 15,
@@ -291,7 +349,7 @@ const styles = StyleSheet.create({
   },
   backBtn: {
     position: 'absolute',
-    top: 40,
+    top: 33,
     left: 20,
     zIndex: 10,
   },
@@ -398,7 +456,49 @@ const styles = StyleSheet.create({
   carouselContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-  
+    top: -10,
+  },
+  carouselItem: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  carouselImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 20,
+    resizeMode: 'cover',
+  },
+  // Izmenjen stil za LinearGradient
+  gradientOverlay: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '100%', // Smanjena visina gradijenta, sada zauzima samo donjih 30% slike. Podesi po potrebi.
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  overlayTextContainer: {
+    position: 'absolute',
+    bottom: 20,
+    left: 20,
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    zIndex: 1,
+  },
+  overlayNameText: {
+    color: '#fff',
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  overlayAgeText: {
+    color: '#fff',
+    fontSize: 22,
+    fontWeight: '600',
+    marginLeft: 5,
   },
   paginationContainer: {
     flexDirection: 'row',

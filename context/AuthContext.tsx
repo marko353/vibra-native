@@ -9,7 +9,7 @@ export interface User {
   birthYear?: number;
   avatar?: string;
   profilePictures?: string[];
-  birthDate?: string;
+  birthDate?: string; // Omogući da bude opcionalan ako ga server ne šalje uvek
 }
 
 interface AuthContextType {
@@ -17,6 +17,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   loading: boolean;
   logout: () => Promise<void>;
+  updateUser: (newUserData: Partial<User>) => void; // Dodaj novu funkciju za ažuriranje
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,6 +47,7 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     const saveUser = async () => {
       try {
         if (user) {
+          // Važno: Sačuvaj kompletan user objekat, uključujući birthDate, ako postoji
           await AsyncStorage.setItem('currentUser', JSON.stringify(user));
         } else {
           await AsyncStorage.removeItem('currentUser');
@@ -63,8 +65,16 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     await AsyncStorage.removeItem('currentUser');
   };
 
+  // Nova funkcija za ažuriranje korisničkih podataka u kontekstu
+  const updateUser = (newUserData: Partial<User>) => {
+    setUser((prevUser) => {
+      if (!prevUser) return null; // Ako nema prethodnog korisnika, ne ažuriraj
+      return { ...prevUser, ...newUserData }; // Spoji stare i nove podatke
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, logout }}>
+    <AuthContext.Provider value={{ user, setUser, loading, logout, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
