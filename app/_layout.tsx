@@ -7,6 +7,7 @@ import AnimatedSplash from '../app/AnimatedSplash';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useMemo } from 'react';
 
 const queryClient = new QueryClient();
 
@@ -16,7 +17,10 @@ function AuthNavigator() {
   const router = useRouter();
 
   const currentSegment = segments[0];
-  const inAuthGroup = currentSegment === '(auth)' || currentSegment === 'login' || currentSegment === 'signup' || currentSegment === 'forgot-password' || currentSegment === 'resetPassword';
+const inAuthGroup = useMemo(() => {
+  const currentSegment = segments[0];
+  return ['(auth)', 'login', 'signup', 'forgot-password', 'resetPassword'].includes(currentSegment as string);
+}, [segments]);
 
   const [initialCheckComplete, setInitialCheckComplete] = useState(false);
 
@@ -24,7 +28,7 @@ function AuthNavigator() {
     if (loading) return;
 
     if (!user && !inAuthGroup) {
-      router.replace('/login');
+      router.replace('../login');
     } else if (user && inAuthGroup) {
       router.replace('/home');
     }
