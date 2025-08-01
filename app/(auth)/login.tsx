@@ -12,7 +12,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { AntDesign } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuthContext } from '../context/AuthContext';
+import { useAuthContext } from '../../context/AuthContext';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -112,7 +112,7 @@ export default function LoginScreen() {
     <View style={styles.container} accessible accessibilityLabel="Login screen">
       <View style={styles.topRight}>
         <TouchableOpacity 
-          onPress={() => router.push('./signup')} 
+          onPress={() => router.push('../signup/birthday')} 
           accessible 
           accessibilityRole="button" 
           accessibilityLabel="Go to Sign Up"

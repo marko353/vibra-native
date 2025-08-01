@@ -43,7 +43,7 @@ export default function ResetPasswordScreen() {
       Alert.alert(
         'Success!',
         'Your password has been changed.',
-        [{ text: 'OK', onPress: () => router.replace('/login') }],
+        [{ text: 'OK', onPress: () => router.replace('../login') }],
         { cancelable: false }
       );
     } catch (error: any) {

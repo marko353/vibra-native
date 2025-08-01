@@ -73,7 +73,7 @@ export default function CreateAccountScreen() {
       });
 
       Alert.alert('Success', 'Account created successfully!');
-      router.push('/login');
+      router.push('../login');
     } catch (error: any) {
       console.error('Registration error:', error);
       Alert.alert('Error', error.response?.data?.message || 'Registration failed');
