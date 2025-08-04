@@ -20,9 +20,15 @@ export default function JobScreen() {
 
   const handleSave = useCallback(() => {
     Keyboard.dismiss();
-    router.navigate({
-      pathname: '/profile/edit-profile', // Ispravna putanja nazad
-      params: { updatedJob: jobTitle || '' }, // Pošalji prazan string ako nema unosa
+    
+    // Ključna izmena: Koristi se `router.replace`
+    // Putanja mora biti relativna da bi se ispravno vratio unutar (tabs)
+    // Postoji problem sa rutama, 'edit-profile' nije unutar '/profile/'
+    // Već je verovatno 'edit-profile.tsx' u 'app/profile/' folderu, 
+    // pa je putanja samo '/profile/edit-profile'
+    router.replace({
+      pathname: '/profile/edit-profile', // Ažurirana putanja
+      params: { updatedJob: jobTitle || '' }, 
     });
   }, [jobTitle, router]);
 
@@ -46,7 +52,7 @@ export default function JobScreen() {
           placeholderTextColor="#888"
           value={jobTitle || ''}
           onChangeText={setJobTitle}
-          maxLength={50} // Ograničenje dužine
+          maxLength={50}
           returnKeyType="done"
           onSubmitEditing={handleSave}
         />

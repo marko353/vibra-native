@@ -1,20 +1,26 @@
-import React from 'react';
-import { View, StyleSheet, Image, Text, Dimensions, FlatList } from 'react-native'; // Dodao FlatList
-import Carousel from 'react-native-reanimated-carousel';
+import React, { useState } from 'react';
+import { View, StyleSheet, Image, Text, FlatList, Dimensions, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import Carousel from 'react-native-reanimated-carousel';
 
 const windowWidth = Dimensions.get('window').width;
-const windowHeight = Dimensions.get('window').height; // Dodao windowHeight da bi se Carousel pravilno skalirao
+const windowHeight = Dimensions.get('window').height;
+
+const COLORS = {
+  textPrimary: '#2c3e50',
+};
 
 interface ProfileCarouselProps {
   images: (string | null)[];
   fullName: string | undefined | null;
   age: number | null;
+  onShowSlider: () => void;
 }
 
-export default function ProfileCarousel({ images, fullName, age }: ProfileCarouselProps) {
+const ProfileCarousel: React.FC<ProfileCarouselProps> = ({ images, fullName, age, onShowSlider }) => {
   const filteredImages = images.filter((img): img is string => img !== null);
-  const [currentIndex, setCurrentIndex] = React.useState(0); // Stanje za praćenje trenutnog indeksa
+  const [currentIndex, setCurrentIndex] = useState(0);
 
   if (filteredImages.length === 0) {
     return (
@@ -32,13 +38,12 @@ export default function ProfileCarousel({ images, fullName, age }: ProfileCarous
           data={filteredImages}
           horizontal
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, index) => `indicator-${index}`}
-          renderItem={({ index }) => (
+          keyExtractor={(_, index: number) => `indicator-${index}`}
+          renderItem={({ index }: { item: string, index: number }) => (
             <View
               style={[
                 styles.indicator,
-                // Dinamička širina indikatora, prilagođava se broju slika
-                { width: (windowWidth - 40) / filteredImages.length - 6 }, // -40 za paddingContainer, -6 za marginHorizontal * 2
+                { width: (windowWidth - 40) / filteredImages.length - 6 },
                 index === currentIndex ? styles.activeIndicator : null,
               ]}
             />
@@ -48,12 +53,11 @@ export default function ProfileCarousel({ images, fullName, age }: ProfileCarous
 
       <Carousel
         loop
-        width={400} // Originalna širina karusela
-        height={595} // Originalna visina karusela
+        width={windowWidth}
+        height={windowHeight - 100}
         autoPlay={false}
         data={filteredImages}
         onProgressChange={(_, absoluteProgress) => {
-          // Ažurirajte trenutni indeks na osnovu progresije karusela
           setCurrentIndex(Math.round(absoluteProgress));
         }}
         renderItem={({ item }) => (
@@ -63,74 +67,66 @@ export default function ProfileCarousel({ images, fullName, age }: ProfileCarous
               style={styles.carouselImage}
             />
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,1)', 'rgba(0,0,0,0.9)']} // Vaše originalne boje gradijenta
+              colors={['transparent', 'rgba(0,0,0,1)', 'rgba(0,0,0,0.9)']}
               locations={[0.7, 0.9, 1.0]}
               style={styles.gradientOverlay}
             />
             <View style={styles.overlayTextContainer}>
               <Text style={styles.overlayNameText}>
                 {fullName}
+                {age !== null && <Text style={styles.overlayAgeText}>, {age}</Text>}
               </Text>
-              {age !== null && (
-                <Text style={styles.overlayAgeText}>
-                  , {age}
-                </Text>
-              )}
             </View>
           </View>
         )}
-        customConfig={() => ({ type: 'positive', setting: 'width' })}
       />
+
+      {/* Dugme sa strelicom */}
+      <TouchableOpacity style={styles.downArrowButton} onPress={onShowSlider}>
+        <Ionicons name="chevron-down-outline" size={30} color="#FFFFFF" />
+      </TouchableOpacity>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   carouselContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
   },
-  // Novi stilovi za indikatore
-paginationContainer: {
-  position: 'absolute',
-  top: windowHeight / 2 - 320,
-  left: 0,
-  right: 0,
-  zIndex: 10,
-  flexDirection: 'row',
-  justifyContent: 'center',
-  alignItems: 'center',
-  paddingHorizontal: 20,
-},
-indicator: {
-  height: 7,
-  backgroundColor: 'rgba(20, 19, 19, 0.5)', // Transparentna crna za neaktivne
-  marginHorizontal: 3,
-  borderRadius: 5,
-  // Dodajemo suptilnu ivicu za sve indikatore
-  borderWidth: 1, // Debljina ivice
-  borderColor: 'rgba(14, 13, 13, 0.3)', // Blago prozirna bela ivica
-},
-activeIndicator: {
-  backgroundColor: '#fff', // Bela boja za aktivni indikator
-  borderRadius: 5,
-  // Zatamnjena ivica za aktivni indikator da se istakne
-  borderWidth: 1, // Debljina ivice
-  borderColor: 'rgba(0, 0, 0, 1)', // Diskretna crna ivica
-},
-  // Originalni stilovi karusela
+  paginationContainer: {
+    position: 'absolute',
+    top: 50,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  indicator: {
+    height: 7,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    marginHorizontal: 3,
+    borderRadius: 5,
+  },
+  activeIndicator: {
+    backgroundColor: '#fff',
+  },
   carouselItem: {
     width: '100%',
     height: '100%',
-    borderRadius: 20, // Vraćeno na 20
+    borderRadius: 15,
     overflow: 'hidden',
     position: 'relative',
   },
   carouselImage: {
-    width: '100%', // Vraćeno na 100%
-    height: '100%', // Vraćeno na 100%
-    borderRadius: 20, // Vraćeno na 20
+    width: '100%',
+    height: '100%',
+    borderRadius: 10,
     resizeMode: 'cover',
   },
   gradientOverlay: {
@@ -138,13 +134,13 @@ activeIndicator: {
     left: 0,
     right: 0,
     bottom: 0,
-    height: '100%', // Vraćeno na 100%
-    borderBottomLeftRadius: 20, // Vraćeno na 20
-    borderBottomRightRadius: 20, // Vraćeno na 20
+    height: '100%',
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
   },
   overlayTextContainer: {
     position: 'absolute',
-    bottom: 20, // Vraćeno na 20
+    bottom: 20,
     left: 20,
     flexDirection: 'row',
     alignItems: 'baseline',
@@ -152,16 +148,14 @@ activeIndicator: {
   },
   overlayNameText: {
     color: '#fff',
-    fontSize: 28, // Vraćeno na 28
+    fontSize: 28,
     fontWeight: 'bold',
-    top: -40, // Vraćeno na -40
   },
   overlayAgeText: {
     color: '#fff',
-    fontSize: 22, // Vraćeno na 22
+    fontSize: 22,
     fontWeight: '600',
     marginLeft: 5,
-    top: -40, // Vraćeno na -40
   },
   noImagesContainer: {
     flex: 1,
@@ -174,4 +168,18 @@ activeIndicator: {
     color: '#888',
     textAlign: 'center',
   },
+  downArrowButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 25,
+    width: 50,
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
 });
+
+export default ProfileCarousel;
