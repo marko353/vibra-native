@@ -8,7 +8,6 @@ import {
   SafeAreaView,
   Platform,
   KeyboardAvoidingView,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -27,9 +26,7 @@ export default function EditBioScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  // ISPRAVKA: Explicitno proveravamo tip i konvertujemo u string ako je potrebno.
-  // params.currentBio može biti string, string[] ili undefined.
-  // TextInputu je potreban samo string.
+  // Inicijalizacija bio teksta
   let initialBio = '';
   if (Array.isArray(params.currentBio)) {
     initialBio = params.currentBio.join(' ');
@@ -39,10 +36,16 @@ export default function EditBioScreen() {
   const [bioText, setBioText] = useState(initialBio);
 
   const handleSave = () => {
-    // Slanje ažurirane biografije nazad na glavni ekran za uređivanje
+    console.log('🔸 Kliknuto dugme Sačuvaj');
+    console.log('✍️ Tekst biografije:', bioText);
+
     router.push({
       pathname: '/profile/edit-profile',
       params: { updatedBio: bioText },
+    });
+
+    console.log('📤 Poslato na /profile/edit-profile sa params:', {
+      updatedBio: bioText,
     });
   };
 
@@ -145,7 +148,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.cardBackground,
     borderRadius: 15,
     padding: 15,
-    minHeight: 200, // Veće polje za unos
+    minHeight: 200,
     borderWidth: 1,
     borderColor: COLORS.border,
     fontSize: 16,

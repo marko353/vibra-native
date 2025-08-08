@@ -1,7 +1,7 @@
 import { Tabs } from 'expo-router';
 import Header from '../../components/Header';
 import { Ionicons, MaterialIcons, FontAwesome5, Feather } from '@expo/vector-icons';
-import { Image } from 'react-native';
+import { Image, Text } from 'react-native';
 
 export default function TabsLayout() {
   return (
@@ -14,7 +14,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="home"
         options={{
-          title: 'Home',
+          tabBarLabel: ({ color }) => <Text style={{ color, fontSize: 10 }}>Home</Text>,
           tabBarIcon: ({ color, size, focused }) => (
             <Image
               source={require('../../assets/images/Page0.png')}
@@ -31,7 +31,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="explore"
         options={{
-          title: 'Explore',
+          tabBarLabel: ({ color }) => <Text style={{ color, fontSize: 10 }}>Explore</Text>,
           tabBarIcon: ({ color, size }) => (
             <Feather name="compass" size={size} color={color} />
           ),
@@ -40,7 +40,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="likes"
         options={{
-          title: 'Likes',
+          tabBarLabel: ({ color }) => <Text style={{ color, fontSize: 10 }}>Likes</Text>,
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="favorite-border" size={size} color={color} />
           ),
@@ -49,7 +49,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: 'Chat',
+          tabBarLabel: ({ color }) => <Text style={{ color, fontSize: 10 }}>Chat</Text>,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble-outline" size={size} color={color} />
           ),
@@ -58,7 +58,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="profile"
         options={{
-          title: 'Profile',
+          tabBarLabel: ({ color }) => <Text style={{ color, fontSize: 10 }}>Profile</Text>,
           tabBarIcon: ({ color, size }) => (
             <FontAwesome5 name="user-circle" size={size} color={color} />
           ),
