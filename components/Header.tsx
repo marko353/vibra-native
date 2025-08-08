@@ -6,37 +6,34 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 export default function Header() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
-      {/* LOGO */}
       <Image
         source={require('@/assets/images/1000006380.png')}
         style={styles.logo}
         resizeMode="contain"
         accessibilityLabel="Logo"
       />
-
-      {/* DESNA STRANA */}
       <View style={styles.buttons}>
         <TouchableOpacity
           onPress={() => console.log('Otvoren filter')}
           accessibilityLabel="Filter dugme"
+          style={styles.iconButton} // Dodat novi stil
         >
           <MaterialCommunityIcons
             name="tune-variant"
-            size={30}
-            color="black"
-            style={styles.filterIcon}
+            size={28} // Malo manja ikona
+            color="#E91E63" // Boja koja se uklapa sa ostalim elementima (primary color)
           />
         </TouchableOpacity>
 
         <TouchableOpacity
           onPress={() => console.log('Otvorena pogodnost')}
           accessibilityLabel="Pogodnost dugme"
+          style={styles.iconButton} // Dodat novi stil
         >
           <MaterialCommunityIcons
             name="star-four-points"
-            size={30}
-            
-            style={styles.icon}
+            size={28} // Malo manja ikona
+            color="#E91E63" // Primary color
           />
         </TouchableOpacity>
       </View>
@@ -46,9 +43,9 @@ export default function Header() {
 
 const styles = StyleSheet.create({
   container: {
-    height: 110,
+    height: 100, // Malo manja visina
     backgroundColor: '#fff',
-    paddingHorizontal: 14,
+    paddingHorizontal: 20, // Povećan razmak sa strane
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -56,25 +53,19 @@ const styles = StyleSheet.create({
     shadowColor: '#000',
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    paddingTop: 10,  // dodatni spacing unutar safe area
+    shadowOffset: { width: 0, height: 2 },
   },
   logo: {
-    width: 130,
-    height: 130,
-    left: -10,
-    
+    width: 100, // Manji logo
+    height: 100,
   },
   buttons: {
     flexDirection: 'row',
     alignItems: 'center',
+    width: 'auto',
   },
- 
-  filterIcon: {
-    marginBottom: -20,
-    right: 70,
+  iconButton: {
+    padding: 8, // Dodat padding oko dugmeta za lakše pritiskanje
+    marginLeft: 10, // Razmak između ikona
   },
-  icon: {
-    marginLeft: -35,
-    marginBottom: -19,
-  }
 });

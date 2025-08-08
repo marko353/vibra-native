@@ -11,14 +11,26 @@ const COLORS = {
   textPrimary: '#2c3e50',
 };
 
+// Ažuriran interfejs sa novim propovima
 interface ProfileCarouselProps {
   images: (string | null)[];
   fullName: string | undefined | null;
   age: number | null;
   onShowSlider: () => void;
+  // NOVI PROPOVI ZA LOKACIJU
+  locationCity: string | null;
+  showLocation: boolean;
 }
 
-const ProfileCarousel: React.FC<ProfileCarouselProps> = ({ images, fullName, age, onShowSlider }) => {
+const ProfileCarousel: React.FC<ProfileCarouselProps> = ({ 
+  images, 
+  fullName, 
+  age, 
+  onShowSlider,
+  // Dodavanje novih propova
+  locationCity,
+  showLocation,
+}) => {
   const filteredImages = images.filter((img): img is string => img !== null);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -76,6 +88,14 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({ images, fullName, age
                 {fullName}
                 {age !== null && <Text style={styles.overlayAgeText}>, {age}</Text>}
               </Text>
+
+              {/* Uslovno renderovanje lokacije */}
+              {showLocation && locationCity && (
+                <View style={styles.locationContainer}>
+                  <Ionicons name="location-sharp" size={18} color="#fff" style={{ marginRight: 5 }} />
+                  <Text style={styles.locationText}>{locationCity}</Text>
+                </View>
+              )}
             </View>
           </View>
         )}
@@ -142,8 +162,6 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 20,
     left: 20,
-    flexDirection: 'row',
-    alignItems: 'baseline',
     zIndex: 1,
   },
   overlayNameText: {
@@ -156,6 +174,17 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '600',
     marginLeft: 5,
+  },
+  // NOVI STILOVI ZA LOKACIJU
+  locationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  locationText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
   noImagesContainer: {
     flex: 1,

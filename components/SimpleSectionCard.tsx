@@ -1,6 +1,13 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+const COLORS = {
+  textPrimary: '#2c3e50',
+  textSecondary: '#7f8c8d',
+  cardBackground: '#ffffff',
+  border: '#dddddd',
+};
 
 type IconNames = keyof typeof Ionicons.glyphMap;
 
@@ -11,17 +18,9 @@ interface SimpleSectionCardProps {
   value?: string | null | number | string[];
   onPress?: () => void;
   mode: 'edit' | 'view';
-  isLocationToggle?: boolean; // Novi prop za lokaciju
-  isToggleEnabled?: boolean; // Prop za status (On/Off)
 }
 
-const COLORS = {
-  primary: '#E91E63',
-  textPrimary: '#2c3e50',
-  textSecondary: '#7f8c8d',
-};
-
-const SimpleSectionCard: React.FC<SimpleSectionCardProps> = ({ iconName, iconColor, title, value, onPress, mode, isLocationToggle = false, isToggleEnabled = false }) => {
+const SimpleSectionCard: React.FC<SimpleSectionCardProps> = ({ iconName, iconColor, title, value, onPress, mode }) => {
   const CardContent = (
     <View style={styles.infoCard}>
       <View style={styles.subSectionContent}>
@@ -30,26 +29,15 @@ const SimpleSectionCard: React.FC<SimpleSectionCardProps> = ({ iconName, iconCol
           <Text style={styles.subSectionItemText}>{title}</Text>
         </View>
         <View style={styles.subSectionRight}>
-          {isLocationToggle ? (
-            // [IZMENA]: Prikazujemo "On" ili "Off" umesto Switch komponente
-            <Text style={[styles.subSectionValueText, isToggleEnabled ? styles.onText : styles.offText]}>
-              {isToggleEnabled ? 'On' : 'Off'}
-            </Text>
-          ) : (
-            // [IZMENA]: Standardni prikaz za ostale kartice
-            <>
-              <Text style={styles.subSectionValueText}>
-                {Array.isArray(value) ? (value.length > 0 ? value.join(', ') : "Dodaj") : (value ? (typeof value === 'number' ? `${value} cm` : value) : "Dodaj")}
-              </Text>
-              {mode === 'edit' && <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />}
-            </>
-          )}
+          <Text style={styles.subSectionValueText}>
+            {Array.isArray(value) ? (value.length > 0 ? value.join(', ') : "Dodaj") : (value ? (typeof value === 'number' ? `${value} cm` : value) : "Dodaj")}
+          </Text>
+          {mode === 'edit' && <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} style={styles.chevronIcon} />}
         </View>
       </View>
     </View>
   );
 
-  // [IZMENA]: Sve kartice se mogu kliknuti, čak i one sa toggle logikom
   return (
     <TouchableOpacity onPress={onPress} style={styles.sectionCard}>
       {CardContent}
@@ -62,7 +50,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   infoCard: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.cardBackground,
     borderRadius: 15,
     paddingVertical: 20,
     paddingHorizontal: 20,
@@ -100,13 +88,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: COLORS.textSecondary,
     marginRight: 5,
-  },
-  onText: {
-    color: COLORS.primary, // Crvena boja za "On"
-    fontWeight: 'bold',
-  },
-  offText: {
-    color: COLORS.textSecondary, // Siva boja za "Off"
   },
   chevronIcon: {
     marginLeft: 5,

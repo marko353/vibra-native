@@ -13,7 +13,7 @@ import axios from 'axios';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useQuery, useQueryClient } from '@tanstack/react-query'; // Dodato useQuery
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -31,26 +31,33 @@ const calculateAge = (birthDateString?: string | null): number | null => {
 };
 
 export default function ProfileScreen() {
-  console.log('PROFILE SCREEN IS LOADING');
   const { user, logout, loading: authContextLoading } = useAuthContext();
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  // Koristimo useQuery umesto useState i useEffect
   const { data: profile, isLoading: isProfileLoading, isError } = useQuery({
     queryKey: ['userProfile', user?.id],
     queryFn: async () => {
-      if (!user?.token) return null;
-      const response = await axios.get(`${API_BASE_URL}/api/user/profile`, {
-        headers: { Authorization: `Bearer ${user?.token}` },
-      });
-      return response.data;
+      // [IZMENA 1]: Dodatna provera da token postoji pre slanja zahteva
+      if (!user?.token) {
+        console.error("Token nije dostupan. Preskačem dohvat korisničkih podataka.");
+        return null;
+      }
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/user/profile`, {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        });
+        return response.data;
+      } catch (error) {
+        console.error('Greška pri preuzimanju profila:', error);
+        throw error;
+      }
     },
     enabled: !!user?.token,
+    retry: 1, // Pokušaj ponovo jednom u slučaju greške
   });
 
-  // Prefetch-ovanje podataka za EditProfileScreen
-  // Učitavamo ih u pozadini dok je korisnik na ovoj strani
+  // [IZMENA 2]: Učitavanje podataka za sledeću stranicu u pozadini
   useFocusEffect(
     useCallback(() => {
       if (user?.id && user?.token) {
@@ -83,8 +90,6 @@ export default function ProfileScreen() {
       }
     }, [user, queryClient])
   );
-
-  // --- RENDERING LOGIKA ---
 
   if (authContextLoading || isProfileLoading) {
     return (
@@ -135,10 +140,6 @@ export default function ProfileScreen() {
         <Icon name="edit" size={20} color="#fff" style={{ marginRight: 8 }} />
         <Text style={styles.editButtonText}>Izmeni profil</Text>
       </TouchableOpacity>
-
-      <Text style={styles.galleryTitle}>Galerija</Text>
-      
-
     </ScrollView>
   );
 }

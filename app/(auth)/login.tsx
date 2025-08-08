@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator 
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -41,12 +41,11 @@ export default function LoginScreen() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    mode: 'onSubmit', // greške se prikazuju samo nakon submit-a
+    mode: 'onSubmit', 
   });
 
   const [request, response, promptAsync] = Google.useAuthRequest({
     androidClientId: '919552449039-9omu51tjlp421po9hjrncsebpe9dulp1.apps.googleusercontent.com',
-    // Dodaj i iosClientId ili webClientId ako treba
   });
 
   useEffect(() => {
@@ -66,11 +65,12 @@ export default function LoginScreen() {
             token: res.data.token,
           };
           setUser(userData);
-          // Čuvaj user i token u AsyncStorage
           await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
           await AsyncStorage.setItem('token', userData.token);
           Toast.show({ type: 'success', text1: 'Logged in with Google' });
-          router.replace('/profile');
+          
+          // ISPRAVLJENA LINIJA: Navigacija na (tabs)
+          router.replace('/(tabs)/profile'); 
         })
         .catch((err) => {
           console.error('Google login failed:', err);
@@ -95,11 +95,12 @@ export default function LoginScreen() {
         token: res.data.token,
       };
       setUser(userData);
-      // Čuvaj user i token u AsyncStorage
       await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
       await AsyncStorage.setItem('token', userData.token);
       Toast.show({ type: 'success', text1: 'Login successful' });
-      router.replace('/home');
+      
+      // ISPRAVLJENA LINIJA: Navigacija na (tabs)
+      router.replace('/(tabs)/home'); 
     } catch (error: any) {
       console.error('Login error:', error);
       setApiError(error?.response?.data?.message || 'Invalid email or password');
@@ -142,8 +143,8 @@ export default function LoginScreen() {
               accessibilityLabel="Email input"
               placeholderTextColor="#888"
               selectionColor="#4c8bf5"
-              textContentType="username"  // za autofill
-              autoComplete="email"        // za autofill
+              textContentType="username" 
+              autoComplete="email" 
             />
             {submitAttempted && errors.email && <Text style={styles.error}>{errors.email.message}</Text>}
           </>
@@ -168,8 +169,8 @@ export default function LoginScreen() {
               accessibilityLabel="Password input"
               placeholderTextColor="#888"
               selectionColor="#4c8bf5"
-              textContentType="password"  // za autofill
-              autoComplete="password"     // za autofill
+              textContentType="password" 
+              autoComplete="password" 
             />
             {submitAttempted && errors.password && <Text style={styles.error}>{errors.password.message}</Text>}
           </>
@@ -235,7 +236,7 @@ const styles = StyleSheet.create({
     right: 20,
   },
   signUpText: {
-    color: '#ff7f00',  // narandžasta
+    color: '#ff7f00', 
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -259,7 +260,7 @@ const styles = StyleSheet.create({
     color: '#222',
   },
   inputError: {
-    borderColor: '#d00', // crvena
+    borderColor: '#d00', 
   },
   button: {
     backgroundColor: '#ff7f00', 
@@ -296,14 +297,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   error: {
-    color: '#d00', // crvena
+    color: '#d00', 
     marginBottom: 8,
     alignSelf: 'flex-start',
     fontWeight: '600',
   },
   forgotPassword: {
     marginTop: 22,
-    color: '#ffcc00', // žuta
+    color: '#ffcc00', 
     fontWeight: '700',
     fontSize: 15,
     textDecorationLine: 'underline',
