@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuthContext } from '../context/AuthContext';
-import { ProfileProvider } from '../context/ProfileContext';
+import  {ProfileProvider } from '../context/ProfileContext'; // ✨ Dodao sam ovu liniju
 import AnimatedSplash from '../app/AnimatedSplash';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';

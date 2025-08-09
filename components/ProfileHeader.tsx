@@ -1,14 +1,12 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, Platform } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 
-// Opcionalno: Možeš prebaciti ove boje u poseban fajl i uvoziti ih
 const COLORS = {
   primary: '#E91E63',
-  textPrimary: '#2c3e50',
-  textSecondary: '#7f8c8d',
-  cardBackground: '#ffffff',
-  border: '#dddddd',
+  white: '#FFFFFF',
+  black: '#000000',
 };
 
 interface ProfileHeaderProps {
@@ -27,97 +25,89 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onToggleView
 }) => {
   return (
-    <View style={styles.fixedHeader}>
-      <TouchableOpacity
-        style={styles.backBtn}
-        onPress={onPressBack}
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar barStyle="light-content" />
+      <LinearGradient
+        colors={['rgba(0,0,0,0.6)', 'transparent']}
+        style={styles.gradientOverlay}
       >
-        <Ionicons name="arrow-back" size={28} color={COLORS.primary} />
-      </TouchableOpacity>
-
-      <View style={styles.headerContentContainer}>
-        <Text style={styles.title}>{title}</Text>
-        
-        {mode && onToggleEdit && onToggleView && (
-          <View style={styles.toggleButtons}>
-            <TouchableOpacity onPress={onToggleEdit} style={styles.toggleBtn}>
-              <Text style={[styles.toggleText, mode === 'edit' && styles.activeToggleText]}>
-                Uredi
-              </Text>
-            </TouchableOpacity>
-            <View style={styles.separator} />
-            {/* Ovde je bila greska: dodata je zatvarajuca tag za TouchableOpacity */}
-            <TouchableOpacity onPress={onToggleView} style={styles.toggleBtn}>
-              <Text style={[styles.toggleText, mode === 'view' && styles.activeToggleText]}>
-                Pregled
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </View>
-    </View>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.iconBtn} onPress={onPressBack}>
+            <Ionicons name="arrow-back" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+          
+          {/* AŽURIRANI USLOV: Prikazuje tastere samo kada je mode 'edit'. */}
+          {mode === 'edit' && onToggleEdit && onToggleView && (
+            <View style={styles.toggleButtonsContainer}>
+              <TouchableOpacity
+                onPress={onToggleEdit}
+                style={[styles.toggleBtn, mode === 'edit' && styles.activeToggleBtn]}
+              >
+                <Text style={[styles.toggleText, mode === 'edit' && styles.activeToggleText]}>
+                  Uredi
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={onToggleView}
+                style={[styles.toggleBtn]}
+              >
+                <Text style={[styles.toggleText]}>
+                  Pregled
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </LinearGradient>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  fixedHeader: {
-    backgroundColor: COLORS.cardBackground,
-    paddingTop: Platform.OS === 'android' ? 10 : 50,
-    paddingBottom: 10,
-    paddingHorizontal: 20,
-    zIndex: 1,
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  headerContentContainer: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  backBtn: {
-    paddingVertical: 10,
+  safeArea: {
     position: 'absolute',
-    left: 20,
-    top: Platform.OS === 'android' ? 10 : 50,
-    zIndex: 2,
+    top: 24,
+    left: 0,
+    right: 0,
+    zIndex: 10,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-    marginBottom: 5,
+  gradientOverlay: {
+    height: 100,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
   },
-  toggleButtons: {
+  header: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
+    height: 60,
+  },
+  iconBtn: {
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 20,
+  },
+  toggleButtonsContainer: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 20,
+    padding: 4,
   },
   toggleBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 20,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+  },
+  activeToggleBtn: {
+    backgroundColor: COLORS.white,
   },
   toggleText: {
-    fontSize: 18,
-    color: COLORS.textSecondary,
+    fontSize: 16,
     fontWeight: '700',
+    color: COLORS.white,
   },
   activeToggleText: {
     color: COLORS.primary,
-    borderBottomWidth: 3,
-    borderBottomColor: COLORS.primary,
-  },
-  separator: {
-    height: 20,
-    width: 1,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 10,
   },
 });
 

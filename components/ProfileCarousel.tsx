@@ -8,16 +8,16 @@ const windowWidth = Dimensions.get('window').width;
 const windowHeight = Dimensions.get('window').height;
 
 const COLORS = {
+  white: '#FFFFFF',
+  black: '#000000',
   textPrimary: '#2c3e50',
 };
 
-// Ažuriran interfejs sa novim propovima
 interface ProfileCarouselProps {
   images: (string | null)[];
   fullName: string | undefined | null;
   age: number | null;
   onShowSlider: () => void;
-  // NOVI PROPOVI ZA LOKACIJU
   locationCity: string | null;
   showLocation: boolean;
 }
@@ -27,7 +27,6 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
   fullName, 
   age, 
   onShowSlider,
-  // Dodavanje novih propova
   locationCity,
   showLocation,
 }) => {
@@ -66,7 +65,8 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
       <Carousel
         loop
         width={windowWidth}
-        height={windowHeight - 100}
+        // IZMENJENA LINIJA: Visina je sada 70% ekrana
+        height={windowHeight * 0.95}
         autoPlay={false}
         data={filteredImages}
         onProgressChange={(_, absoluteProgress) => {
@@ -79,8 +79,8 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
               style={styles.carouselImage}
             />
             <LinearGradient
-              colors={['transparent', 'rgba(0,0,0,1)', 'rgba(0,0,0,0.9)']}
-              locations={[0.7, 0.9, 1.0]}
+              colors={['transparent', 'rgba(0,0,0,0.8)']}
+              locations={[0.5, 1]}
               style={styles.gradientOverlay}
             />
             <View style={styles.overlayTextContainer}>
@@ -89,10 +89,9 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
                 {age !== null && <Text style={styles.overlayAgeText}>, {age}</Text>}
               </Text>
 
-              {/* Uslovno renderovanje lokacije */}
               {showLocation && locationCity && (
                 <View style={styles.locationContainer}>
-                  <Ionicons name="location-sharp" size={18} color="#fff" style={{ marginRight: 5 }} />
+                  <Ionicons name="location-sharp" size={18} color={COLORS.white} style={{ marginRight: 5 }} />
                   <Text style={styles.locationText}>{locationCity}</Text>
                 </View>
               )}
@@ -103,7 +102,7 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
 
       {/* Dugme sa strelicom */}
       <TouchableOpacity style={styles.downArrowButton} onPress={onShowSlider}>
-        <Ionicons name="chevron-down-outline" size={30} color="#FFFFFF" />
+        <Ionicons name="chevron-down-outline" size={30} color={COLORS.white} />
       </TouchableOpacity>
     </View>
   );
@@ -113,12 +112,12 @@ const styles = StyleSheet.create({
   carouselContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start', 
     position: 'relative',
   },
   paginationContainer: {
     position: 'absolute',
-    top: 50,
+    top: 5,
     left: 0,
     right: 0,
     zIndex: 10,
@@ -134,7 +133,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
   },
   activeIndicator: {
-    backgroundColor: '#fff',
+    backgroundColor: COLORS.white,
   },
   carouselItem: {
     width: '100%',
@@ -165,24 +164,23 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   overlayNameText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 28,
     fontWeight: 'bold',
   },
   overlayAgeText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 22,
     fontWeight: '600',
     marginLeft: 5,
   },
-  // NOVI STILOVI ZA LOKACIJU
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 5,
   },
   locationText: {
-    color: '#fff',
+    color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
   },

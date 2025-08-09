@@ -1,117 +1,84 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+// app/profile/edit/location.tsx
+
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  View, Text, StyleSheet, TouchableOpacity, Alert, SafeAreaView, Platform, TextInput, Keyboard
+} from 'react-native';
+import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
-type IconNames = keyof typeof Ionicons.glyphMap;
+export default function LocationScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams();
+  const [userLocation, setUserLocation] = useState<string | null>(null);
 
-interface SimpleSectionCardProps {
-  iconName: IconNames;
-  iconColor: string;
-  title: string;
-  value?: string | null | number | string[];
-  onPress?: () => void;
-  mode: 'edit' | 'view';
-  isLocationToggle?: boolean; // Novi prop za lokaciju
-  isToggleEnabled?: boolean; // Prop za status (On/Off)
+  useEffect(() => {
+    if (params.currentLocation) {
+      setUserLocation(params.currentLocation as string);
+    }
+  }, [params.currentLocation]);
+
+  const handleSave = useCallback(() => {
+    Keyboard.dismiss();
+    router.navigate({
+      pathname: '/profile/edit-profile', // Ispravna putanja nazad
+      params: { updatedLocation: userLocation || '' },
+    });
+  }, [userLocation, router]);
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <Stack.Screen options={{ headerShown: false }} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={28} color="#ff2f06" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Živim na lokaciji</Text>
+        <TouchableOpacity onPress={handleSave} style={styles.saveButton}>
+          <Text style={styles.saveButtonText}>Sačuvaj</Text>
+        </TouchableOpacity>
+      </View>
+      <View style={styles.container}>
+        <Text style={styles.label}>Tvoja lokacija:</Text>
+        <TextInput
+          style={styles.textInput}
+          placeholder="Npr. Beograd, Srbija"
+          placeholderTextColor="#888"
+          value={userLocation || ''}
+          onChangeText={setUserLocation}
+          maxLength={50}
+          returnKeyType="done"
+          onSubmitEditing={handleSave}
+        />
+      </View>
+    </SafeAreaView>
+  );
 }
 
-const COLORS = {
-  primary: '#E91E63',
-  textPrimary: '#2c3e50',
-  textSecondary: '#7f8c8d',
-};
-
-const SimpleSectionCard: React.FC<SimpleSectionCardProps> = ({ iconName, iconColor, title, value, onPress, mode, isLocationToggle = false, isToggleEnabled = false }) => {
-  const CardContent = (
-    <View style={styles.infoCard}>
-      <View style={styles.subSectionContent}>
-        <View style={styles.subSectionLeft}>
-          <Ionicons name={iconName} size={20} color={iconColor} style={styles.subSectionItemIcon} />
-          <Text style={styles.subSectionItemText}>{title}</Text>
-        </View>
-        <View style={styles.subSectionRight}>
-          {isLocationToggle ? (
-            // [IZMENA]: Prikazujemo "On" ili "Off" umesto Switch komponente
-            <Text style={[styles.subSectionValueText, isToggleEnabled ? styles.onText : styles.offText]}>
-              {isToggleEnabled ? 'On' : 'Off'}
-            </Text>
-          ) : (
-            // [IZMENA]: Standardni prikaz za ostale kartice
-            <>
-              <Text style={styles.subSectionValueText}>
-                {Array.isArray(value) ? (value.length > 0 ? value.join(', ') : "Dodaj") : (value ? (typeof value === 'number' ? `${value} cm` : value) : "Dodaj")}
-              </Text>
-              {mode === 'edit' && <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />}
-            </>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-
-  // [IZMENA]: Sve kartice se mogu kliknuti, čak i one sa toggle logikom
-  return (
-    <TouchableOpacity onPress={onPress} style={styles.sectionCard}>
-      {CardContent}
-    </TouchableOpacity>
-  );
-};
-
 const styles = StyleSheet.create({
-  sectionCard: {
-    marginBottom: 10,
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 15, paddingTop: Platform.OS === 'android' ? 40 : 10, paddingBottom: 10,
+    backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#eee',
   },
-  infoCard: {
+  backButton: { padding: 5 },
+  headerTitle: { fontSize: 20, fontWeight: '600', color: '#333' },
+  saveButton: { paddingVertical: 8, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#ff2f06' },
+  saveButtonText: { color: '#fff', fontWeight: '600', fontSize: 16 },
+  container: { flex: 1, padding: 20, backgroundColor: '#f8f8f8' },
+  label: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 10 },
+  textInput: {
     backgroundColor: '#fff',
     borderRadius: 15,
-    paddingVertical: 20,
+    paddingVertical: 15,
     paddingHorizontal: 20,
-    justifyContent: 'center',
+    fontSize: 16,
+    color: '#333',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
     elevation: 3,
-    width: '100%',
-  },
-  subSectionContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  subSectionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  subSectionRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  subSectionItemIcon: {
-    marginRight: 10,
-  },
-  subSectionItemText: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  subSectionValueText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    marginRight: 5,
-  },
-  onText: {
-    color: COLORS.primary, // Crvena boja za "On"
-    fontWeight: 'bold',
-  },
-  offText: {
-    color: COLORS.textSecondary, // Siva boja za "Off"
-  },
-  chevronIcon: {
-    marginLeft: 5,
-    color: COLORS.textSecondary,
   },
 });
-
-export default SimpleSectionCard;

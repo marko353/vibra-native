@@ -12,6 +12,8 @@ import {
   ScrollView,
   NativeSyntheticEvent,
   NativeScrollEvent,
+  Switch,
+ 
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import axios from 'axios';
@@ -19,14 +21,19 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useAuthContext } from '../../context/AuthContext';
 import { useProfile, UserProfile } from '../../context/ProfileContext';
 import { useRouter, useFocusEffect, useLocalSearchParams, UnknownInputParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import ProfileCarousel from '../../components/ProfileCarousel';
 import ProfileHeader from '../../components/ProfileHeader';
 import ProfilePhotoGrid from '../../components/ProfilePhotoGrid';
-import SimpleSectionCard from '../../components/SimpleSectionCard'; // Uvezena nova komponenta
 import {
   GestureHandlerRootView,
 } from 'react-native-gesture-handler';
+import JobModal from './edit/JobModal';
+
+const windowHeight = Dimensions.get('window').height;
+
+interface SimulatedImage {
+  path: string;
+}
 
 const COLORS = {
   primary: '#E91E63',
@@ -44,8 +51,8 @@ const COLORS = {
   white: '#FFFFFF',
 };
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-const windowWidth = Dimensions.get('window').width;
+const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
+
 
 const calculateAge = (birthDateString?: string | null): number | null => {
   if (!birthDateString) return null;
@@ -89,62 +96,64 @@ interface UserProfileData {
   height: number | null;
   languages: string[];
   interests: string[];
+  fullName?: string;
+  birthDate?: string;
 }
 
 const ProfileDetailsView = ({ profile }: { profile: UserProfileData }) => {
   const renderInfoRow = (iconName: IconNames, title: string, value: any) => {
-      if (title === 'Živi u') {
-          const displayLocation = profile.location?.locationCity;
+    if (title === 'Živi u') {
+      const displayLocation = profile.location?.locationCity;
 
-          if (!profile.showLocation || !displayLocation) {
-              return null;
-          }
-
-          return (
-            <View style={viewStyles.infoRow}>
-              <Ionicons name={iconName} size={20} color="#7f8c8d" />
-              <Text style={viewStyles.infoTitle}>{title}:</Text>
-              <Text style={viewStyles.infoValue}>{displayLocation}</Text>
-            </View>
-          );
-      }
-
-      if (!value || (Array.isArray(value) && value.length === 0)) {
-          return null;
-      }
-
-      let displayValue = value;
-      if (Array.isArray(value)) {
-        displayValue = value.join(', ');
-      } else if (title === 'Visina') {
-        displayValue = `${value} cm`;
+      if (!profile.showLocation || !displayLocation) {
+        return null;
       }
 
       return (
         <View style={viewStyles.infoRow}>
           <Ionicons name={iconName} size={20} color="#7f8c8d" />
           <Text style={viewStyles.infoTitle}>{title}:</Text>
-          <Text style={viewStyles.infoValue}>{displayValue}</Text>
+          <Text style={viewStyles.infoValue}>{displayLocation}</Text>
         </View>
       );
+    }
+
+    if (!value || (Array.isArray(value) && value.length === 0)) {
+      return null;
+    }
+
+    let displayValue = value;
+    if (Array.isArray(value)) {
+      displayValue = value.join(', ');
+    } else if (title === 'Visina') {
+      displayValue = `${value} cm`;
+    }
+
+    return (
+      <View style={viewStyles.infoRow}>
+        <Ionicons name={iconName} size={20} color="#7f8c8d" />
+        <Text style={viewStyles.infoTitle}>{title}:</Text>
+        <Text style={viewStyles.infoValue}>{displayValue}</Text>
+      </View>
+    );
   };
 
   const renderTagSection = (title: string, tags: string[]) => {
-      if (!tags || tags.length === 0) {
-        return null;
-      }
-      return (
-        <View style={viewStyles.section}>
-          <Text style={viewStyles.sectionTitle}>{title}</Text>
-          <View style={viewStyles.tagsContainer}>
-            {tags.map((tag, index) => (
-              <View key={index} style={viewStyles.tag}>
-                <Text style={viewStyles.tagText}>{tag}</Text>
-              </View>
-            ))}
-          </View>
+    if (!tags || tags.length === 0) {
+      return null;
+    }
+    return (
+      <View style={viewStyles.section}>
+        <Text style={viewStyles.sectionTitle}>{title}</Text>
+        <View style={viewStyles.tagsContainer}>
+          {tags.map((tag, index) => (
+            <View key={index} style={viewStyles.tag}>
+              <Text style={viewStyles.tagText}>{tag}</Text>
+            </View>
+          ))}
         </View>
-      );
+      </View>
+    );
   };
 
   return (
@@ -154,7 +163,7 @@ const ProfileDetailsView = ({ profile }: { profile: UserProfileData }) => {
         {profile.bio ? (
           <Text style={viewStyles.bioText}>{profile.bio}</Text>
         ) : (
-          <Text style={viewStyles.placeholderText}>Nema unetih informacija o vama.</Text>
+          <Text style={viewStyles.placeholderText}>Nema unetih informacija o vas.</Text>
         )}
       </View>
 
@@ -162,7 +171,7 @@ const ProfileDetailsView = ({ profile }: { profile: UserProfileData }) => {
         <Text style={viewStyles.sectionTitle}>Osnovne informacije</Text>
         {renderInfoRow('briefcase-outline', 'Posao', profile.job)}
         {renderInfoRow('school-outline', 'Obrazovanje', profile.education)}
-        {renderInfoRow('location-outline', 'Živi u', profile.location)}
+        {renderInfoRow('location-outline', 'Živi u', profile.location?.locationCity)}
         {renderInfoRow('resize-outline', 'Visina', profile.height)}
         {renderInfoRow('person-outline', 'Pol', profile.gender)}
         {renderInfoRow('transgender-outline', 'Seksualna orijentacija', profile.sexualOrientation)}
@@ -192,7 +201,6 @@ const ProfileDetailsView = ({ profile }: { profile: UserProfileData }) => {
   );
 };
 
-
 type RoutePath =
   | '/profile/edit/editBio'
   | '/profile/edit/relationshipType'
@@ -208,7 +216,7 @@ type RoutePath =
   | '/profile/edit/smokes'
   | '/profile/edit/workout'
   | '/profile/edit/diet'
-  | '/profile/edit/job'
+  | '/profile/edit/JobModal'
   | '/profile/edit/education'
   | '/profile/edit/location'
   | '/profile/edit/gender'
@@ -238,12 +246,25 @@ type RouteParams = {
 
 export default function EditProfileScreen() {
   const { user, logout } = useAuthContext();
-  const { profile, setProfileField, loadProfile, resetProfile } = useProfile();
+  const { profile, setProfileField, loadProfile } = useProfile();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [mode, setMode] = useState<'edit' | 'view'>('edit');
   const params = useLocalSearchParams();
+  
+  const [isJobModalVisible, setJobModalVisible] = useState(false);
+
+  const handleOpenJobModal = useCallback(() => {
+    setJobModalVisible(true);
+  }, []);
+  
+  const handleSaveJob = (newJobTitle: string | null) => {
+    setProfileField('job', newJobTitle);
+    setJobModalVisible(false);
+    
+    setPendingUpdates(prev => [...prev.filter(u => u.field !== 'job'), { field: 'job', value: newJobTitle }]);
+  };
 
   const scrollViewRef = useRef<ScrollView | null>(null);
   const scrollPositionRef = useRef<number>(0);
@@ -260,7 +281,7 @@ export default function EditProfileScreen() {
           return null;
         }
 
-        const res = await axios.get(`${API_BASE_URL}/api/user/${user?.id}`, {
+        const res = await axios.get(`${API_B}/api/user/${user?.id}`, {
           headers: { Authorization: `Bearer ${user?.token}` },
         });
         return res.data;
@@ -281,7 +302,7 @@ export default function EditProfileScreen() {
           return Array(9).fill(null);
         }
 
-        const res = await axios.get(`${API_BASE_URL}/api/user/profile-pictures`, {
+        const res = await axios.get(`${API_B}/api/user/profile-pictures`, {
           headers: { Authorization: `Bearer ${user?.token}` },
         });
         const filledImages = Array(9).fill(null);
@@ -301,6 +322,7 @@ export default function EditProfileScreen() {
 
 const updateProfileMutation = useMutation({
     mutationFn: async (payload: { field: string; value: any } | { showLocation: boolean }) => {
+        console.log('Sending payload to backend:', payload);
         if (!user?.token) {
           throw new Error("Token nije dostupan.");
         }
@@ -311,7 +333,7 @@ const updateProfileMutation = useMutation({
         }
 
         const response = await axios.put(
-          `${API_BASE_URL}/api/user/update-profile`,
+          `${API_B}/api/user/update-profile`,
           requestPayload,
           {
             headers: {
@@ -329,6 +351,7 @@ const updateProfileMutation = useMutation({
         const isShowLocation = 'showLocation' in variables;
         const field = isShowLocation ? 'showLocation' : (variables as { field: string; value: any }).field;
         const value = isShowLocation ? (variables as { showLocation: boolean }).showLocation : (variables as { field: string; value: any }).value;
+        console.log('Updating query cache for field:', field, 'with value:', value);
         return {
           ...oldData,
           [field]: value,
@@ -361,7 +384,7 @@ const updateProfileMutation = useMutation({
       formData.append('position', index.toString());
 
       const response = await axios.post(
-        `${API_BASE_URL}/api/user/upload-profile-picture`,
+        `${API_B}/api/user/upload-profile-picture`,
         formData,
         {
           headers: {
@@ -393,7 +416,7 @@ const updateProfileMutation = useMutation({
       if (!user?.token) throw new Error("Token nije dostupan.");
 
       const response = await axios.delete(
-        `${API_BASE_URL}/api/user/delete-profile-picture`,
+        `${API_B}/api/user/delete-profile-picture`,
         {
           headers: { 'Authorization': `Bearer ${user.token}` },
           data: { imageUrl, position: index },
@@ -429,7 +452,8 @@ const updateProfileMutation = useMutation({
     }
   }, [userData]);
 
-  const handleLocationToggle = (newValue: boolean) => {
+  const handleLocationToggle = () => {
+    const newValue = !isLocationEnabled;
     setIsLocationEnabled(newValue);
     updateProfileMutation.mutate({ showLocation: newValue });
   };
@@ -493,7 +517,6 @@ const updateProfileMutation = useMutation({
           hasUpdated = true;
         }
       });
-
       if (scrollViewRef.current && scrollPositionRef.current > 0 && !hasUpdated) {
         scrollViewRef.current.scrollTo({ y: scrollPositionRef.current, animated: false });
       }
@@ -509,11 +532,12 @@ const updateProfileMutation = useMutation({
   }, [pendingUpdates, updateProfileMutation]);
 
   const userAge = userData ? calculateAge(userData.birthDate) : null;
+  const fullName = userData?.fullName || '';
 
-  const handleCardPress = (path: RoutePath, params: RouteParams) => {
+  const handleCardPress = useCallback((path: RoutePath, params: RouteParams) => {
     router.push({ pathname: path, params: params as unknown as UnknownInputParams });
-  };
-
+  }, [router]);
+  
   const pickAndUploadImage = async (index: number) => {
     if (uploadingIndex !== null) return;
     Alert.alert(
@@ -524,27 +548,18 @@ const updateProfileMutation = useMutation({
           text: 'Izaberi iz galerije',
           onPress: async () => {
             try {
-              const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-              if (status !== 'granted') {
-                Alert.alert('Potrebna je dozvola', 'Morate omogućiti pristup galeriji da biste dodali slike.');
-                return;
-              }
-              const result = await ImagePicker.launchImageLibraryAsync({
-                mediaTypes: 'images',
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 1,
+              const image: SimulatedImage = await new Promise(resolve => {
+                console.log('Pretpostavljena funkcionalnost za izbor slike iz galerije...');
+                resolve({ path: 'path/to/image.jpg' });
               });
 
-              if (!result.canceled) {
-                const uri = result.assets[0].uri;
+              if (image) {
+                const uri = image.path;
                 setUploadingIndex(index);
                 uploadImageMutation.mutate({ uri, index });
               }
             } catch (e: unknown) {
-              if (e instanceof Error && e.message !== 'User cancelled image selection') {
                 Alert.alert('Greška', 'Došlo je do greške prilikom obrade slike.');
-              }
             }
           },
         },
@@ -552,26 +567,17 @@ const updateProfileMutation = useMutation({
           text: 'Napravi fotografiju',
           onPress: async () => {
             try {
-              const { status } = await ImagePicker.requestCameraPermissionsAsync();
-              if (status !== 'granted') {
-                Alert.alert('Potrebna je dozvola', 'Morate omogućiti pristup kameri da biste dodali slike.');
-                return;
-              }
-              const result = await ImagePicker.launchCameraAsync({
-                mediaTypes: 'images',
-                allowsEditing: true,
-                aspect: [4, 3],
-                quality: 1,
+              const image: SimulatedImage = await new Promise(resolve => {
+                console.log('Pretpostavljena funkcionalnost za snimanje fotografije...');
+                resolve({ path: 'path/to/camera_image.jpg' });
               });
-              if (!result.canceled) {
-                const uri = result.assets[0].uri;
+              if (image) {
+                const uri = image.path;
                 setUploadingIndex(index);
                 uploadImageMutation.mutate({ uri, index });
               }
             } catch (e: unknown) {
-              if (e instanceof Error && e.message !== 'User cancelled image selection') {
                 Alert.alert('Greška', 'Došlo je do greške prilikom obrade slike.');
-              }
             }
           },
         },
@@ -582,6 +588,7 @@ const updateProfileMutation = useMutation({
       ]
     );
   };
+  
 const removeImage = (index: number) => {
     const imageUrl = images[index];
     if (!imageUrl) return;
@@ -612,367 +619,327 @@ const removeImage = (index: number) => {
   };
   
   const handleToggleEdit = () => {
-    handleScrollToTop();
     setMode('edit');
   };
 
   const handleToggleView = () => {
-    handleScrollToTop();
     setMode('view');
   };
   
   const handleBackPress = () => {
-    router.push('/profile');
+    if (mode === 'view') {
+      setMode('edit');
+      handleScrollToTop();
+    } else {
+      router.push('/profile');
+    }
+  };
+  
+  const handleShowSlider = () => {
+    console.log('Prikaz slidera');
   };
 
-  const renderProfileDetailsEdit = useCallback(() => (
-    <View style={styles.footerContainer}>
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="information-circle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>O meni</Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => handleCardPress('/profile/edit/editBio', { currentBio: profile.bio || '' })}
-          style={styles.infoCard}
-        >
-          <View style={styles.infoContentContainer}>
-            {profile.bio ? (
-              <Text style={styles.bioText}>{profile.bio}</Text>
-            ) : (
-              <Text style={styles.placeholderTextWithIcon}>
-                Dodaj nešto o sebi
-              </Text>
-            )}
-            <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
+  const renderProfileDetailsEdit = useCallback(() => {
+    const renderEditCard = (
+      iconName: IconNames,
+      title: string,
+      value: string | number | null | undefined,
+      onPress: () => void,
+      isToggle = false,
+      isToggleEnabled = false,
+    ) => (
+      <TouchableOpacity
+        onPress={onPress}
+        style={styles.infoCard}
+      >
+        <View style={styles.infoContentContainer}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name={iconName} size={20} color={COLORS.textPrimary} style={styles.icon} />
+            <View style={styles.textContent}>
+              <Text style={styles.titleText}>{title}</Text>
+              {value ? (
+                <Text style={styles.valueText} numberOfLines={1}>
+                  {value}
+                </Text>
+              ) : (
+                <Text style={styles.placeholderTextWithIcon}>
+                  Dodaj {title.toLowerCase()}
+                </Text>
+              )}
+            </View>
           </View>
-        </TouchableOpacity>
-      </View>
+          {isToggle ? (
+            <Switch
+              onValueChange={onPress}
+              value={isToggleEnabled}
+              trackColor={{ false: '#767577', true: COLORS.primary }}
+              thumbColor={isToggleEnabled ? COLORS.white : '#f4f3f4'}
+            />
+          ) : (
+            <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
+          )}
+        </View>
+      </TouchableOpacity>
+    );
 
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="briefcase-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Osnovne informacije</Text>
+    const renderTagsCard = (
+      title: string,
+      tags: string[],
+      onPress: () => void
+    ) => (
+      <TouchableOpacity
+        onPress={onPress}
+        style={styles.infoCard}
+      >
+        <View style={styles.infoContentContainer}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Ionicons name="heart-circle-outline" size={20} color={COLORS.textPrimary} style={styles.icon} />
+            <View style={styles.textContent}>
+              <Text style={styles.titleText}>{title}</Text>
+              {tags.length > 0 ? (
+                <View style={styles.tagsDisplayContainer}>
+                  {tags.slice(0, 3).map((tag, index) => (
+                    <View key={index} style={styles.interestTag}>
+                      <Text style={styles.interestText}>{tag}</Text>
+                    </View>
+                  ))}
+                  {tags.length > 3 && (
+                    <Text style={styles.seeAllText}>...</Text>
+                  )}
+                </View>
+              ) : (
+                <Text style={styles.placeholderTextWithIcon}>
+                  Dodaj {title.toLowerCase()}
+                </Text>
+              )}
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
         </View>
-        <SimpleSectionCard
-          iconName="briefcase-outline"
-          iconColor={COLORS.textPrimary}
-          title="Posao"
-          value={profile.job}
-          onPress={() => handleCardPress('/profile/edit/job', { currentJob: profile.job || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="school-outline"
-          iconColor={COLORS.textPrimary}
-          title="Obrazovanje"
-          value={profile.education}
-          onPress={() => handleCardPress('/profile/edit/education', { currentEducation: profile.education || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="location-outline"
-          iconColor={COLORS.textPrimary}
-          title="Živi u"
-          value={profile.location?.locationCity}
-          onPress={() => handleCardPress('/profile/edit/location', { currentLocation: JSON.stringify(profile.location) })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="person-outline"
-          iconColor={COLORS.textPrimary}
-          title="Pol"
-          value={profile.gender}
-          onPress={() => handleCardPress('/profile/edit/gender', { currentGender: profile.gender || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="transgender-outline"
-          iconColor={COLORS.textPrimary}
-          title="Seksualna orijentacija"
-          value={profile.sexualOrientation}
-          onPress={() => handleCardPress('/profile/edit/sexualOrientation', { currentSexualOrientation: profile.sexualOrientation || '' })}
-          mode={mode}
-        />
-      </View>
+      </TouchableOpacity>
+    );
 
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="bicycle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Životni stil</Text>
-        </View>
-        <SimpleSectionCard
-          iconName="paw-outline"
-          iconColor={COLORS.textPrimary}
-          title="Ljubimci"
-          value={profile.pets}
-          onPress={() => handleCardPress('/profile/edit/pets', { currentPets: profile.pets || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="beer-outline"
-          iconColor={COLORS.textPrimary}
-          title="Piće"
-          value={profile.drinks}
-          onPress={() => handleCardPress('/profile/edit/drinks', { currentDrinks: profile.drinks || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="bonfire-outline"
-          iconColor={COLORS.textPrimary}
-          title="Koliko često pušiš"
-          value={profile.smokes}
-          onPress={() => handleCardPress('/profile/edit/smokes', { currentSmokes: profile.smokes || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="barbell-outline"
-          iconColor={COLORS.textPrimary}
-          title="Vežbanje"
-          value={profile.workout}
-          onPress={() => handleCardPress('/profile/edit/workout', { currentWorkout: profile.workout || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="nutrition-outline"
-          iconColor={COLORS.textPrimary}
-          title="Ishrana"
-          value={profile.diet}
-          onPress={() => handleCardPress('/profile/edit/diet', { currentDiet: profile.diet || '' })}
-          mode={mode}
-        />
-      </View>
-
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="chatbubbles-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Kakvu vezu želim</Text>
-        </View>
-        <SimpleSectionCard
-          iconName="heart-outline"
-          iconColor={COLORS.textPrimary}
-          title="Tip veze"
-          value={profile.relationshipType}
-          onPress={() => handleCardPress('/profile/edit/relationshipType', { currentRelationshipType: profile.relationshipType })}
-          mode={mode}
-        />
-      </View>
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="heart-circle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Interesovanja</Text>
-        </View>
-        <TouchableOpacity
-          onPress={() => handleCardPress('/profile/edit/interests', { currentInterests: JSON.stringify(profile.interests) })}
-          style={styles.infoCard}
-        >
-          <View style={styles.infoContentContainer}>
-            {profile.interests.length > 0 ? (
-              <View style={styles.tagsDisplayContainer}>
-                {profile.interests.slice(0, 3).map((tag, index) => (
-                  <View key={index} style={styles.interestTag}>
-                    <Text style={styles.interestText}>{tag}</Text>
-                  </View>
-                ))}
-                {profile.interests.length > 3 && (
-                  <Text style={styles.seeAllText}>...</Text>
+    return (
+      <View style={styles.footerContainer}>
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="information-circle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>O meni</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => handleCardPress('/profile/edit/editBio', { currentBio: profile.bio || '' })}
+            style={styles.infoCard}
+          >
+            <View style={styles.infoContentContainer}>
+              <View style={{ flex: 1, marginRight: 10 }}> 
+                {profile.bio ? (
+                  <Text style={styles.bioText}>{profile.bio}</Text>
+                ) : (
+                  <Text style={styles.placeholderTextWithIcon}>
+                    Dodaj nešto o sebi
+                  </Text>
                 )}
               </View>
-            ) : (
-              <Text style={styles.placeholderTextWithIcon}>
-                Dodaj interesovanja
-              </Text>
-            )}
-            <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
-          </View>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="resize-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Tvoja visina</Text>
+              <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
+            </View>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity
-          onPress={() => handleCardPress('/profile/edit/height', { currentHeight: profile.height ? profile.height.toString() : '' })}
-          style={styles.infoCard}
-        >
-          <View style={styles.infoContentContainer}>
-            {profile.height ? (
-              <Text style={styles.subSectionValueText}>
-                {profile.height} cm
-              </Text>
-            ) : (
-              <Text style={styles.placeholderTextWithIcon}>
-                Dodaj svoju visinu
-              </Text>
-            )}
-            <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="briefcase-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Osnovne informacije</Text>
           </View>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="language-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Jezici koje govorite</Text>
+          {renderEditCard('briefcase-outline', 'Posao', profile.job, handleOpenJobModal)}
+          {renderEditCard('school-outline', 'Obrazovanje', profile.education, () => handleCardPress('/profile/edit/education', { currentEducation: profile.education || '' }))}
+          {renderEditCard('location-outline', 'Živi u', profile.location?.locationCity, handleLocationToggle, true, isLocationEnabled)}
+          {renderEditCard('person-outline', 'Pol', profile.gender, () => handleCardPress('/profile/edit/gender', { currentGender: profile.gender || '' }))}
+          {renderEditCard('transgender-outline', 'Seksualna orijentacija', profile.sexualOrientation, () => handleCardPress('/profile/edit/sexualOrientation', { currentSexualOrientation: profile.sexualOrientation || '' }))}
         </View>
-        <TouchableOpacity
-          onPress={() => handleCardPress('/profile/edit/languages', { currentLanguages: JSON.stringify(profile.languages) })}
-          style={styles.infoCard}
-        >
-          <View style={styles.infoContentContainer}>
-            {profile.languages.length > 0 ? (
-              <View style={styles.tagsDisplayContainer}>
-                {profile.languages.slice(0, 3).map((lang, index) => (
-                  <View key={index} style={styles.interestTag}>
-                    <Text style={styles.interestText}>{lang}</Text>
-                  </View>
-                ))}
-                {profile.languages.length > 3 && (
-                  <Text style={styles.seeAllText}>...</Text>
-                )}
-              </View>
-            ) : (
-              <Text style={styles.placeholderTextWithIcon}>
-                Dodaj jezike
-              </Text>
-            )}
-            <Ionicons name="chevron-forward" size={16} color={styles.chevronIcon.color} style={styles.chevronIcon} />
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="bicycle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Životni stil</Text>
+            </View>
+            {renderEditCard('paw-outline', 'Ljubimci', profile.pets, () => handleCardPress('/profile/edit/pets', { currentPets: profile.pets || '' }))}
+            {renderEditCard('beer-outline', 'Piće', profile.drinks, () => handleCardPress('/profile/edit/drinks', { currentDrinks: profile.drinks || '' }))}
+            {renderEditCard('bonfire-outline', 'Koliko često pušiš', profile.smokes, () => handleCardPress('/profile/edit/smokes', { currentSmokes: profile.smokes || '' }))}
+            {renderEditCard('barbell-outline', 'Vežbanje', profile.workout, () => handleCardPress('/profile/edit/workout', { currentWorkout: profile.workout || '' }))}
+            {renderEditCard('nutrition-outline', 'Ishrana', profile.diet, () => handleCardPress('/profile/edit/diet', { currentDiet: profile.diet || '' }))}
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="chatbubbles-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Kakvu vezu želim</Text>
           </View>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.sectionContainer}>
-        <View style={styles.sectionTitleRow}>
-          <Ionicons name="information-circle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
-          <Text style={styles.sectionTitle}>Osobine i stavovi</Text>
+          {renderEditCard('heart-outline', 'Tip veze', profile.relationshipType, () => handleCardPress('/profile/edit/relationshipType', { currentRelationshipType: profile.relationshipType }))}
         </View>
-        <SimpleSectionCard
-          iconName="star-outline"
-          iconColor={COLORS.textPrimary}
-          title="Horoskop"
-          value={profile.horoscope}
-          onPress={() => handleCardPress('/profile/edit/horoscope', { currentHoroscope: profile.horoscope || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="people-outline"
-          iconColor={COLORS.textPrimary}
-          title="Porodični planovi"
-          value={profile.familyPlans}
-          onPress={() => handleCardPress('/profile/edit/familyPlans', { currentFamilyPlans: profile.familyPlans || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="chatbox-outline"
-          iconColor={COLORS.textPrimary}
-          title="Stil komunikacije"
-          value={profile.communicationStyle}
-          onPress={() => handleCardPress('/profile/edit/communicationStyle', { currentCommunicationStyle: profile.communicationStyle || '' })}
-          mode={mode}
-        />
-        <SimpleSectionCard
-          iconName="heart-outline"
-          iconColor={COLORS.textPrimary}
-          title="Ljubavni stil"
-          value={profile.loveStyle}
-          onPress={() => handleCardPress('/profile/edit/loveStyle', { currentLoveStyle: profile.loveStyle || '' })}
-          mode={mode}
-        />
+        
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="heart-circle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Interesovanja</Text>
+          </View>
+          {renderTagsCard('Interesovanja', profile.interests, () => handleCardPress('/profile/edit/interests', { currentInterests: JSON.stringify(profile.interests) }))}
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="resize-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Tvoja visina</Text>
+          </View>
+          {renderEditCard('resize-outline', 'Visina', profile.height ? `${profile.height} cm` : null, () => handleCardPress('/profile/edit/height', { currentHeight: profile.height ? profile.height.toString() : '' }))}
+        </View>
+        
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="language-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Jezici koje govorite</Text>
+          </View>
+          {renderTagsCard('Jezici', profile.languages, () => handleCardPress('/profile/edit/languages', { currentLanguages: JSON.stringify(profile.languages) }))}
+        </View>
+
+        <View style={styles.sectionContainer}>
+          <View style={styles.sectionTitleRow}>
+            <Ionicons name="information-circle-outline" size={28} color={COLORS.textPrimary} style={styles.sectionIcon} />
+            <Text style={styles.sectionTitle}>Osobine i stavovi</Text>
+          </View>
+          {renderEditCard('star-outline', 'Horoskop', profile.horoscope, () => handleCardPress('/profile/edit/horoscope', { currentHoroscope: profile.horoscope || '' }))}
+          {renderEditCard('people-outline', 'Porodični planovi', profile.familyPlans, () => handleCardPress('/profile/edit/familyPlans', { currentFamilyPlans: profile.familyPlans || '' }))}
+          {renderEditCard('chatbox-outline', 'Stil komunikacije', profile.communicationStyle, () => handleCardPress('/profile/edit/communicationStyle', { currentCommunicationStyle: profile.communicationStyle || '' }))}
+          {renderEditCard('heart-outline', 'Ljubavni stil', profile.loveStyle, () => handleCardPress('/profile/edit/loveStyle', { currentLoveStyle: profile.loveStyle || '' }))}
+        </View>
       </View>
-
-    </View>
-  ), [profile, mode]);
-
-  const normalizedProfile: UserProfileData = {
-    ...profile,
-    location: typeof profile.location === 'string'
-      ? { locationCity: profile.location, locationCountry: '' }
-      : profile.location || { locationCity: '', locationCountry: '' },
-  };
+    );
+  }, [profile, isLocationEnabled, handleCardPress, handleOpenJobModal, handleLocationToggle]);
 
   const renderProfileDetailsView = useCallback(() => (
-    <View style={styles.footerContainer}>
-        <ProfileDetailsView profile={normalizedProfile} />
+    <View style={viewStyles.container}>
+      <ProfileDetailsView profile={profile} />
     </View>
-  ), [normalizedProfile]);
+  ), [profile]);
 
-  if (isUserLoading || isImagesLoading) {
+  if (isUserLoading) {
     return (
-      <View style={styles.centered}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
       </View>
     );
   }
 
-  return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <SafeAreaView style={styles.safeArea}>
-        <ProfileHeader 
-          title="Uredi Profil"
+  const headerTitle = userData ? `${userData.fullName} ${userAge !== null ? `, ${userAge}` : ''}` : 'Učitavanje...';
+  const showScrollButton = mode === 'view';
+
+return (
+  <SafeAreaView style={styles.safeArea}>
+    <GestureHandlerRootView style={styles.flex1}>
+      <View style={styles.container}>
+        <ProfileHeader
+          title={headerTitle}
           onPressBack={handleBackPress}
           mode={mode}
           onToggleEdit={handleToggleEdit}
           onToggleView={handleToggleView}
         />
-
-        <ScrollView
-          ref={scrollViewRef}
-          style={styles.scrollViewContent}
-          scrollEventThrottle={16}
-          onScroll={handleScroll}
-        >
-          {mode === 'edit' ? (
-            <>
-              <ProfilePhotoGrid 
-                images={images}
-                uploadingIndex={uploadingIndex}
-                onAddImage={pickAndUploadImage}
-                onRemoveImage={removeImage}
-              />
-              {renderProfileDetailsEdit()}
-            </>
-          ) : (
-            <>
-              <ProfileCarousel
-                images={images}
-                fullName={userData?.fullName || ''}
-                age={userAge}
-                onShowSlider={handleScrollToDetails}
-                locationCity={normalizedProfile?.location?.locationCity || ''}
-                showLocation={userData?.showLocation || false}
-              />
-              <ProfileDetailsView profile={normalizedProfile} />
-            </>
-          )}
-        </ScrollView>
-      </SafeAreaView>
+        {mode === 'edit' ? (
+          <ScrollView
+            ref={scrollViewRef}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={styles.scrollView}
+          >
+            <ProfilePhotoGrid
+              images={images}
+              onAddImage={pickAndUploadImage}
+              onRemoveImage={removeImage}
+              uploadingIndex={uploadingIndex}
+              mode={mode}
+            />
+            {renderProfileDetailsEdit()}
+          </ScrollView>
+        ) : (
+          <ScrollView
+            ref={scrollViewRef}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={styles.scrollView}
+          >
+            <View style={styles.carouselWrapper}>
+            <ProfileCarousel
+              images={images.filter((img) => img !== null)}
+              fullName={fullName}
+              age={userAge}
+              locationCity={profile.location?.locationCity || ''}
+              showLocation={isLocationEnabled}
+              onShowSlider={handleScrollToDetails}
+            />
+            </View>
+            {renderProfileDetailsView()}
+          </ScrollView>
+        )}
+      </View>
     </GestureHandlerRootView>
-  );
+
+    <JobModal
+      isVisible={isJobModalVisible}
+      onClose={() => setJobModalVisible(false)}
+      onSave={handleSaveJob}
+      currentJob={profile.job || ''}
+    />
+  </SafeAreaView>
+);
 }
 
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
+    backgroundColor: COLORS.white,
+  },
+  container: {
+    flex: 1,
     backgroundColor: COLORS.background,
   },
-  centered: {
+  carouselWrapper: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    padding: 35,
+  },
+  loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: COLORS.background,
   },
-  scrollViewContent: {
+  scrollView: {
     flex: 1,
   },
   footerContainer: {
-    paddingHorizontal: 20,
-    alignItems: 'flex-start',
-    marginBottom: 50,
+    padding: 16,
   },
+  detailsScrollView: {
+  position: 'absolute',
+  top: windowHeight * 0.7,
+  left: 0,
+  right: 0,
+},
+
+carouselAndDetailsContainer: {
+  flex: 1,
+
+  
+},
   sectionContainer: {
-    alignSelf: 'stretch',
-    marginVertical: 10,
+    marginBottom: 20,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 2,
   },
   sectionTitleRow: {
     flexDirection: 'row',
@@ -980,167 +947,136 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   sectionIcon: {
-    marginRight: 10,
-  },
-  tagsDisplayContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 5,
+    marginRight: 8,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.textPrimary,
   },
   infoCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 15,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    width: '100%',
-  },
-  bioCard: {
-    borderRadius: 15,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  label: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-    marginBottom: 10,
-  },
-  inputBox: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 10,
-    padding: 15,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    textAlignVertical: 'top',
-  },
-  placeholderText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-  },
-  placeholderTextWithIcon: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
     flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f8f8',
+    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginTop: 8,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#e8e8e8',
+  },
+  infoContentContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
   },
   bioText: {
     fontSize: 16,
     color: COLORS.textPrimary,
-    flexShrink: 1,
+    lineHeight: 24,
   },
-  infoContentContainer: {
+  placeholderTextWithIcon: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
+  },
+  chevronIcon: {
+    color: COLORS.textSecondary,
+  },
+  tagsDisplayContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
   interestTag: {
-    backgroundColor: '#FDECEC',
-    borderRadius: 20,
-    paddingVertical: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 6,
     paddingHorizontal: 12,
     marginRight: 8,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#FADBD8',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    elevation: 1,
   },
   interestText: {
+    color: COLORS.white,
     fontSize: 14,
-    color: '#E91E63',
-    fontWeight: '600',
   },
   seeAllText: {
-    fontSize: 18,
-    color: COLORS.textSecondary,
-    fontStyle: 'italic',
-    marginTop: 5,
-  },
-  selectedOptionText: {
     fontSize: 14,
-    color: COLORS.primary,
-    fontWeight: '600',
+    color: COLORS.textSecondary,
   },
   subSectionValueText: {
     fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    marginRight: 5,
+    color: COLORS.textPrimary,
   },
-  chevronIcon: {
-    marginLeft: 5,
-    color: COLORS.textSecondary,
-  },
-  signOutButton: {
-    marginTop: 30,
-    backgroundColor: '#ff4d4f',
-    paddingVertical: 15,
-    paddingHorizontal: 30,
+  scrollButton: {
+    position: 'absolute',
+    bottom: 20,
+    right: 20,
+    backgroundColor: COLORS.primary,
+    width: 50,
+    height: 50,
     borderRadius: 25,
+    justifyContent: 'center',
     alignItems: 'center',
-    width: '80%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
     elevation: 5,
   },
-  signOutButtonText: {
-    color: COLORS.white,
-    fontSize: 18,
-    fontWeight: 'bold',
+  flex1: {
+    flex: 1,
+  },
+  icon: {
+    marginRight: 12,
+  },
+  textContent: {
+    flex: 1,
+  },
+  titleText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+  },
+  valueText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginTop: 2,
   },
 });
 
 const viewStyles = StyleSheet.create({
   container: {
-    paddingHorizontal: 20,
-    marginTop: 20,
-    marginBottom: 50,
+    padding: 16,
   },
   section: {
-    marginBottom: 25,
-    backgroundColor: COLORS.white,
-    borderRadius: 15,
-    padding: 15,
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 20,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 3,
+    elevation: 2,
   },
   sectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#333',
+    color: COLORS.textPrimary,
     marginBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    paddingBottom: 5,
+  },
+  bioText: {
+    fontSize: 16,
+    color: COLORS.textPrimary,
+    lineHeight: 24,
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    fontStyle: 'italic',
   },
   infoRow: {
     flexDirection: 'row',
@@ -1149,46 +1085,30 @@ const viewStyles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#555',
-    marginLeft: 10,
-    flex: 1,
+    fontWeight: '500',
+    color: COLORS.textPrimary,
+    marginLeft: 8,
   },
   infoValue: {
     fontSize: 16,
-    color: '#777',
-    fontWeight: '400',
-    flexShrink: 1,
-    textAlign: 'right',
-  },
-  bioText: {
-    fontSize: 16,
-    color: '#555',
-    lineHeight: 24,
+    color: COLORS.textSecondary,
+    marginLeft: 4,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginTop: 5,
+    marginTop: 8,
   },
   tag: {
-    backgroundColor: '#e6f7ff',
-    borderRadius: 20,
-    paddingVertical: 8,
-    paddingHorizontal: 15,
+    backgroundColor: COLORS.primary,
+    borderRadius: 16,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
     marginRight: 8,
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#91d5ff',
   },
   tagText: {
+    color: COLORS.white,
     fontSize: 14,
-    color: '#0050b3',
-    fontWeight: '600',
   },
-  placeholderText: {
-      fontSize: 16,
-      fontStyle: 'italic',
-      color: '#999',
-  }
 });
