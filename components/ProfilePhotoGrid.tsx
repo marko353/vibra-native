@@ -17,54 +17,58 @@ const CARD_MARGIN = 10;
 interface ProfilePhotoGridProps {
   images: (string | null)[];
   uploadingIndex: number | null;
-  onAddImage: (index: number) => void;
-  onRemoveImage: (index: number) => void;
+  onAddImagePress: (index: number) => void;
+  onRemoveImage: (index: number, url: string) => void;
   mode: 'edit' | 'view';
 }
 
 const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
   images,
   uploadingIndex,
-  onAddImage,
+  onAddImagePress,
   onRemoveImage,
   mode,
 }) => {
-  const renderPhotoItem = ({ item, index }: { item: string | null; index: number }) => (
-    <View style={styles.card}>
-      {item ? (
-        <>
-          <Image source={{ uri: item }} style={styles.image} />
-          {mode === 'edit' && (
-            <TouchableOpacity
-              style={styles.removeBtn}
-              onPress={() => onRemoveImage(index)}
-            >
-              <Ionicons name="close-circle" size={24} color={COLORS.white} />
-            </TouchableOpacity>
-          )}
-        </>
-      ) : (
-        <TouchableOpacity
-          style={styles.placeholderCard}
-          onPress={() => onAddImage(index)}
-          disabled={uploadingIndex === index || mode === 'view'}
-        >
-          {uploadingIndex === index ? (
-            <ActivityIndicator size="small" color={COLORS.primary} />
-          ) : (
-            <>
-              <Ionicons name="add-circle-outline" size={40} color={COLORS.primary} />
-              <Text style={styles.addText}>Dodaj sliku</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      )}
-    </View>
-  );
+  const renderPhotoItem = ({ item, index }: { item: string | null; index: number }) => {
+    // Calculate card width dynamically
+    const cardWidth = (windowWidth - HORIZONTAL_PADDING * 2 - CARD_MARGIN * 2) / 3;
+
+    return (
+      <View style={[styles.card, { width: cardWidth }]}>
+        {item ? (
+          <>
+            <Image source={{ uri: item }} style={styles.image} />
+            {mode === 'edit' && (
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => onRemoveImage(index, item)}
+              >
+                <Ionicons name="close-circle" size={24} color={COLORS.white} />
+              </TouchableOpacity>
+            )}
+          </>
+        ) : (
+          <TouchableOpacity
+            style={styles.placeholderCard}
+            onPress={() => onAddImagePress(index)}
+            disabled={uploadingIndex === index || mode === 'view'}
+          >
+            {uploadingIndex === index ? (
+              <ActivityIndicator size="small" color={COLORS.primary} />
+            ) : (
+              <>
+                <Ionicons name="add-circle-outline" size={40} color={COLORS.primary} />
+                <Text style={styles.addText}>Dodaj sliku</Text>
+              </>
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
 
   return (
     <View style={styles.container}>
-      {/* Izmenjen naslov za primer */}
       <Text style={styles.photosTitle}>Galerija slika</Text> 
       <FlatList
         data={images}
@@ -94,7 +98,6 @@ const styles = StyleSheet.create({
     marginBottom: CARD_MARGIN,
   },
   card: {
-    width: (windowWidth - HORIZONTAL_PADDING * 2 - CARD_MARGIN * 2) / 3,
     aspectRatio: 3 / 4,
     borderRadius: 15,
     overflow: 'hidden',

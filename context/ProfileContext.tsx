@@ -1,44 +1,62 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { useAuthContext } from './AuthContext';
+import React, {
+  createContext,
+  useState,
+  useContext,
+  ReactNode,
+  useCallback,
+} from 'react';
 
+// Ažuriran UserProfile interfejs da koristi niz stringova za education
 export interface UserProfile {
-  bio: string | null;
-  relationshipType: string | null;
-  interests: string[];
-  height: number | null;
-  languages: string[];
-  horoscope: string | null;
-  familyPlans: string | null;
-  communicationStyle: string | null;
-  loveStyle: string | null;
-  pets: string | null;
-  drinks: string | null;
-  smokes: string | null;
-  workout: string | null;
-  diet: string | null;
-  job: string | null;
-  education: string | null;
-  // Promenjen je tip za 'location' u objekat ili null
-  location: { locationCity: string; locationCountry: string } | null;
-  gender: string | null;
-  sexualOrientation: string | null;
-  showLocation?: boolean; // Dodao sam showLocation ako je potrebno
+    bio: string | null;
+    jobTitle: string | null;
+    education: string[] | null;
+    // Ažurirani tip za lokaciju:
+    location: { 
+        latitude?: number; 
+        longitude?: number; 
+        locationCity?: string; 
+        locationCountry?: string 
+    } | null;
+    showLocation?: boolean;
+    gender: string | null;
+    sexualOrientation: string | null;
+    relationshipType: string | null;
+    horoscope: string | null;
+    familyPlans: string | null;
+    communicationStyle: string | null;
+    loveStyle: string | null;
+    pets: string | null;
+    drinks: string | null;
+    smokes: string | null;
+    workout: string | null;
+    diet: string | null;
+    height: number | null;
+    languages: string[];
+    interests: string[];
+    fullName?: string;
+    birthDate?: string;
 }
 
 interface ProfileContextType {
   profile: UserProfile;
-  setProfileField: (field: keyof UserProfile, value: any) => void;
-  loadProfile: (data: Partial<UserProfile>) => void;
+  loadProfile: (data: UserProfile) => void;
+  setProfileField: <T extends keyof UserProfile>(
+    field: T,
+    value: UserProfile[T]
+  ) => void;
   resetProfile: () => void;
-  signOut: () => void;
 }
 
-const defaultProfileState: UserProfile = {
+const defaultProfile: UserProfile = {
   bio: null,
+  jobTitle: null,
+  education: null,
+  location: null,
+  showLocation: true,
+  gender: null,
+  sexualOrientation: null,
   relationshipType: null,
-  interests: [],
-  height: null,
-  languages: [],
   horoscope: null,
   familyPlans: null,
   communicationStyle: null,
@@ -48,57 +66,51 @@ const defaultProfileState: UserProfile = {
   smokes: null,
   workout: null,
   diet: null,
-  job: null,
-  education: null,
-  location: null,
-  gender: null,
-  sexualOrientation: null,
+  height: null,
+
+  languages: [],
+  interests: [],
 };
 
-const ProfileContext = createContext<ProfileContextType | undefined>(undefined);
+const ProfileContext = createContext<ProfileContextType | undefined>(
+  undefined
+);
 
-export const ProfileProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [profile, setProfile] = useState<UserProfile>(defaultProfileState);
-  const { logout: authSignOut } = useAuthContext();
+export const ProfileProvider = ({ children }: { children: ReactNode }) => {
+  const [profile, setProfileState] = useState<UserProfile>(defaultProfile);
 
-  const loadProfile = (data: Partial<UserProfile>) => {
-    setProfile((prev) => ({
-      ...prev,
-      ...data,
-    }));
-  };
+  const loadProfile = useCallback((data: UserProfile) => {
+    setProfileState(data);
+  }, []);
 
-  const resetProfile = () => {
-    setProfile(defaultProfileState);
-  };
+  const setProfileField = useCallback(
+    <T extends keyof UserProfile>(field: T, value: UserProfile[T]) => {
+      setProfileState((prevProfile) => ({
+        ...prevProfile,
+        [field]: value,
+      }));
+    },
+    []
+  );
 
-  const setProfileField = (field: keyof UserProfile, value: any) => {
-    setProfile((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  const resetProfile = useCallback(() => {
+    setProfileState(defaultProfile);
+  }, []);
 
-  const signOut = () => {
-    resetProfile();
-    authSignOut();
-  };
-
-  const value = {
-    profile,
-    setProfileField,
-    loadProfile,
-    resetProfile,
-    signOut,
-  };
-
-  return <ProfileContext.Provider value={value}>{children}</ProfileContext.Provider>;
+  return (
+    <ProfileContext.Provider
+      value={{ profile, loadProfile, setProfileField, resetProfile }}
+    >
+      {children}
+    </ProfileContext.Provider>
+  );
 };
 
-export const useProfile = () => {
+// Ključna izmena: promenjeno ime funkcije iz 'useProfile' u 'useProfileContext'
+export const useProfileContext = () => {
   const context = useContext(ProfileContext);
-  if (context === undefined) {
-    throw new Error('useProfile mora biti korišćen unutar ProfileProvider-a');
+  if (!context) {
+    throw new Error('useProfileContext must be used within a ProfileProvider');
   }
   return context;
 };

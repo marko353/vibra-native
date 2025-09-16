@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, StyleSheet, Image, Text, FlatList, Dimensions, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Image, Text, Dimensions, TouchableOpacity } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import Carousel from 'react-native-reanimated-carousel';
@@ -11,6 +11,7 @@ const COLORS = {
   white: '#FFFFFF',
   black: '#000000',
   textPrimary: '#2c3e50',
+  primary: '#E91E63',
 };
 
 interface ProfileCarouselProps {
@@ -36,42 +37,36 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
   if (filteredImages.length === 0) {
     return (
       <View style={styles.noImagesContainer}>
+        <Ionicons name="camera-outline" size={80} color="#ccc" />
         <Text style={styles.noImagesText}>Nema fotografija za prikaz.</Text>
+        <Text style={styles.noImagesSubtext}>Dodajte slike u modu za uređivanje.</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.carouselContainer}>
+    <View style={styles.mainContainer}>
       {/* Indikatori slika na vrhu */}
       <View style={styles.paginationContainer}>
-        <FlatList
-          data={filteredImages}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(_, index: number) => `indicator-${index}`}
-          renderItem={({ index }: { item: string, index: number }) => (
-            <View
-              style={[
-                styles.indicator,
-                { width: (windowWidth - 40) / filteredImages.length - 6 },
-                index === currentIndex ? styles.activeIndicator : null,
-              ]}
-            />
-          )}
-        />
+        {filteredImages.map((_, index: number) => (
+          <View
+            key={`indicator-${index}`}
+            style={[
+              styles.indicator,
+              { width: (windowWidth - 40) / filteredImages.length - 6 },
+              index === currentIndex ? styles.activeIndicator : null,
+            ]}
+          />
+        ))}
       </View>
 
       <Carousel
         loop
         width={windowWidth}
-        // IZMENJENA LINIJA: Visina je sada 70% ekrana
-        height={windowHeight * 0.95}
+        height={windowHeight * 0.98} 
         autoPlay={false}
         data={filteredImages}
-        onProgressChange={(_, absoluteProgress) => {
-          setCurrentIndex(Math.round(absoluteProgress));
-        }}
+        onSnapToItem={(index) => setCurrentIndex(index)}
         renderItem={({ item }) => (
           <View style={styles.carouselItem}>
             <Image
@@ -83,9 +78,10 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
               locations={[0.5, 1]}
               style={styles.gradientOverlay}
             />
+            
             <View style={styles.overlayTextContainer}>
               <Text style={styles.overlayNameText}>
-                {fullName}
+                {fullName || ''}
                 {age !== null && <Text style={styles.overlayAgeText}>, {age}</Text>}
               </Text>
 
@@ -109,15 +105,16 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
 };
 
 const styles = StyleSheet.create({
-  carouselContainer: {
+  mainContainer: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'flex-start', 
+    justifyContent: 'flex-start',
     position: 'relative',
+    marginTop: 15,
   },
   paginationContainer: {
     position: 'absolute',
-    top: 5,
+    top: 30,
     left: 0,
     right: 0,
     zIndex: 10,
@@ -127,10 +124,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
   indicator: {
-    height: 7,
+    height: 4, 
     backgroundColor: 'rgba(255, 255, 255, 0.5)',
     marginHorizontal: 3,
-    borderRadius: 5,
+    borderRadius: 2,
+    marginTop: -10,
   },
   activeIndicator: {
     backgroundColor: COLORS.white,
@@ -138,15 +136,20 @@ const styles = StyleSheet.create({
   carouselItem: {
     width: '100%',
     height: '100%',
-    borderRadius: 15,
+    borderRadius: 20,
     overflow: 'hidden',
     position: 'relative',
+    justifyContent: 'center', // Centriranje sadržaja unutar karusela
+    alignItems: 'center', // Centriranje sadržaja unutar karusela
   },
   carouselImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 10,
+    width: '97%', // Smanjena širina na 90%
+    height: '97%', // Smanjena visina na 90%
     resizeMode: 'cover',
+    borderRadius: 20, 
+    transform: [{ translateY: 10 }],
+   // Povećana vrednost za više pomeranje
+    
   },
   gradientOverlay: {
     position: 'absolute',
@@ -154,8 +157,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     height: '100%',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
   },
   overlayTextContainer: {
     position: 'absolute',
@@ -167,6 +168,9 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 28,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   overlayAgeText: {
     color: COLORS.white,
@@ -183,17 +187,32 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontSize: 18,
     fontWeight: 'bold',
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
   },
   noImagesContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
+    padding: 40,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 20,
+    marginHorizontal: 20,
+    marginVertical: 40,
   },
   noImagesText: {
-    fontSize: 18,
+    fontSize: 20,
     color: '#888',
     textAlign: 'center',
+    marginTop: 15,
+    fontWeight: '600',
+  },
+  noImagesSubtext: {
+    fontSize: 16,
+    color: '#a0a0a0',
+    textAlign: 'center',
+    marginTop: 5,
   },
   downArrowButton: {
     position: 'absolute',
