@@ -1,28 +1,34 @@
-// AnimatedSplash.tsx
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
+import * as SplashScreen from 'expo-splash-screen';
 
 export default function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
-  console.log('🔄 Rendering AnimatedSplash...');
-
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    console.log('🚀 Starting splash animation...');
+    // Sakrij Expo splash čim animacija počne
+    async function hideSplash() {
+      try {
+        await SplashScreen.hideAsync();
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+    hideSplash();
+
     Animated.sequence([
       Animated.timing(opacity, {
         toValue: 1,
-        duration: 1000,
+        duration: 500,
         useNativeDriver: true,
       }),
-      Animated.delay(2000),
+      Animated.delay(1000),
       Animated.timing(opacity, {
         toValue: 0,
         duration: 1000,
         useNativeDriver: true,
       }),
     ]).start(() => {
-      console.log('✅ Animation finished, calling onFinish()');
       onFinish();
     });
   }, []);
@@ -30,11 +36,9 @@ export default function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
   return (
     <View style={styles.container}>
       <Animated.Image
-        source={require('@/assets/images/1000006401.png')}
+        source={require('../assets/images/1000006401.png')}
         style={[styles.image, { opacity }]}
         resizeMode="contain"
-        onLoad={() => console.log('🖼️ Splash image loaded')}
-        onError={(e) => console.log('❌ Error loading splash image:', e.nativeEvent.error)}
       />
     </View>
   );

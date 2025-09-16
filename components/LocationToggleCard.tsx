@@ -1,111 +1,128 @@
-// app/components/LocationToggleCard.tsx
-
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
 const COLORS = {
-  primary: '#5B41F5',
-  background: '#F0F2F5',
-  cardBackground: '#FFFFFF',
-  textPrimary: '#1E1E1E',
-  textSecondary: '#666666',
-  placeholder: '#A0A0A0',
-  border: '#E0E0E0',
-  onColor: '#4CAF50', // Zelena boja za "On"
-  offColor: '#9E9E9E', // Siva boja za "Off"
+  primary: '#E91E63',
+  accent: '#007AFF',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#6B7280',
+  background: '#F8F8F8',
+  cardBackground: '#FFFFFF',
+  border: '#E0E0E0',
+  placeholder: '#A0A0A0',
+  shadow: 'rgba(0,0,0,0.08)',
+  onColor: '#4CAF50',
+  offColor: '#9E9E9E',
 };
 
 interface LocationToggleCardProps {
-  onToggle: () => void;
-  isToggleEnabled: boolean;
-  value: string | null;
+  onToggle: () => void;
+  isToggleEnabled: boolean;
+  value: string | null;
 }
 
 const LocationToggleCard: React.FC<LocationToggleCardProps> = ({ onToggle, isToggleEnabled, value }) => {
-  return (
-    <TouchableOpacity onPress={onToggle} style={styles.sectionCard}>
-      <View style={styles.infoCard}>
-        <View style={styles.subSectionContent}>
-          <View style={styles.subSectionLeft}>
-            <Ionicons name="location-outline" size={20} color={COLORS.textPrimary} style={styles.subSectionItemIcon} />
-            <Text style={styles.subSectionItemText}>Živi u</Text>
-          </View>
-          <View style={styles.subSectionRight}>
-            <Text style={styles.subSectionValueText}>
-              {value || 'Dodaj'}
-            </Text>
-            <Text style={[styles.statusText, isToggleEnabled ? styles.onText : styles.offText]}>
-              {isToggleEnabled ? 'On' : 'Off'}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color={COLORS.textSecondary} style={styles.chevronIcon} />
-          </View>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+  // Pomoćna funkcija za renderovanje vrednosti lokacije i statusa
+  const renderLocationValue = () => {
+    if (isToggleEnabled) {
+      return (
+        <>
+          <Text style={styles.cardValue}>
+            {value || 'Nepoznat grad'}
+          </Text>
+          <Text style={[styles.statusText, styles.onText]}>On</Text>
+        </>
+      );
+    } else {
+      return (
+        <>
+          <Text style={styles.cardValue}>Isključeno</Text>
+          <Text style={[styles.statusText, styles.offText]}>Off</Text>
+        </>
+      );
+    }
+  };
+
+  return (
+    <TouchableOpacity
+      onPress={onToggle}
+      style={styles.cardContainer}
+    >
+      <View style={styles.cardIconAndContent}>
+        <Ionicons name="location-outline" size={22} color={COLORS.textSecondary} style={styles.cardIcon} />
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle}>Živi u</Text>
+          <View style={styles.valueRow}>
+            {renderLocationValue()}
+          </View>
+        </View>
+      </View>
+      <Ionicons name="chevron-forward" size={24} color={COLORS.textSecondary} />
+    </TouchableOpacity>
+  );
 };
 
 const styles = StyleSheet.create({
-  sectionCard: {
-    marginBottom: 10,
-  },
-  infoCard: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 15,
-    paddingVertical: 20,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-    width: '100%',
-  },
-  subSectionContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  subSectionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  subSectionRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  subSectionItemIcon: {
-    marginRight: 10,
-  },
-  subSectionItemText: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-    fontWeight: '500',
-  },
-  subSectionValueText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-    marginRight: 5,
-  },
-  statusText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginLeft: 5,
-    marginRight: 5,
-  },
-  onText: {
-    color: COLORS.onColor,
-  },
-  offText: {
-    color: COLORS.offColor,
-  },
-  chevronIcon: {
-    marginLeft: 5,
-    color: COLORS.textSecondary,
-  },
+  cardContainer: {
+    backgroundColor: COLORS.cardBackground,
+    borderRadius: 18,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderColor: COLORS.border,
+    borderWidth: 1,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.shadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 10,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+  },
+  cardIconAndContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  cardIcon: {
+    marginRight: 15,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.textPrimary,
+  },
+  cardValue: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginRight: 5,
+  },
+  valueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  statusText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  onText: {
+    color: COLORS.onColor,
+  },
+  offText: {
+    color: COLORS.offColor,
+  },
 });
 
 export default LocationToggleCard;
