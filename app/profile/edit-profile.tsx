@@ -10,13 +10,14 @@ import {
     NativeSyntheticEvent,
     NativeScrollEvent,
     Alert,
+    Text, 
 } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
 import { useProfileContext } from '../../context/ProfileContext';
 
@@ -127,6 +128,7 @@ export default function EditProfileScreen() {
     const { profile, setProfileField, loadProfile } = useProfileContext();
     const router = useRouter();
     const queryClient = useQueryClient();
+    const params = useLocalSearchParams();
 
     const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
     const [mode, setMode] = useState<'edit' | 'view'>('edit');
@@ -183,10 +185,9 @@ export default function EditProfileScreen() {
                 scrollViewRef.current.scrollTo({ y: 0, animated: true });
             } 
             
-            // KLJUČNA IZMENA: Eksplicitno postavljanje početne pozicije za `view` režim
             if (newMode === 'view' && scrollViewRef.current) {
-                globalScrollYRef.current = 0; // Očistimo sačuvani skrol
-                scrollViewRef.current.scrollTo({ y: 0, animated: true }); // Uvek skrolujemo na vrh
+                globalScrollYRef.current = 0;
+                scrollViewRef.current.scrollTo({ y: 0, animated: true });
             }
 
             return newMode;
@@ -351,10 +352,23 @@ export default function EditProfileScreen() {
             loadProfile(finalProfileData);
         }
     }, [userData, loadProfile]);
+    
+    useEffect(() => {
+        console.log('[useEffect] Proveravam parametre iz modala:', params);
+        if (params.locationCity !== undefined) {
+            const newShowLocation = params.isLocationEnabled === 'true';
+            const newLocationCity = params.locationCity as string;
+
+            console.log(`[useEffect] Ažuriram stanje lokacije: isEnabled=${newShowLocation}, city=${newLocationCity}`);
+            
+            setProfileField('showLocation', newShowLocation);
+            setLocationCity(newLocationCity);
+        }
+    }, [params.locationCity, params.isLocationEnabled, setProfileField]);
 
     useEffect(() => {
         console.log('[useEffect] Pokrećem geokodiranje lokacije.');
-        if (userData?.location?.latitude && userData?.location?.longitude) {
+        if (userData?.location?.latitude && userData?.location?.longitude && profile?.showLocation) {
             const fetchCity = async () => {
                 try {
                     const geocode = await Location.reverseGeocodeAsync({
@@ -364,8 +378,9 @@ export default function EditProfileScreen() {
                     if (geocode.length > 0 && geocode[0].city) {
                         setLocationCity(geocode[0].city);
                         console.log(`[useEffect] Grad je pronađen: ${geocode[0].city}`);
+                    } else {
+                        setLocationCity(null);
                     }
-                    else setLocationCity(null);
                 } catch (e) {
                     console.error("Geocoding error:", e);
                     setLocationCity(null);
@@ -373,13 +388,14 @@ export default function EditProfileScreen() {
             };
             fetchCity();
         } else setLocationCity(null);
-    }, [userData]);
+    }, [userData, profile?.showLocation]);
 
     if (isUserLoading || isImagesLoading || !profile) {
         console.log('[render] Učitavanje profila...');
         return (
             <View style={[styles.container, styles.center]}>
                 <ActivityIndicator size="large" color={COLORS.primary} />
+                <Text>Učitavanje profila...</Text>
             </View>
         );
     }
@@ -410,6 +426,7 @@ export default function EditProfileScreen() {
     };
     
     console.log('[render] Renderujem EditProfileScreen.');
+    console.log('[render] Trenutni podaci o lokaciji:', { showLocation: profileData.showLocation, locationCity });
 
     return (
         <GestureHandlerRootView style={{ flex: 1 }}>
@@ -467,6 +484,7 @@ export default function EditProfileScreen() {
                 ) : (
                     <View style={[styles.container, styles.center]}>
                         <ActivityIndicator size="large" color={COLORS.primary} />
+                        <Text>Učitavanje...</Text>
                     </View>
                 )}
             </SafeAreaView>
