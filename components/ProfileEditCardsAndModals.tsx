@@ -21,7 +21,6 @@ const COLORS = {
     shadow: 'rgba(0,0,0,0.08)',
 };
 
-// Dodat je screens objekat za ispravno tipiziranje
 const screens = {
     languages: '/(modals)/languages',
     interests: '/(modals)/interests',
@@ -50,7 +49,6 @@ interface ProfileEditCardsAndModalsProps {
     setProfileField: (field: keyof UserProfile, value: any) => void;
     setPendingUpdates: Dispatch<SetStateAction<{ field: string; value: any }[]>>;
     locationCity?: string | null;
-    // onOpenModal je pravilno definisan sa očekivanim tipovima
     onOpenModal: (screenName: keyof typeof screens, params?: any) => void;
 }
 
@@ -61,7 +59,6 @@ const ProfileEditCardsAndModals = ({
     locationCity,
     onOpenModal,
 }: ProfileEditCardsAndModalsProps) => {
-
     const handleCardPress = (screen: keyof typeof screens, params?: any) => {
         onOpenModal(screen, params);
     };
@@ -69,7 +66,7 @@ const ProfileEditCardsAndModals = ({
     const renderCard = (
         title: string,
         value: string | null | undefined,
-        screenKey: keyof typeof screens, // Prihvata ključ ekrana umesto funkcije
+        screenKey: keyof typeof screens,
         params?: any,
         iconName?: keyof typeof Ionicons.glyphMap,
         isFirstCard: boolean = false
@@ -107,14 +104,15 @@ const ProfileEditCardsAndModals = ({
 
     const renderLocationCard = () => {
         const showLocation = profile?.showLocation ?? false;
-        const locationValue = showLocation && locationCity ? locationCity : 'Isključeno';
+        const locationValue =
+            showLocation && locationCity ? locationCity : 'Isključeno';
 
         return (
             <TouchableOpacity
                 onPress={() =>
                     handleCardPress('location', {
-                        isLocationEnabled: showLocation.toString(),
-                        currentLocationCity: locationCity || ''
+                        isLocationEnabled: showLocation, // šaljemo boolean
+                        currentLocationCity: locationCity || '',
                     })
                 }
                 style={[styles.cardContainer, styles.locationCardContainer]}
@@ -138,14 +136,7 @@ const ProfileEditCardsAndModals = ({
 
     return (
         <View style={styles.container}>
-            {renderCard(
-                'O meni',
-                profile.bio,
-                'bio',
-                { currentBio: profile.bio || '' },
-                'person-outline',
-                true
-            )}
+            {renderCard('O meni', profile.bio, 'bio', { currentBio: profile.bio || '' }, 'person-outline', true)}
             {renderCard(
                 'Jezici',
                 profile.languages?.length ? profile.languages.join(', ') : null,

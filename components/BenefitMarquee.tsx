@@ -13,8 +13,8 @@ const BENEFITS = [
   { text: 'Ekskluzivni stilovi profila', icon: 'palette', color: '#9C27B0' },
 ];
 
-const ITEM_WIDTH = 250; // Prilagodite širinu svake stavke
-const DURATION = 30000; // Trajanje animacije u milisekundama (30 sekundi)
+const ITEM_WIDTH = 250; 
+const DURATION = 30000; 
 
 const BenefitMarquee = () => {
   const scrollX = useSharedValue(0);
@@ -25,7 +25,7 @@ const BenefitMarquee = () => {
         duration: DURATION,
         easing: Easing.linear,
       }),
-      -1, // -1 znači beskonačno ponavljanje
+      -1, 
       false
     );
   }, [scrollX]);
@@ -36,14 +36,13 @@ const BenefitMarquee = () => {
     };
   });
 
-  // Dupliramo listu da bismo dobili efekat neprekidnog kretanja
   const fullBenefitsList = [...BENEFITS, ...BENEFITS];
 
   return (
     <View style={styles.container}>
       <Animated.View style={[styles.marqueeContent, animatedStyle]}>
         {fullBenefitsList.map((item, index) => (
-          <View key={index} style={styles.benefitItem}>
+          <View key={`${item.text}-${index}`} style={styles.benefitItem}>
             <Icon name={item.icon} size={24} color={item.color} />
             <Text style={styles.benefitText}>{item.text}</Text>
           </View>
@@ -56,14 +55,14 @@ const BenefitMarquee = () => {
 const styles = StyleSheet.create({
   container: {
     width: windowWidth,
-    height: 60, // Visina trake
-    overflow: 'hidden', // Ključno da se sakrije sadržaj van ekrana
+    height: 60, 
+    overflow: 'hidden', 
     backgroundColor: '#f5f5f5',
     marginVertical: 20,
   },
   marqueeContent: {
     flexDirection: 'row',
-    width: ITEM_WIDTH * BENEFITS.length * 2, // Dovoljno široko da sadrži duplirani sadržaj
+    width: ITEM_WIDTH * BENEFITS.length * 2, 
     alignItems: 'center',
   },
   benefitItem: {

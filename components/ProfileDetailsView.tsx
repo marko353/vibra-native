@@ -18,6 +18,7 @@ const COLORS = {
     white: '#FFFFFF',
 };
 
+// Ispravljena linija
 type IconNames = keyof typeof Ionicons.glyphMap;
 
 interface UserProfileData {
@@ -76,8 +77,10 @@ const ProfileDetailsView = ({ profile, locationCity }: ProfileDetailsViewProps) 
         return (
             <View style={styles.infoRow}>
                 <Ionicons name={iconName} size={20} color={COLORS.textSecondary} style={styles.infoIcon} />
-                <Text style={styles.infoTitle}>{title}:</Text>
-                <Text style={styles.infoValue}>{displayValue}</Text>
+                <View style={styles.textContainer}>
+                    <Text style={styles.infoTitle}>{title}:</Text>
+                    <Text style={styles.infoValue}>{displayValue}</Text>
+                </View>
             </View>
         );
     };
@@ -171,21 +174,25 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'flex-start',
         marginBottom: 10,
-        flexWrap: 'wrap',
     },
     infoIcon: {
         marginRight: 10,
+    },
+    textContainer: {
+        flex: 1,
+        flexDirection: 'row',
+        flexWrap: 'wrap',
     },
     infoTitle: {
         fontSize: 16,
         fontWeight: '600',
         color: COLORS.textPrimary,
+        marginRight: 5,
     },
     infoValue: {
         fontSize: 16,
         color: COLORS.textSecondary,
-        marginLeft: 5,
-        flex: 1,
+        flexShrink: 1,
     },
     tagsContainer: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 5 },
     tag: {
