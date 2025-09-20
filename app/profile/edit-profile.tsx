@@ -28,6 +28,7 @@ import ProfileCarousel from '../../components/ProfileCarousel';
 import ProfileDetailsView from '../../components/ProfileDetailsView';
 
 const windowHeight = Dimensions.get('window').height;
+const HEADER_HEIGHT = 100;
 
 const COLORS = {
     primary: '#E91E63',
@@ -323,6 +324,27 @@ export default function EditProfileScreen() {
         },
     });
 
+    const reorderImagesMutation = useMutation({
+        mutationFn: async (newImageOrder: (string | null)[]) => {
+            console.log('[useMutation] Šaljem novi redosled slika na server.');
+            if (!user?.token) throw new Error("Token not available");
+            const orderedImageUrls = newImageOrder.filter(url => url !== null);
+            const response = await axios.put(`${API_BASE_URL}/api/user/reorder-profile-pictures`, {
+                pictures: orderedImageUrls
+            }, {
+                headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' },
+            });
+            return response.data;
+        },
+        onSuccess: (data, variables) => {
+            console.log('[useMutation] Redosled slika je uspešno sačuvan na serveru.');
+        },
+        onError: (error) => {
+            console.error("Greška pri ređanju slika:", error);
+            Alert.alert('Greška', 'Došlo je do greške prilikom promene redosleda slika.');
+        },
+    });
+
     const handleImageUploadPress = async (index: number) => {
         const result = await ImagePicker.launchImageLibraryAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -443,19 +465,29 @@ export default function EditProfileScreen() {
                 {initialScrollY !== null ? (
                     <ScrollView
                         ref={scrollViewRef}
-                        style={styles.container}
                         onScroll={handleScroll}
                         scrollEventThrottle={16}
                         contentOffset={{ y: initialScrollY, x: 0 }}
+                        style={styles.contentScrollView}
                     >
                         {mode === 'edit' ? (
-                            <View>
+                            <View style={styles.editContent}>
                                 <ProfilePhotoGrid
                                     images={images}
                                     onAddImagePress={handleImageUploadPress}
-                                    onRemoveImage={(index, url) => deleteImageMutation.mutate({ index, imageUrl: url })}
+                                    onRemoveImage={(index, url) => {
+                                        console.log(`[ProfilePhotoGrid] Brisanje slike na poziciji ${index}`);
+                                        deleteImageMutation.mutate({ index, imageUrl: url });
+                                    }}
                                     uploadingIndex={uploadingIndex}
                                     mode={mode}
+                                    onReorderImages={(newImages) => {
+                                        console.log(`[ProfilePhotoGrid] Promena redosleda slika. Novi redosled:`, newImages);
+                                        // Ažuriranje lokalnog keša za trenutni UI
+                                        queryClient.setQueryData(['userProfilePhotos', user?.id], newImages);
+                                        // Slanje promene na backend
+                                        reorderImagesMutation.mutate(newImages);
+                                    }}
                                 />
                                 <ProfileEditCardsAndModals
                                     profile={profile}
@@ -466,7 +498,7 @@ export default function EditProfileScreen() {
                                 />
                             </View>
                         ) : (
-                            <View>
+                            <View style={styles.viewContent}>
                                 <ProfileCarousel
                                     images={images}
                                     fullName={profile?.fullName || ''}
@@ -475,7 +507,7 @@ export default function EditProfileScreen() {
                                     locationCity={locationCity}
                                     showLocation={profile?.showLocation || false}
                                 />
-                                <View ref={contentRef} style={styles.content}>
+                                <View ref={contentRef} style={styles.profileDetailsContainer}>
                                     <ProfileDetailsView profile={profileData} locationCity={locationCity} />
                                 </View>
                             </View>
@@ -499,18 +531,26 @@ const styles = StyleSheet.create({
         top: 0,
         left: 0,
         right: 0,
-        zIndex: 1,
+        zIndex: 10,
         paddingHorizontal: 16,
         paddingTop: Platform.OS === 'ios' ? 0 : 40,
     },
     container: { flex: 1, backgroundColor: COLORS.background },
     center: { justifyContent: 'center', alignItems: 'center' },
-    content: {
-        padding: 20,
-        backgroundColor: COLORS.cardBackground,
+    contentScrollView: {
+        flex: 1,
+    },
+    editContent: {
+        paddingTop: HEADER_HEIGHT,
+    },
+    viewContent: {
+        flex: 1,
+    },
+    profileDetailsContainer: {
+        marginTop: 20,
         borderTopLeftRadius: 30,
         borderTopRightRadius: 30,
-        marginTop: 20,
-        zIndex: 10,
+        backgroundColor: COLORS.cardBackground,
+        zIndex: 1,
     },
 });

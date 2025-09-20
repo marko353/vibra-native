@@ -1,13 +1,31 @@
 import React from 'react';
-import { View, StyleSheet, Image, TouchableOpacity, Text, FlatList, ActivityIndicator, Dimensions } from 'react-native';
+import {
+  View,
+  Image,
+  TouchableOpacity,
+  Text,
+  Dimensions,
+  ActivityIndicator,
+  StyleSheet,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import {
+  Gesture,
+  GestureDetector,
+  GestureHandlerRootView,
+} from 'react-native-gesture-handler';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+} from 'react-native-reanimated';
 
 const COLORS = {
   primary: '#E91E63',
   textPrimary: '#2c3e50',
   white: '#FFFFFF',
   placeholderBackground: '#f0f2f5',
-  placeholderBorder: '#e0e0e0',
 };
 
 const windowWidth = Dimensions.get('window').width;
@@ -15,33 +33,78 @@ const HORIZONTAL_PADDING = 20;
 const CARD_MARGIN = 10;
 
 interface ProfilePhotoGridProps {
-  images: (string | null)[];
+  images: string[];
   uploadingIndex: number | null;
   onAddImagePress: (index: number) => void;
   onRemoveImage: (index: number, url: string) => void;
+  onReorderImages: (newOrder: string[]) => void;
   mode: 'edit' | 'view';
 }
 
-const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
-  images,
-  uploadingIndex,
-  onAddImagePress,
-  onRemoveImage,
-  mode,
-}) => {
-  const renderPhotoItem = ({ item, index }: { item: string | null; index: number }) => {
-    // Calculate card width dynamically
-    const cardWidth = (windowWidth - HORIZONTAL_PADDING * 2 - CARD_MARGIN * 2) / 3;
+interface DraggableCardProps {
+  uri?: string | null;
+  index: number;
+  cardWidth: number;
+  onReorder: (from: number, to: number) => void;
+  onRemoveImage?: (index: number, uri: string) => void;
+  onAddImagePress?: (index: number) => void;
+  uploadingIndex?: number | null;
+  mode?: 'edit' | 'view';
+  draggable?: boolean;
+}
 
-    return (
-      <View style={[styles.card, { width: cardWidth }]}>
-        {item ? (
+const DraggableCard: React.FC<DraggableCardProps> = ({
+  uri,
+  index,
+  cardWidth,
+  onReorder,
+  onRemoveImage,
+  onAddImagePress,
+  uploadingIndex,
+  mode,
+  draggable = true,
+}) => {
+  const translateX = useSharedValue((index % 3) * (cardWidth + CARD_MARGIN));
+  const translateY = useSharedValue(Math.floor(index / 3) * (cardWidth * 4/3 + CARD_MARGIN));
+
+  const panGesture = Gesture.Pan()
+    .onUpdate((event) => {
+      if (!draggable) return;
+      translateX.value = event.translationX + (index % 3) * (cardWidth + CARD_MARGIN);
+      translateY.value = event.translationY + Math.floor(index / 3) * (cardWidth * 4/3 + CARD_MARGIN);
+    })
+    .onEnd(() => {
+      if (!draggable) return;
+      const col = Math.round(translateX.value / (cardWidth + CARD_MARGIN));
+      const row = Math.round(translateY.value / (cardWidth * 4/3 + CARD_MARGIN));
+      const newIndex = row * 3 + col;
+      translateX.value = withSpring((col < 0 ? 0 : col) * (cardWidth + CARD_MARGIN));
+      translateY.value = withSpring((row < 0 ? 0 : row) * (cardWidth * 4/3 + CARD_MARGIN));
+      runOnJS(onReorder)(index, newIndex);
+    });
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    position: 'absolute',
+    width: cardWidth,
+    aspectRatio: 3/4,
+    borderRadius: 15,
+    overflow: 'hidden',
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+    ],
+  }));
+
+  return (
+    <GestureDetector gesture={panGesture}>
+      <Animated.View style={[animatedStyle, styles.card]}>
+        {uri ? (
           <>
-            <Image source={{ uri: item }} style={styles.image} />
-            {mode === 'edit' && (
+            <Image source={{ uri }} style={styles.image} />
+            {mode === 'edit' && onRemoveImage && (
               <TouchableOpacity
                 style={styles.removeBtn}
-                onPress={() => onRemoveImage(index, item)}
+                onPress={() => onRemoveImage(index, uri)}
               >
                 <Ionicons name="close-circle" size={24} color={COLORS.white} />
               </TouchableOpacity>
@@ -50,7 +113,7 @@ const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
         ) : (
           <TouchableOpacity
             style={styles.placeholderCard}
-            onPress={() => onAddImagePress(index)}
+            onPress={() => onAddImagePress && onAddImagePress(index)}
             disabled={uploadingIndex === index || mode === 'view'}
           >
             {uploadingIndex === index ? (
@@ -63,55 +126,95 @@ const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
             )}
           </TouchableOpacity>
         )}
-      </View>
-    );
-  };
-
-  return (
-    <View style={styles.container}>
-      <Text style={styles.photosTitle}>Galerija slika</Text> 
-      <FlatList
-        data={images}
-        keyExtractor={(_, index) => `image-${index}`}
-        renderItem={renderPhotoItem}
-        numColumns={3}
-        scrollEnabled={false}
-        columnWrapperStyle={styles.columnWrapper}
-      />
-    </View>
+      </Animated.View>
+    </GestureDetector>
   );
 };
 
+const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
+  images,
+  uploadingIndex,
+  onAddImagePress,
+  onRemoveImage,
+  onReorderImages,
+  mode,
+}) => {
+  const cardWidth = (windowWidth - HORIZONTAL_PADDING * 2 - CARD_MARGIN * 2) / 3;
+
+  const reorder = (from: number, to: number) => {
+    if (from === to || to < 0 || to >= images.length) return;
+    const updated = [...images];
+    const moved = updated.splice(from, 1)[0];
+    updated.splice(to, 0, moved);
+    onReorderImages(updated);
+  };
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <Text style={styles.photosTitle}>Galerija slika</Text>
+      <View style={[styles.gridContainer, { minHeight: Math.ceil(images.length / 3) * (cardWidth * 4/3 + CARD_MARGIN) + 50 }]}>
+        {images.map((uri, index) => (
+          <DraggableCard
+            key={`${uri || 'placeholder'}-${index}`}
+            uri={uri}
+            index={index}
+            cardWidth={cardWidth}
+            onReorder={reorder}
+            onRemoveImage={onRemoveImage}
+            onAddImagePress={onAddImagePress}
+            uploadingIndex={uploadingIndex}
+            mode={mode}
+            draggable={!!uri} // Samo stvarne slike mogu da se drag-uju
+          />
+        ))}
+      </View>
+    </GestureHandlerRootView>
+  );
+};
+
+// Svi stilovi dole
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: HORIZONTAL_PADDING,
-    paddingTop: 100,
+    flex: 1,
+    justifyContent: 'center',
   },
   photosTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 15,
-  },
-  columnWrapper: {
-    justifyContent: 'space-between',
-    marginBottom: CARD_MARGIN,
-  },
+  fontSize: 22,
+  fontWeight: '700',
+  color: COLORS.textPrimary,
+  marginBottom: 8,      // malo iznad kartica
+  paddingHorizontal: HORIZONTAL_PADDING,
+},
+
+gridContainer: {
+  paddingHorizontal: HORIZONTAL_PADDING,
+  marginTop: 10,        // mali razmak od naslova
+  width: windowWidth - HORIZONTAL_PADDING * 2,
+  alignSelf: 'center',
+},
+
   card: {
-    aspectRatio: 3 / 4,
-    borderRadius: 15,
-    overflow: 'hidden',
     backgroundColor: COLORS.white,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
+    borderRadius: 15,
+    overflow: 'hidden',
   },
   image: {
     width: '100%',
     height: '100%',
     resizeMode: 'cover',
+  },
+  removeBtn: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+    padding: 2,
   },
   placeholderCard: {
     flex: 1,
@@ -125,14 +228,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: COLORS.textPrimary,
-  },
-  removeBtn: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 20,
-    padding: 2,
   },
 });
 
