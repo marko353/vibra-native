@@ -168,6 +168,18 @@ export default function EditProfileScreen() {
             console.log(`[onScroll] Trenutni režim je 'view', pozicija skrola se ne pamti.`);
         }
     };
+    
+    // 👇 Ključna izmena: dodata nova funkcija za povratak
+    const handleBackPress = () => {
+        // Provera da li postoji prethodni ekran u steku
+        if (router.canGoBack()) {
+            // Ako postoji, vratite se na prethodni ekran
+            router.back();
+        } else {
+            // Ako ne postoji, idite direktno na početni (home) tab
+            router.replace('/(tabs)/home'); 
+        }
+    };
 
     const handleOpenModal = (screenName: keyof typeof screens, extraParams?: any) => {
         const currentScrollY = globalScrollYRef.current || 0;
@@ -388,29 +400,39 @@ export default function EditProfileScreen() {
         }
     }, [params.locationCity, params.isLocationEnabled, setProfileField]);
 
-    useEffect(() => {
-        console.log('[useEffect] Pokrećem geokodiranje lokacije.');
-        if (userData?.location?.latitude && userData?.location?.longitude && profile?.showLocation) {
-            const fetchCity = async () => {
-                try {
-                    const geocode = await Location.reverseGeocodeAsync({
-                        latitude: userData.location.latitude,
-                        longitude: userData.location.longitude,
-                    });
-                    if (geocode.length > 0 && geocode[0].city) {
-                        setLocationCity(geocode[0].city);
-                        console.log(`[useEffect] Grad je pronađen: ${geocode[0].city}`);
+ useEffect(() => {
+    console.log('[useEffect] Pokrećem geokodiranje lokacije.');
+    if (userData?.location?.latitude && userData?.location?.longitude && profile?.showLocation) {
+        const fetchCity = async () => {
+            try {
+                const geocode = await Location.reverseGeocodeAsync({
+                    latitude: userData.location.latitude,
+                    longitude: userData.location.longitude,
+                });
+
+                if (geocode.length > 0) {
+                    const locationData = geocode[0];
+                    // Prioritet dajemo polju 'subregion', a 'city' koristimo kao rezervu.
+                    const city = locationData.subregion || locationData.city; 
+                    
+                    if (city) {
+                        setLocationCity(city);
+                        console.log(`[useEffect] Grad je pronađen: ${city} (Koristi se ${locationData.subregion ? 'subregion' : 'city'})`);
                     } else {
                         setLocationCity(null);
                     }
-                } catch (e) {
-                    console.error("Geocoding error:", e);
+                } else {
                     setLocationCity(null);
                 }
-            };
-            fetchCity();
-        } else setLocationCity(null);
-    }, [userData, profile?.showLocation]);
+
+            } catch (e) {
+                console.error("Geocoding error:", e);
+                setLocationCity(null);
+            }
+        };
+        fetchCity();
+    } else setLocationCity(null);
+}, [userData, profile?.showLocation]);
 
     if (isUserLoading || isImagesLoading || !profile) {
         console.log('[render] Učitavanje profila...');
@@ -455,7 +477,7 @@ export default function EditProfileScreen() {
             <SafeAreaView style={styles.safeArea}>
                 <View style={styles.headerContainer}>
                     <ProfileHeader
-                        onBackPress={() => router.back()}
+                        onBackPress={handleBackPress} // 👈 Koristite ispravljenu funkciju
                         mode={mode}
                         onToggleMode={handleToggleMode}
                         onSettingsPress={handleSettingsPress}
