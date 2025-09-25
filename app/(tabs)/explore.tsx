@@ -1,10 +1,10 @@
-// A new or existing file: ExploreScreen.js
+// Ažuriran fajl: ExploreScreen.js
 import React from 'react';
 import { View, Text, Button, SafeAreaView, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuthContext } from '../../context/AuthContext'; // Import the AuthContext
+import { useAuthContext } from '../../context/AuthContext'; // Import AuthContext
+import Header from '../../components/Header';
 
-// This component would likely be in a file like 'explore.tsx' or 'index.tsx'
 export default function ExploreScreen() {
     const router = useRouter();
     const { logout } = useAuthContext();
@@ -20,13 +20,16 @@ export default function ExploreScreen() {
 
     return (
         <SafeAreaView style={styles.container}>
+            <Header withShadow={false} />
             <View style={styles.header}>
                 <Text style={styles.title}>Explore</Text>
-                {/* The logout button is now here */}
-                <Button title="Logout" onPress={handleLogout} />
             </View>
             <View style={styles.content}>
                 <Text>This is the Explore content.</Text>
+                {/* Ažuriran kod: Premestili smo dugme u 'content' */}
+                <View style={styles.logoutButtonWrapper}>
+                    <Button title="Logout" onPress={handleLogout} />
+                </View>
             </View>
         </SafeAreaView>
     );
@@ -43,7 +46,11 @@ const styles = StyleSheet.create({
     title: { fontSize: 24, fontWeight: 'bold' },
     content: {
         flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
+        justifyContent: 'center', // Ovo će centrirati sadržaj (i dugme) vertikalno
+        alignItems: 'center',    // Ovo će centrirati sadržaj (i dugme) horizontalno
+    },
+    logoutButtonWrapper: {
+        marginTop: 20, // Dodaje malo razmaka iznad dugmeta
+        width: '80%', // Postavlja širinu dugmeta
     },
 });
