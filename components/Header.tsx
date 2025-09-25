@@ -3,11 +3,17 @@ import { View, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-export default function Header() {
+// Definišemo novi, logičniji prop
+interface HeaderProps {
+  withShadow?: boolean;
+}
+
+export default function Header({ withShadow }: HeaderProps) {
   return (
-    <SafeAreaView edges={['top']} style={styles.container}>
+    // Logika je sada obrnuta: primeni senku samo ako je `withShadow` true
+    <SafeAreaView edges={['top']} style={[styles.container, withShadow && styles.shadow]}>
       <Image
-        source={require('@/assets/images/1000006380.png')}
+        source={require('../assets/images/1000006380.png')} // Prilagodite putanju
         style={styles.logo}
         resizeMode="contain"
         accessibilityLabel="Logo"
@@ -16,25 +22,16 @@ export default function Header() {
         <TouchableOpacity
           onPress={() => console.log('Otvoren filter')}
           accessibilityLabel="Filter dugme"
-          style={styles.iconButton} // Dodat novi stil
+          style={styles.iconButton}
         >
-          <MaterialCommunityIcons
-            name="tune-variant"
-            size={28} // Malo manja ikona
-            color="#E91E63" // Boja koja se uklapa sa ostalim elementima (primary color)
-          />
+          <MaterialCommunityIcons name="tune-variant" size={28} color="#E91E63" />
         </TouchableOpacity>
-
         <TouchableOpacity
           onPress={() => console.log('Otvorena pogodnost')}
           accessibilityLabel="Pogodnost dugme"
-          style={styles.iconButton} // Dodat novi stil
+          style={styles.iconButton}
         >
-          <MaterialCommunityIcons
-            name="star-four-points"
-            size={28} // Malo manja ikona
-            color="#E91E63" // Primary color
-          />
+          <MaterialCommunityIcons name="star-four-points" size={28} color="#E91E63" />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -43,12 +40,14 @@ export default function Header() {
 
 const styles = StyleSheet.create({
   container: {
-    height: 100, // Malo manja visina
+    height: 100,
     backgroundColor: '#fff',
-    paddingHorizontal: 20, // Povećan razmak sa strane
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  shadow: {
     elevation: 4,
     shadowColor: '#000',
     shadowOpacity: 0.1,
@@ -56,16 +55,15 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
   },
   logo: {
-    width: 100, // Manji logo
+    width: 100,
     height: 100,
   },
   buttons: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 'auto',
   },
   iconButton: {
-    padding: 8, // Dodat padding oko dugmeta za lakše pritiskanje
-    marginLeft: 10, // Razmak između ikona
+    padding: 8,
+    marginLeft: 10,
   },
 });
