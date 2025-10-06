@@ -1,4 +1,4 @@
-// app/(modals)/diet.tsx - Implementacija kao standardni ekran (bez react-native-modal)
+// app/(modals)/diet.tsx - Implementacija kao standardni ekran
 
 import React, { useState, useMemo, useEffect } from 'react';
 import {
@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext'; // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
@@ -53,10 +54,17 @@ const dietOptions = [
   { style: 'Nije navedeno', description: 'Ne želim da navedem svoju ishranu.' },
 ];
 
+// Tipizacija za ishranu
+interface MutationPayload { field: string; value: any; }
+type UpdateableProfileField = 'diet';
+interface UserProfile { diet: string | null; [key: string]: any; }
+
+
 export default function DietScreen() { // Preimenovano u DietScreen
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext(); // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
   const queryClient = useQueryClient();
 
   // Učitavanje početne opcije ishrane iz params-a
@@ -76,7 +84,7 @@ export default function DietScreen() { // Preimenovano u DietScreen
   }, [initialDiet]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
+    mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
       const response = await axios.put(
         `${API_B}/api/user/update-profile`,
@@ -91,13 +99,25 @@ export default function DietScreen() { // Preimenovano u DietScreen
       return response.data;
     },
     onSuccess: (data, variables) => {
+      const fieldName = 'diet' as const; // Eksplicitno kastovanje
+      const newValue = variables.value;
+
+      // KORAK A: AŽURIRANJE LOKALNOG CONTEXTA (Brza sinhronizacija)
+      setProfileField(fieldName, newValue);
+      
+      // KORAK B: DIREKTNO AŽURIRANJE QUERY KEŠA (Optimistično ažuriranje)
       queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
-          [variables.field]: variables.value,
+          [fieldName]: newValue,
         };
       });
+
+      // KORAK C: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA (Vizuelna potvrda)
+      setSelectedDiet(newValue);
+
+      // KORAK D: Zatvaranje modala
       router.back();
     },
     onError: (error: any) => {

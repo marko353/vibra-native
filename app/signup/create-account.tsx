@@ -86,7 +86,7 @@ export default function CreateAccountScreen() {
     <View style={styles.container}>
       <View style={styles.headerRow}>
         <TouchableOpacity onPress={() => router.back()}>
-          <AntDesign name="arrowleft" size={23} color="#ff7f00" />
+          <AntDesign name="arrow-left" size={23} color="#ff7f00" />
         </TouchableOpacity>
         <Text style={styles.title}>Create Account</Text>
       </View>
@@ -142,8 +142,7 @@ export default function CreateAccountScreen() {
             style={styles.eyeIcon}
             onPress={() => setShowPass(!showPass)}
           >
-            <AntDesign name={showPass ? 'eye' : 'eyeo'} size={20} color="#666" />
-          </TouchableOpacity>
+         <AntDesign name={showPass ? 'eye' : 'eye-invisible'} size={20} color="#666" />          </TouchableOpacity>
         </View>
         {errors.pass && <Text style={styles.error}>{errors.pass}</Text>}
 
@@ -164,8 +163,7 @@ export default function CreateAccountScreen() {
             style={styles.eyeIcon}
             onPress={() => setShowConf(!showConf)}
           >
-            <AntDesign name={showConf ? 'eye' : 'eyeo'} size={20} color="#666" />
-          </TouchableOpacity>
+          <AntDesign name={showPass ? 'eye' : 'eye-invisible'} size={20} color="#666" />          </TouchableOpacity>
         </View>
         {errors.conf && <Text style={styles.error}>{errors.conf}</Text>}
 

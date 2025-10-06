@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
@@ -27,17 +28,17 @@ const wp = (percentage: number) => (width * percentage) / 100;
 const RF = (size: number) => size * (width / 375);
 
 const COLORS = {
-  primary: '#E91E63', // Akcentna ružičasta
-  textPrimary: '#1A1A1A', // Tamni tekst
-  textSecondary: '#6B7280', // Sekundarni sivi tekst
-  background: '#F8F8F8', // Svetlo siva pozadina (opšti background)
-  cardBackground: '#FFFFFF', // Bela pozadina za kartice/modale
-  border: '#E0E0E0', // Svetla ivica
-  white: '#FFFFFF', // Bela
-  danger: '#DC3545', // Crvena za greške
-  selectedChip: '#FFEBF1', // Svetlija nijansa primary boje za selektovane čipove
+  primary: '#E91E63',
+  textPrimary: '#1A1A1A',
+  textSecondary: '#6B7280',
+  background: '#F8F8F8',
+  cardBackground: '#FFFFFF',
+  border: '#E0E0E0',
+  white: '#FFFFFF',
+  danger: '#DC3545',
+  selectedChip: '#FFEBF1',
   selectedChipBorder: '#E91E63',
-  headerShadow: 'rgba(0, 0, 0, 0.08)', // Definisana senka za header
+  headerShadow: 'rgba(0, 0, 0, 0.08)',
 };
 
 const drinkOptions = [
@@ -50,30 +51,32 @@ const drinkOptions = [
   { style: 'Ne pijem', description: 'Uopšte ne konzumiram alkohol.' },
 ];
 
-export default function DrinksScreen() { // Preimenovano u DrinksScreen
+interface MutationPayload { field: string; value: any; }
+type UpdateableProfileField = 'drinks';
+interface UserProfile { drinks: string | null; [key: string]: any; }
+
+
+export default function DrinksScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext();
   const queryClient = useQueryClient();
 
-  // Učitavanje početne opcije za piće iz params-a
   const initialDrinks: string = useMemo(() => {
-    // Ako params.currentDrinks postoji i string je, koristi ga, inače prazan string.
     return typeof params.currentDrinks === 'string' ? params.currentDrinks : '';
   }, [params.currentDrinks]);
 
   const [selectedDrinks, setSelectedDrinks] = useState<string>(initialDrinks);
 
-  // Proverava da li je došlo do promene u odnosu na početnu opciju
   const hasChanges = useMemo(() => selectedDrinks !== initialDrinks, [selectedDrinks, initialDrinks]);
 
-  // Resetuje stanje kada se ekran inicijalizuje ili kada se initialDrinks promeni (mada se ne bi trebalo menjati)
   useEffect(() => {
     setSelectedDrinks(initialDrinks);
   }, [initialDrinks]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
+    mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
       const response = await axios.put(
         `${API_B}/api/user/update-profile`,
@@ -88,14 +91,21 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
       return response.data;
     },
     onSuccess: (data, variables) => {
+      const fieldName = 'drinks' as const;
+      const newValue = variables.value;
+
+      setProfileField(fieldName, newValue);
+
       queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
-          [variables.field]: variables.value,
+          [fieldName]: newValue,
         };
       });
-      // Umesto Alert.alert('Uspešno'), direktno se vraćamo nazad
+
+      setSelectedDrinks(newValue);
+
       router.back();
     },
     onError: (error: any) => {
@@ -120,10 +130,10 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
         style={[
           styles.itemContainer,
           isSelected && styles.itemContainerSelected,
-          updateProfileMutation.isPending && styles.itemContainerDisabled // Onemogući vizuelno tokom čuvanja
+          updateProfileMutation.isPending && styles.itemContainerDisabled
         ]}
         onPress={() => setSelectedDrinks(item.style)}
-        disabled={updateProfileMutation.isPending} // Onemogući klik tokom čuvanja
+        disabled={updateProfileMutation.isPending}
       >
         <Text style={[styles.itemTitle, isSelected && styles.itemTitleSelected]}>
           {item.style}
@@ -134,7 +144,7 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
         {isSelected && (
           <Ionicons
             name="checkmark-circle"
-            size={RF(24)} // Responzivna veličina ikone
+            size={RF(24)}
             color={COLORS.primary}
             style={styles.checkmarkIcon}
           />
@@ -148,7 +158,6 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.cardBackground} />
 
-      {/* Header View */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} disabled={updateProfileMutation.isPending}>
           <Ionicons name="close-outline" size={RF(30)} color={COLORS.textPrimary} />
@@ -157,14 +166,14 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
         <TouchableOpacity
           style={styles.saveBtn}
           onPress={handleSave}
-          disabled={!hasChanges || updateProfileMutation.isPending || !selectedDrinks} // Dodatno onemogućeno ako nema odabrane opcije
+          disabled={!hasChanges || updateProfileMutation.isPending || !selectedDrinks}
         >
           {updateProfileMutation.isPending ? (
             <ActivityIndicator color={COLORS.primary} />
           ) : (
             <Text style={[
               styles.saveBtnText,
-              { color: (!hasChanges || !selectedDrinks) ? COLORS.textSecondary : COLORS.primary } // Boja teksta
+              { color: (!hasChanges || !selectedDrinks) ? COLORS.textSecondary : COLORS.primary }
             ]}>
               Sačuvaj
             </Text>
@@ -172,15 +181,12 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
         </TouchableOpacity>
       </View>
 
-      {/* Content View */}
       <FlatList
         data={drinkOptions}
         renderItem={renderItem}
         keyExtractor={(item) => item.style}
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
-        // Uklonjen ListFooterComponent jer se "Sačuvaj" dugme sada nalazi u headeru
-        // ListFooterComponent={renderFooter()}
       />
     </SafeAreaView>
   );
@@ -189,7 +195,7 @@ export default function DrinksScreen() { // Preimenovano u DrinksScreen
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.background, // Pozadina celog ekrana
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
@@ -214,10 +220,10 @@ const styles = StyleSheet.create({
     }),
     zIndex: 10,
   },
-  closeBtn: { // Preimenovano iz backBtn za konzistentnost sa 'close-outline' ikonom
+  closeBtn: {
     padding: wp(1.5),
   },
-  saveBtn: { // Dugme za čuvanje premešteno u header
+  saveBtn: {
     padding: wp(1.5),
   },
   saveBtnText: {
@@ -233,19 +239,19 @@ const styles = StyleSheet.create({
     marginHorizontal: wp(2),
   },
   container: {
-    padding: wp(5), // Responzivni padding
-    paddingBottom: wp(10), // Malo više paddinga na dnu za FlatList
+    padding: wp(5),
+    paddingBottom: wp(10),
     backgroundColor: COLORS.background,
   },
   itemContainer: {
     backgroundColor: COLORS.cardBackground,
-    borderRadius: RF(15), // Responzivni border radius
-    padding: wp(5), // Responzivni padding
-    marginBottom: wp(3), // Responzivni margin
+    borderRadius: RF(15),
+    padding: wp(5),
+    marginBottom: wp(3),
     borderWidth: 1,
     borderColor: COLORS.border,
     position: 'relative',
-    shadowColor: '#000', // Diskretna senka
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: RF(1) },
     shadowOpacity: 0.05,
     shadowRadius: RF(3),
@@ -255,16 +261,16 @@ const styles = StyleSheet.create({
     borderColor: COLORS.selectedChipBorder,
     backgroundColor: COLORS.selectedChip,
     shadowColor: COLORS.selectedChipBorder,
-    shadowOffset: { width: 0, height: RF(4) }, // Jača senka
+    shadowOffset: { width: 0, height: RF(4) },
     shadowOpacity: 0.1,
     shadowRadius: RF(10),
     elevation: 5,
   },
   itemContainerDisabled: {
-    opacity: 0.6, // Smanjena neprozirnost kada je onemogućeno
+    opacity: 0.6,
   },
   itemTitle: {
-    fontSize: RF(18), // Responzivni font size
+    fontSize: RF(18),
     fontWeight: 'bold',
     color: COLORS.textPrimary,
   },
@@ -272,17 +278,16 @@ const styles = StyleSheet.create({
     color: COLORS.primary,
   },
   itemDescription: {
-    fontSize: RF(14), // Responzivni font size
-    color: COLORS.textSecondary, // Sekundarna boja za opis
-    marginTop: wp(1), // Responzivni margin
+    fontSize: RF(14),
+    color: COLORS.textSecondary,
+    marginTop: wp(1),
   },
   itemDescriptionSelected: {
-    color: COLORS.textSecondary, // Ostaje ista boja za opis i kada je selektovano
+    color: COLORS.textSecondary,
   },
   checkmarkIcon: {
     position: 'absolute',
-    right: wp(4), // Responzivna pozicija
-    top: wp(4), // Responzivna pozicija
+    right: wp(4),
+    top: wp(4),
   },
-
 });

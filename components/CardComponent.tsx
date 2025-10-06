@@ -191,7 +191,7 @@ export default Card;
 const styles = StyleSheet.create({
     cardWrapper: {
         width: CARD_WIDTH,
-        height: '95%',
+        height: '93%',
         borderRadius: 20,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 5 },
@@ -200,7 +200,7 @@ const styles = StyleSheet.create({
         elevation: 10,
         position: 'absolute',
         alignSelf: 'center',
-        top: '-1.7%',
+        top: '2%',
     },
     card: {
         width: '100%',

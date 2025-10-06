@@ -1,4 +1,3 @@
-// app/(modals)/languages.tsx - Implementacija kao standardni ekran
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
@@ -6,7 +5,7 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
+  Alert, // Using Alert for native environment
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
@@ -17,16 +16,19 @@ import {
   Keyboard,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+// Pretpostavljeni importi iz Expo/React Native okruženja:
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { useAuthContext } from '../../context/AuthContext';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+// Importi za autentifikaciju i stanje profila:
+import { useAuthContext } from '../../context/AuthContext'; // REAL IMPORT
+// Importi za TanStack Query:
+import { useMutation, useQueryClient } from '@tanstack/react-query'; // REAL IMPORT
+import axios from 'axios'; // REAL IMPORT
 
-const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
-
+// Konfiguracija i Konstante
+const API_B = process.env.EXPO_PUBLIC_API_BASE_URL; // Pretpostavljena varijabla okruženja
 const { width } = Dimensions.get('window');
 const wp = (percentage: number) => (width * percentage) / 100;
-const RF = (size: number) => size * (width / 375);
+const RF = (size: number) => size * (width / 375); // Responzivna font skala
 
 const COLORS = {
   primary: '#E91E63',
@@ -37,8 +39,7 @@ const COLORS = {
   border: '#E0E0E0',
   white: '#FFFFFF',
   danger: '#DC3545',
-  selectedChip: '#FFEBF1',
-  selectedChipBorder: '#E91E63',
+  selectedChip: '#FFEBF1', // Light pink for selected background
   headerShadow: 'rgba(0, 0, 0, 0.08)',
 };
 
@@ -47,244 +48,267 @@ const PREDEFINED_LANGUAGES: string[] = [
 ];
 const MAX_LANGUAGES = 4;
 
+// Definisanje interfejsa za payload mutacije
+interface MutationPayload {
+  field: string;
+  value: any; // Može biti string, string[], ili drugi tip zavisno od polja
+}
+
+// TIP: Definišemo UserProfile sa ključevima koje koristimo
+interface UserProfile {
+  languages: string[];
+  bio: string | null | undefined; // Dodato za potrebe tipizacije pri setProfileField
+  [key: string]: any;
+}
+// TIP: Pomoćni tip koji obuhvata polja koja ažuriramo
+type UpdateableProfileField = 'languages' | 'bio';
+
+// Mock implementacija useProfileContext je uklonjena radi čistoće i izbegavanja logova dupliranja.
+// Oslanjamo se na vašu pravu implementaciju:
+import { useProfileContext } from '../../context/ProfileContext'; 
+
 export default function LanguagesScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams();
+  const params = useLocalSearchParams(); 
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext(); 
   const queryClient = useQueryClient();
-
+  
+  // LOG: Inicijalizacija iz params
   const initialLanguages: string[] = useMemo(() => {
+    let languages: string[] = [];
     if (typeof params.currentLanguages === 'string') {
-      try {
-        return JSON.parse(params.currentLanguages);
-      } catch (e) {
-        console.error("Failed to parse currentLanguages:", e);
-        return [];
-      }
+        try {
+            const parsed = JSON.parse(params.currentLanguages);
+            languages = Array.isArray(parsed) ? (parsed as string[]).map(String) : [];
+        } catch {
+            languages = [];
+        }
+    } else if (Array.isArray(params.currentLanguages)) {
+        languages = (params.currentLanguages as string[]).map(String);
     }
-    if (Array.isArray(params.currentLanguages)) {
-      return params.currentLanguages.map(String);
-    }
-    return [];
+    console.log("LOG: [Languages] useMemo - Inicijalni jezici iz params:", languages);
+    return languages;
   }, [params.currentLanguages]);
 
-  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(initialLanguages);
+
+  // Lokalni state
+  const [selectedLanguages, setSelectedLanguages] = useState<string[]>(initialLanguages); 
+  
   const [newLanguage, setNewLanguage] = useState<string>('');
   const [showInput, setShowInput] = useState<boolean>(false);
   const textInputRef = useRef<TextInput>(null);
 
+  // LOG: Provera promena
   const hasChanges = useMemo(() => {
     const sortedInitial = [...initialLanguages].sort();
     const sortedSelected = [...selectedLanguages].sort();
-    return JSON.stringify(sortedInitial) !== JSON.stringify(sortedSelected);
-  }, [initialLanguages, selectedLanguages]);
+    const changed = JSON.stringify(sortedInitial) !== JSON.stringify(sortedSelected);
+    console.log(`LOG: [Languages] useMemo - Promene detektovane: ${changed}, Trenutno: ${selectedLanguages.join(', ')}`);
+    return changed;
+  }, [initialLanguages, selectedLanguages]); 
 
   useEffect(() => {
     if (showInput) {
-      const timeoutId = setTimeout(() => {
-        textInputRef.current?.focus();
-      }, 100);
+      const timeoutId = setTimeout(() => textInputRef.current?.focus(), 100);
       return () => clearTimeout(timeoutId);
     }
   }, [showInput]);
 
   const allLanguages: string[] = useMemo(() => {
-    const customLanguages = selectedLanguages.filter(lang => !PREDEFINED_LANGUAGES.includes(lang));
-    const uniqueLanguages = new Set([...PREDEFINED_LANGUAGES, ...customLanguages]);
-    return Array.from(uniqueLanguages).sort((a, b) => a.localeCompare(b));
+    const customLanguages = selectedLanguages.filter(lang => 
+        !PREDEFINED_LANGUAGES.some(predef => predef.toLowerCase() === lang.toLowerCase())
+    );
+    return Array.from(new Set([...PREDEFINED_LANGUAGES, ...customLanguages])).sort((a, b) => a.localeCompare(b));
   }, [selectedLanguages]);
 
+  // Implementacija mutacije
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
-      if (!user?.token) throw new Error("Token not available");
-      const response = await axios.put(
-        `${API_B}/api/user/update-profile`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${user.token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
+    mutationFn: async (payload: MutationPayload) => {
+        if (!user?.token) throw new Error("Token nije dostupan");
+        console.log("LOG: [Languages] MutationFn - Slanje payload-a:", payload);
+        const res = await axios.put(`${API_B}/api/user/update-profile`, payload, {
+            headers: { 
+                Authorization: `Bearer ${user.token}`, 
+                'Content-Type': 'application/json' 
+            },
+        });
+        return res.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          [variables.field]: variables.value,
-        };
-      });
-      router.back();
+        // FIKSIRANO: Kastovanje na UpdateableProfileField (koji uključuje 'languages')
+        const fieldName = variables.field as UpdateableProfileField;
+        const newValue = variables.value;
+
+        // KORAK 1: Ažuriranje LOKALNOG Contexta (Brzo, sinhrono ažuriranje stanja)
+        setProfileField(fieldName, newValue); 
+        console.log(`LOG: [Languages] Mutacija USPEŠNA. Ažuriran context za polje: ${fieldName}.`);
+
+        // KORAK 2: DIREKTNO AŽURIRANJE QUERY KEŠA (Optimistično ažuriranje)
+        queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
+            if (!oldData) return oldData;
+            const updatedData = { ...oldData, [fieldName]: newValue };
+            console.log("LOG: [Languages] Mutacija USPEŠNA. Query keš AŽURIRAN.");
+            return updatedData;
+        });
+
+        // KORAK 3: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA
+        // Ovo osigurava da korisnik vidi najnoviju promenu pre nego što se modal zatvori.
+        setSelectedLanguages(newValue as string[]); 
+        
+        // KORAK 4: Zatvaranje modala
+        router.back();
     },
     onError: (error: any) => {
-      console.error('Greška pri čuvanju jezika:', error.response?.data || error.message);
-      Alert.alert('Greška', `Došlo je do greške prilikom čuvanja jezika: ${error.response?.data?.message || error.message}`);
-    },
+        console.error("LOG: [LanguagesScreen] onError - Greška prilikom čuvanja:", error.response?.data || error.message);
+        Alert.alert('Greška', `Došlo je do greške pri čuvanju jezika: ${error.response?.data?.message || error.message}`);
+    }
   });
 
+  const isLoading = updateProfileMutation.isPending; 
+
   const handleToggleLanguage = (language: string) => {
-    if (updateProfileMutation.isPending) return;
-    setSelectedLanguages((prev: string[]) => {
-      const isSelected = prev.includes(language);
-      if (isSelected) {
-        return prev.filter((lang: string) => lang !== language);
+    if (isLoading) return;
+    setSelectedLanguages(prev => {
+      let newState: string[];
+      if (prev.includes(language)) {
+        newState = prev.filter(l => l !== language);
       } else {
         if (prev.length >= MAX_LANGUAGES) {
           Alert.alert('Limit je dostignut', `Možete odabrati maksimalno ${MAX_LANGUAGES} jezika.`);
           return prev;
         }
-        return [...prev, language];
+        newState = [...prev, language];
       }
+      console.log("LOG: [Languages] Novi odabrani jezici:", newState);
+      return newState;
     });
   };
 
   const handleAddLanguage = () => {
-    if (updateProfileMutation.isPending) return;
-    const trimmedLang = newLanguage.trim();
-    if (trimmedLang === '') {
-      Alert.alert('Upozorenje', 'Unesite naziv jezika.');
-      return;
-    }
+    if (isLoading) return;
+    const trimmed = newLanguage.trim();
+    if (!trimmed) return Alert.alert('Upozorenje', 'Unesite naziv jezika.');
+    
+    // Provere limita i duplikata...
     if (selectedLanguages.length >= MAX_LANGUAGES) {
-      Alert.alert('Limit je dostignut', `Možete dodati maksimalno ${MAX_LANGUAGES} jezika.`);
-      setNewLanguage('');
-      Keyboard.dismiss();
-      return;
+        Alert.alert('Limit je dostignut', `Možete dodati maksimalno ${MAX_LANGUAGES} jezika.`);
+        setNewLanguage('');
+        Keyboard.dismiss();
+        return;
     }
-    if (allLanguages.map(l => l.toLowerCase()).includes(trimmedLang.toLowerCase())) {
-      Alert.alert('Upozorenje', 'Ovaj jezik je već dodat ili odabran.');
-      setNewLanguage('');
-      Keyboard.dismiss();
-      return;
+    if (allLanguages.some(l => l.toLowerCase() === trimmed.toLowerCase())) {
+        Alert.alert('Upozorenje', 'Ovaj jezik je već dodat ili odabran.');
+        setNewLanguage('');
+        Keyboard.dismiss();
+        return;
     }
 
-    setSelectedLanguages(prev => [...prev, trimmedLang]);
+    const newState = [...selectedLanguages, trimmed];
+    setSelectedLanguages(newState);
+    console.log("LOG: [Languages] Dodat novi jezik:", trimmed, "Ukupno:", newState);
+    
     setNewLanguage('');
     setShowInput(false);
     Keyboard.dismiss();
   };
 
   const handleSave = () => {
+    if (selectedLanguages.length === 0) {
+        return Alert.alert('Upozorenje', 'Morate odabrati barem jedan jezik pre čuvanja.');
+    }
+    console.log("LOG: [Languages] Pokrenuto čuvanje. Vrednost za slanje:", selectedLanguages);
     updateProfileMutation.mutate({ field: 'languages', value: selectedLanguages });
   };
 
-  const renderLanguageItem = (item: string) => {
-    const isSelected = selectedLanguages.includes(item);
-    return (
-      <TouchableOpacity
-        key={item}
-        style={[
-          styles.languageChip,
-          isSelected && styles.languageChipSelected,
-          updateProfileMutation.isPending && styles.languageChipDisabled
-        ]}
-        onPress={() => handleToggleLanguage(item)}
-        disabled={updateProfileMutation.isPending}
-      >
-        <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>{item}</Text>
-        {isSelected && (
-          <Ionicons name="checkmark-circle-outline" size={RF(18)} color={COLORS.primary} style={styles.chipIcon} />
-        )}
-      </TouchableOpacity>
-    );
-  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.cardBackground} />
-
-      {/* Header View */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.headerButton} disabled={updateProfileMutation.isPending}>
+        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} disabled={isLoading}>
           <Ionicons name="close-outline" size={RF(30)} color={COLORS.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Uredi jezike</Text>
-        <TouchableOpacity
-          onPress={handleSave}
-          style={styles.headerButton}
-          disabled={!hasChanges || updateProfileMutation.isPending}
+        <TouchableOpacity 
+          style={styles.saveBtn}
+          onPress={handleSave} 
+          disabled={!hasChanges || isLoading}
         >
-          {updateProfileMutation.isPending ? (
+          {isLoading ? (
             <ActivityIndicator color={COLORS.primary} />
           ) : (
-            <Text style={[
-              styles.saveButtonTextHeader,
-              { color: (!hasChanges) ? COLORS.textSecondary : COLORS.primary }
-            ]}>
+            <Text style={[styles.saveBtnText, { color: !hasChanges ? COLORS.textSecondary : COLORS.primary }]}>
               Sačuvaj
             </Text>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Content View */}
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scrollViewContentContainer}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.selectedCount}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+          <Text style={styles.limitText}>
             Odabrano: {selectedLanguages.length} / {MAX_LANGUAGES}
           </Text>
+
           {showInput ? (
-            <View style={styles.inputContainer}>
+            <View style={styles.inputRow}>
               <TextInput
                 ref={textInputRef}
-                style={styles.textInput}
+                style={styles.input}
                 placeholder="Unesite novi jezik"
                 placeholderTextColor={COLORS.textSecondary}
                 value={newLanguage}
                 onChangeText={setNewLanguage}
                 onSubmitEditing={handleAddLanguage}
-                cursorColor={COLORS.textPrimary}
-                returnKeyType="done"
-                autoCapitalize="sentences"
-                editable={!updateProfileMutation.isPending}
+                editable={!isLoading}
               />
-              <TouchableOpacity
-                style={[styles.addButton, updateProfileMutation.isPending && styles.addButtonDisabled]}
-                onPress={handleAddLanguage}
-                disabled={updateProfileMutation.isPending}
+              <TouchableOpacity 
+                onPress={handleAddLanguage} 
+                disabled={isLoading} 
+                style={styles.addButton}
               >
-                {updateProfileMutation.isPending ? (
-                  <ActivityIndicator color={COLORS.white} />
-                ) : (
-                  <Ionicons name="add" size={RF(24)} color={COLORS.white} />
-                )}
+                {isLoading ? <ActivityIndicator color={COLORS.white} /> : <Ionicons name="add" size={RF(24)} color={COLORS.white} />}
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity
-              style={[
-                styles.addLanguageButton,
-                (selectedLanguages.length >= MAX_LANGUAGES || updateProfileMutation.isPending) && styles.addLanguageButtonDisabled
-              ]}
-              onPress={() => setShowInput(true)}
-              disabled={selectedLanguages.length >= MAX_LANGUAGES || updateProfileMutation.isPending}
+            <TouchableOpacity 
+              onPress={() => setShowInput(true)} 
+              disabled={selectedLanguages.length >= MAX_LANGUAGES || isLoading} 
+              style={styles.addLanguageButton}
             >
-              <Ionicons
-                name="add-circle-outline"
-                size={RF(22)}
-                color={(selectedLanguages.length >= MAX_LANGUAGES || updateProfileMutation.isPending) ? COLORS.textSecondary : COLORS.primary}
+              <Ionicons 
+                name="add-circle-outline" 
+                size={RF(22)} 
+                color={selectedLanguages.length >= MAX_LANGUAGES || isLoading ? COLORS.textSecondary : COLORS.primary} 
               />
-              <Text style={[
-                styles.addLanguageText,
-                (selectedLanguages.length >= MAX_LANGUAGES || updateProfileMutation.isPending) && { color: COLORS.textSecondary }
-              ]}>
-                Dodaj novi jezik
-              </Text>
+              <Text style={styles.addLanguageText}>Dodaj novi jezik</Text>
             </TouchableOpacity>
           )}
-          <View style={styles.chipContainer}>
-            {allLanguages.map(renderLanguageItem)}
+
+          <View style={styles.chipsContainer}>
+            {allLanguages.map(lang => {
+              const isSelected = selectedLanguages.includes(lang);
+              return (
+                <TouchableOpacity 
+                  key={lang} 
+                  onPress={() => handleToggleLanguage(lang)} 
+                  disabled={isLoading} 
+                  style={[
+                    styles.chip, 
+                    { 
+                      borderColor: isSelected ? COLORS.primary : COLORS.border,
+                      backgroundColor: isSelected ? COLORS.selectedChip : COLORS.cardBackground,
+                    }
+                  ]}
+                >
+                  <Text style={[styles.chipText, { color: isSelected ? COLORS.primary : COLORS.textPrimary }]}>
+                    {lang}
+                  </Text>
+                  {isSelected && <Ionicons name="checkmark-circle-outline" size={RF(18)} color={COLORS.primary} style={styles.chipIcon} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -293,17 +317,14 @@ export default function LanguagesScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: wp(4),
     paddingVertical: wp(2.5),
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + wp(2) : wp(2.5),
+    paddingTop: Platform.select({ android: (StatusBar.currentHeight ?? 0) + wp(2), ios: wp(2.5) }),
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.cardBackground,
@@ -314,54 +335,91 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.2,
         shadowRadius: 5,
       },
-      android: {
-        elevation: 6,
-      },
+      android: { elevation: 6 },
     }),
     zIndex: 10,
   },
-  headerButton: { padding: wp(1.5) },
+  closeBtn: { padding: wp(1.5) },
+  saveBtn: { padding: wp(1.5) },
+  saveBtnText: { fontSize: RF(16), fontWeight: '600' },
   headerTitle: {
-    fontSize: RF(18), fontWeight: 'bold', color: COLORS.textPrimary, flex: 1, textAlign: 'center', marginHorizontal: wp(2),
-  },
-  saveButtonTextHeader: { fontSize: RF(16), fontWeight: '600' },
-  
-  keyboardAvoidingContainer: {
+    fontSize: RF(18),
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
     flex: 1,
+    textAlign: 'center',
+    marginHorizontal: wp(2),
   },
-  scrollViewContentContainer: {
+  scrollContent: {
     flexGrow: 1,
     padding: wp(5),
-    backgroundColor: COLORS.background,
-    paddingBottom: Platform.OS === 'ios' ? wp(5) : wp(10),
   },
-  selectedCount: {
-    textAlign: 'center', fontSize: RF(16), color: COLORS.textPrimary, marginBottom: wp(4), fontWeight: 'bold',
+  limitText: {
+    textAlign: 'center',
+    fontSize: RF(16),
+    fontWeight: 'bold',
+    color: COLORS.textPrimary,
+    marginBottom: wp(4),
   },
-  addLanguageButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', padding: wp(4), borderRadius: 12, backgroundColor: COLORS.cardBackground, marginBottom: wp(4),
-    borderColor: COLORS.border, borderWidth: 1,
-    ...Platform.select({ ios: { shadowColor: COLORS.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5 }, android: { elevation: 3 } }),
+  inputRow: {
+    flexDirection: 'row',
+    marginBottom: wp(4),
   },
-  addLanguageButtonDisabled: { opacity: 0.5 },
-  addLanguageText: { color: COLORS.primary, fontWeight: 'bold', marginLeft: wp(1.5), fontSize: RF(16) },
-  inputContainer: { flexDirection: 'row', marginBottom: wp(4) },
-  textInput: {
-    flex: 1, borderColor: COLORS.border, borderWidth: 1, borderRadius: 12, padding: wp(4), fontSize: RF(16), color: COLORS.textPrimary, backgroundColor: COLORS.cardBackground,
-    ...Platform.select({ ios: { shadowColor: COLORS.textPrimary, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 5 }, android: { elevation: 3 } }),
+  input: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    padding: wp(4),
+    fontSize: RF(16),
+    color: COLORS.textPrimary,
+    backgroundColor: COLORS.cardBackground,
   },
   addButton: {
-    backgroundColor: COLORS.primary, borderRadius: 12, padding: wp(4), marginLeft: wp(2), justifyContent: 'center', alignItems: 'center',
+    marginLeft: wp(2),
+    backgroundColor: COLORS.primary,
+    borderRadius: 12,
+    padding: wp(4),
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  addButtonDisabled: { opacity: 0.6 },
-  chipContainer: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', alignItems: 'center' },
-  languageChip: {
-    backgroundColor: COLORS.cardBackground, borderRadius: 20, paddingHorizontal: wp(4), paddingVertical: wp(3), marginBottom: wp(3), marginHorizontal: wp(1), borderWidth: 1, borderColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    ...Platform.select({ ios: { shadowColor: COLORS.textPrimary, shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 3 }, android: { elevation: 2 } }),
+  addLanguageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: wp(4),
+    borderRadius: 12,
+    backgroundColor: COLORS.cardBackground,
+    marginBottom: wp(4),
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  languageChipSelected: { backgroundColor: COLORS.selectedChip, borderColor: COLORS.selectedChipBorder },
-  languageChipDisabled: { opacity: 0.7 },
-  chipText: { color: COLORS.textPrimary, fontSize: RF(14), fontWeight: '500' },
-  chipTextSelected: { color: COLORS.primary, fontWeight: 'bold' },
-  chipIcon: { marginLeft: wp(1.5) },
+  addLanguageText: {
+    marginLeft: wp(1.5),
+    color: COLORS.primary,
+    fontWeight: 'bold',
+    fontSize: RF(16),
+  },
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: wp(4),
+    paddingVertical: wp(3),
+    margin: wp(1),
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  chipText: {
+    fontSize: RF(14),
+    fontWeight: '500',
+  },
+  chipIcon: {
+    marginLeft: wp(1.5),
+  }
 });

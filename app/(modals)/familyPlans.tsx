@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
@@ -45,10 +46,13 @@ const familyPlanOptions = [
   { style: 'Imam decu', description: 'Već imam decu.' },
 ];
 
+interface MutationPayload { field: string; value: any; }
+
 export default function FamilyPlansScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext();
   const queryClient = useQueryClient();
 
   const initialFamilyPlans: string = useMemo(() => {
@@ -64,7 +68,7 @@ export default function FamilyPlansScreen() {
   }, [initialFamilyPlans]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
+    mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
       const response = await axios.put(
         `${API_B}/api/user/update-profile`,
@@ -79,13 +83,22 @@ export default function FamilyPlansScreen() {
       return response.data;
     },
     onSuccess: (data, variables) => {
+      const fieldName = 'familyPlans' as const;
+      const newValue = variables.value as string;
+
+      // 1. AŽURIRANJE LOKALNOG CONTEXTA
+      setProfileField(fieldName, newValue);
+
+      // 2. DIREKTNO AŽURIRANJE QUERY KEŠA
       queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
         if (!oldData) return oldData;
-        return {
-          ...oldData,
-          [variables.field]: variables.value,
-        };
+        return { ...oldData, [fieldName]: newValue };
       });
+
+      // 3. TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA
+      setSelectedFamilyPlans(newValue);
+
+      // 4. Zatvaranje modala
       router.back();
     },
     onError: (error: any) => {

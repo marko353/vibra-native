@@ -97,7 +97,7 @@ export default function BirthdayScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => router.push('../login')}>
-            <AntDesign name="arrowleft" size={28} color="#ff7f00" />
+            <AntDesign name="arrow-left" size={28} color="#ff7f00" />
           </TouchableOpacity>
         </View>
 

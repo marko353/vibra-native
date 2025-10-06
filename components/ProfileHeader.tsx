@@ -1,138 +1,139 @@
 import React from 'react';
-import { View, StyleSheet, TouchableOpacity, Text, SafeAreaView, Platform, StatusBar } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 const COLORS = {
   primary: '#E91E63',
   white: '#FFFFFF',
-  black: '#000000',
+  textPrimary: '#1E1E1E',
+  textSecondary: '#666666',
 };
 
 interface ProfileHeaderProps {
   onBackPress: () => void;
   mode: 'edit' | 'view';
-  onToggleMode: () => void;
+  setMode: (mode: 'edit' | 'view') => void;
   onSettingsPress: () => void;
 }
 
 const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   onBackPress,
   mode,
-  onToggleMode,
+  setMode,
   onSettingsPress,
 }) => {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={['rgba(0,0,0,0.6)', 'transparent']}
-        style={styles.gradientOverlay}
+  const iconColor = mode === 'view' ? COLORS.white : COLORS.textPrimary;
+  const toggleTextColor = mode === 'view' ? COLORS.white : COLORS.textSecondary;
+  const activeToggleTextColor = COLORS.primary;
+
+  // Izdvojena komponenta za dugmad da se ne ponavlja kod
+  const ToggleButtons = () => (
+    <View style={[styles.toggleButtonsContainer, mode === 'view' && styles.toggleButtonsTransparent]}>
+      <TouchableOpacity
+        onPress={() => setMode('edit')}
+        style={[styles.toggleBtn, mode === 'edit' && styles.activeToggleBtn]}
       >
-        <View style={styles.header}>
+        <Text style={[styles.toggleText, { color: toggleTextColor }, mode === 'edit' && { color: activeToggleTextColor }]}>
+          Uredi
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        onPress={() => setMode('view')}
+        style={[styles.toggleBtn, mode === 'view' && styles.activeToggleBtn]}
+      >
+        <Text style={[styles.toggleText, { color: toggleTextColor }, mode === 'view' && { color: activeToggleTextColor }]}>
+          Pregled
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top']}>
+      <View style={styles.header}>
+        {/* Levi deo hedera */}
+        <View style={styles.sideContainer}>
           <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
-            <Ionicons name="arrow-back" size={28} color={COLORS.white} />
+            <Ionicons name="arrow-back" size={28} color={iconColor} />
           </TouchableOpacity>
-
-          {/* Dinamički kontejner za dugmad na desnoj strani */}
-          <View style={[styles.rightSideContainer, mode === 'view' && styles.viewRightSideContainer]}>
-            <View style={styles.toggleButtonsContainer}>
-              <TouchableOpacity
-                onPress={() => onToggleMode()}
-                style={[styles.toggleBtn, mode === 'edit' && styles.activeToggleBtn]}
-              >
-                <Text style={[styles.toggleText, mode === 'edit' && styles.activeToggleText]}>
-                  Uredi
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => onToggleMode()}
-                style={[styles.toggleBtn, mode === 'view' && styles.activeToggleBtn]}
-              >
-                <Text style={[styles.toggleText, mode === 'view' && styles.activeToggleText]}>
-                  Pregled
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Dugme za podešavanja se prikazuje samo u "uredi" modu */}
-            {mode === 'edit' && (
-              <TouchableOpacity style={styles.iconBtn} onPress={onSettingsPress}>
-                <Ionicons name="settings-outline" size={28} color={COLORS.white} />
-              </TouchableOpacity>
-            )}
-
-            {/* OVAJ BLOK KODA JE IZBRISAN JER JE UZROKOVAO PRAZAN KRUG */}
-            {/* {mode === 'view' && (
-              <View style={styles.iconBtn} />
-            )} */}
-          </View>
         </View>
-      </LinearGradient>
+
+        {/* Srednji, centralni deo hedera */}
+        <View style={styles.centerContainer}>
+          {mode === 'edit' && <ToggleButtons />}
+        </View>
+
+        {/* Desni deo hedera */}
+        <View style={[styles.sideContainer, styles.alignRight]}>
+          {mode === 'edit' ? (
+            <TouchableOpacity style={styles.iconBtn} onPress={onSettingsPress}>
+              <Ionicons name="settings-outline" size={24} color={iconColor} />
+            </TouchableOpacity>
+          ) : (
+            <ToggleButtons />
+          )}
+        </View>
+      </View>
     </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
-    position: 'absolute',
-    top: 24,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  gradientOverlay: {
-    height: 100,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
+    width: '100%',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    height: 60,
+    paddingHorizontal: 16,
+    height: 56, // AŽURIRANO: Malo smanjena visina da se sve podigne
+  },
+  sideContainer: {
+    width: 60,
+    justifyContent: 'center',
+  },
+  alignRight: {
+    alignItems: 'flex-end',
+    width: 'auto',
+    minWidth: 60,
+  },
+  centerContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   iconBtn: {
     padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-    borderRadius: 20,
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  rightSideContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  viewRightSideContainer: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    marginRight: -10,
   },
   toggleButtonsContainer: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: '#EAEAEA',
     borderRadius: 20,
-    padding: 3,
-    marginRight: 10,
+    padding: 3, // AŽURIRANO: Malo smanjen padding
+  },
+  toggleButtonsTransparent: {
+    backgroundColor: 'rgba(255,255,255,0.2)',
   },
   toggleBtn: {
-    paddingVertical: 5,
-    paddingHorizontal: 11,
+    paddingVertical: 4, // AŽURIRANO: Smanjen vertikalni padding
+    paddingHorizontal: 10, // AŽURIRANO: Smanjen horizontalni padding
     borderRadius: 16,
   },
   activeToggleBtn: {
     backgroundColor: COLORS.white,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 3,
+    elevation: 3,
   },
   toggleText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.white,
-  },
-  activeToggleText: {
-    color: COLORS.primary,
+    fontSize: 13, // AŽURIRANO: Malo smanjen font
+    fontWeight: '600',
   },
 });
 
 export default ProfileHeader;
+

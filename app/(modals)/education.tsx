@@ -15,13 +15,13 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext'; // DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 
 const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const { width } = Dimensions.get('window');
-// Dodata su 'number' tipovi za 'percentage' i 'size'
 const wp = (percentage: number) => (width * percentage) / 100;
 const RF = (size: number) => size * (width / 375);
 
@@ -48,13 +48,19 @@ const educationOptions = [
     { style: 'Nije navedeno', description: 'Ne želim da navedem svoje obrazovanje.' },
 ];
 
+interface MutationPayload { field: string; value: any; }
+type UpdateableProfileField = 'education'; // Ostavljamo tipizaciju polja za proveru
+interface UserProfile { education: string[]; [key: string]: any; }
+
+
 export default function EducationScreen() {
     const router = useRouter();
     const { user } = useAuthContext();
+    const { setProfileField } = useProfileContext(); // DODATO
     const queryClient = useQueryClient();
 
     // Dohvatanje najnovijih podataka o korisniku
-    const { data: userProfile, isLoading: isProfileLoading, refetch } = useQuery({
+    const { data: userProfile, isLoading: isProfileLoading, refetch } = useQuery<UserProfile>({
         queryKey: ['userProfile', user?.id],
         queryFn: async () => {
             if (!user?.token) throw new Error("Token not available");
@@ -64,7 +70,14 @@ export default function EducationScreen() {
                     headers: { 'Authorization': `Bearer ${user.token}` },
                 }
             );
-            return response.data;
+            // Osiguravamo da je 'education' niz, čak i ako server vrati samo string
+            const data = response.data;
+            if (typeof data.education === 'string') {
+                data.education = [data.education];
+            } else if (!Array.isArray(data.education)) {
+                data.education = [];
+            }
+            return data;
         },
         enabled: !!user?.token,
     });
@@ -98,7 +111,7 @@ export default function EducationScreen() {
     }, [selectedEducation, userProfile]);
 
     const updateProfileMutation = useMutation({
-        mutationFn: async (payload: { field: string; value: any }) => {
+        mutationFn: async (payload: MutationPayload) => {
             if (!user?.token) throw new Error("Token not available");
             const response = await axios.put(
                 `${API_B}/api/user/update-profile`,
@@ -113,11 +126,22 @@ export default function EducationScreen() {
             return response.data;
         },
         onSuccess: (data, variables) => {
-            // Optimizovano ažuriranje keša kako bi se odmah prikazale promene
-            queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
+            const fieldName = 'education' as const;
+            const newValue = variables.value as string[]; // Očekujemo array stringova
+
+            // 1. AŽURIRANJE LOKALNOG CONTEXTA
+            setProfileField(fieldName, newValue);
+
+            // 2. DIREKTNO AŽURIRANJE QUERY KEŠA (Optimistično ažuriranje)
+            queryClient.setQueryData(['userProfile', user?.id], (oldData: UserProfile | undefined) => {
                 if (!oldData) return oldData;
-                return { ...oldData, [variables.field]: variables.value };
+                return { ...oldData, [fieldName]: newValue };
             });
+
+            // 3. TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA
+            setSelectedEducation(newValue[0] || '');
+
+            // 4. Zatvaranje modala
             router.back();
         },
         onError: (error: any) => {
@@ -133,7 +157,7 @@ export default function EducationScreen() {
         }
         if (!hasChanges || updateProfileMutation.isPending || isProfileLoading) return;
 
-        // Ažuriranje: Slanje niza umesto stringa
+        // Ažuriranje: Slanje niza, čak i ako sadrži samo jedan element
         updateProfileMutation.mutate({ field: 'education', value: [selectedEducation] });
     };
 

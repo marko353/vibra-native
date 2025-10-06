@@ -1,26 +1,21 @@
-// app/(modals)/bio.tsx - Finalna korigovana verzija (sa diskretnim kursorom)
-
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-  SafeAreaView,
-  StatusBar,
+  View, TextInput, Text, TouchableOpacity, StyleSheet, Alert, ActivityIndicator,
+  KeyboardAvoidingView, Platform, SafeAreaView, StatusBar, Dimensions
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useProfileContext } from '../../context/ProfileContext';
+import { useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { Ionicons } from '@expo/vector-icons';
 
 const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
+const MAX_BIO_LENGTH = 500;
+
+const { width } = Dimensions.get('window');
+const wp = (percentage: number) => (width * percentage) / 100;
+const RF = (size: number) => size * (width / 375);
 
 const COLORS = {
   primary: '#E91E63',
@@ -29,124 +24,83 @@ const COLORS = {
   background: '#F8F8F8',
   cardBackground: '#FFFFFF',
   border: '#E0E0E0',
-  white: '#FFFFFF',
-  danger: '#DC3545',
+  headerShadow: 'rgba(0, 0, 0, 0.08)',
 };
-
-const MAX_BIO_LENGTH = 500;
 
 export default function BioModalScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
-  const queryClient = useQueryClient();
-  const textInputRef = useRef<TextInput>(null);
+  const { setProfileField } = useProfileContext();
 
   const initialBio = typeof params.currentBio === 'string' ? params.currentBio : '';
   const [bioInput, setBioInput] = useState(initialBio);
   const [isChanged, setIsChanged] = useState(false);
+  const textInputRef = useRef<TextInput>(null);
 
-  useEffect(() => {
-    setIsChanged(bioInput !== initialBio);
-  }, [bioInput, initialBio]);
-
-  useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      textInputRef.current?.focus();
-    }, 100);
-    return () => clearTimeout(timeoutId);
-  }, []);
+  useEffect(() => setIsChanged(bioInput !== initialBio), [bioInput, initialBio]);
+  useEffect(() => { const timeout = setTimeout(() => textInputRef.current?.focus(), 100); return () => clearTimeout(timeout); }, []);
 
   const updateProfileMutation = useMutation({
     mutationFn: async (payload: { field: string; value: any }) => {
       if (!user?.token) throw new Error("Token not available");
-      const response = await axios.put(
-        `${API_B}/api/user/update-profile`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${user.token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
+      const res = await axios.put(`${API_B}/api/user/update-profile`, payload, {
+        headers: { Authorization: `Bearer ${user.token}` }
+      });
+      return res.data;
     },
     onSuccess: (data, variables) => {
-      queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          [variables.field]: variables.value,
-        };
-      });
+      setProfileField(variables.field as 'bio', variables.value);
       router.back();
     },
     onError: (error: any) => {
-      console.error('Greška pri čuvanju biografije:', error.response?.data || error.message);
-      Alert.alert('Greška', `Došlo je do greške prilikom čuvanja biografije: ${error.response?.data?.message || error.message}`);
-    },
+      console.error("LOG: [BioModal] onError:", error.response?.data || error.message);
+      Alert.alert('Greška', `Došlo je do greške: ${error.response?.data?.message || error.message}`);
+    }
   });
 
   const handleSaveBio = () => {
-    const trimmedBio = bioInput.trim();
-    updateProfileMutation.mutate({ field: 'bio', value: trimmedBio === '' ? null : trimmedBio });
+    const trimmed = bioInput.trim();
+    updateProfileMutation.mutate({ field: 'bio', value: trimmed === '' ? null : trimmed });
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar barStyle="dark-content" backgroundColor={COLORS.cardBackground} />
-      <KeyboardAvoidingView
-        style={styles.keyboardAvoidingContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
-      >
-        {/* HEADER */}
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+        
+        {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
-            <Ionicons name="close-outline" size={30} color={COLORS.textPrimary} />
+          <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} disabled={updateProfileMutation.isPending}>
+            <Ionicons name="close-outline" size={RF(30)} color={COLORS.textPrimary} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Uredi biografiju</Text>
           <TouchableOpacity
+            style={styles.saveBtn}
             onPress={handleSaveBio}
-            style={styles.headerButton}
-            disabled={!isChanged || updateProfileMutation.isPending || bioInput.trim() === initialBio.trim()}
+            disabled={!isChanged || updateProfileMutation.isPending}
           >
             {updateProfileMutation.isPending ? (
               <ActivityIndicator color={COLORS.primary} />
             ) : (
-              <Text style={[
-                styles.saveButtonTextHeader,
-                { color: (!isChanged || bioInput.trim() === initialBio.trim()) ? COLORS.textSecondary : COLORS.primary }
-              ]}>
+              <Text style={[styles.saveBtnText, { color: !isChanged ? COLORS.textSecondary : COLORS.primary }]}>
                 Sačuvaj
               </Text>
             )}
           </TouchableOpacity>
         </View>
 
-        {/* CONTENT */}
-        <View style={styles.content}>
-          <TextInput
-            ref={textInputRef}
-            style={styles.textInput}
-            multiline
-            placeholder="Napišite nešto o sebi..."
-            placeholderTextColor={COLORS.textSecondary}
-            value={bioInput}
-            onChangeText={setBioInput}
-            maxLength={MAX_BIO_LENGTH}
-            autoCorrect={true}
-            autoCapitalize="sentences"
-            // ✨ KLJUČNA PROMENA: Postavljen cursorColor na istu boju kao tekst
-            cursorColor={COLORS.textPrimary}
-          />
-          <View style={styles.charCountContainer}>
-            <Text style={styles.charCountText}>
-              {bioInput.length}/{MAX_BIO_LENGTH}
-            </Text>
-          </View>
-        </View>
+        {/* Bio Input */}
+        <TextInput
+          ref={textInputRef}
+          value={bioInput}
+          onChangeText={setBioInput}
+          multiline
+          maxLength={MAX_BIO_LENGTH}
+          placeholder="Napišite nešto o sebi..."
+          style={styles.input}
+        />
+        <Text style={styles.charCount}>{bioInput.length}/{MAX_BIO_LENGTH}</Text>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -155,73 +109,59 @@ export default function BioModalScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: COLORS.cardBackground,
-  },
-  keyboardAvoidingContainer: {
-    flex: 1,
+    backgroundColor: COLORS.background,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 15,
-    paddingVertical: 10,
+    paddingHorizontal: wp(4),
+    paddingVertical: wp(2.5),
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + wp(2) : wp(2.5),
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
     backgroundColor: COLORS.cardBackground,
-    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0,
+    ...Platform.select({
+      ios: {
+        shadowColor: COLORS.headerShadow,
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.2,
+        shadowRadius: 5,
+      },
+      android: {
+        elevation: 6,
+      },
+    }),
+    zIndex: 10,
   },
-  headerButton: {
-    padding: 5,
-  },
+  closeBtn: { padding: wp(1.5) },
+  saveBtn: { padding: wp(1.5) },
+  saveBtnText: { fontSize: RF(16), fontWeight: '600' },
   headerTitle: {
-    fontSize: 18,
+    fontSize: RF(18),
     fontWeight: 'bold',
     color: COLORS.textPrimary,
     flex: 1,
     textAlign: 'center',
-    marginHorizontal: 10,
+    marginHorizontal: wp(2),
   },
-  saveButtonTextHeader: {
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  content: {
+  input: {
     flex: 1,
-    padding: 20,
-    backgroundColor: COLORS.cardBackground,
-  },
-  textInput: {
-    flex: 1,
-    minHeight: 120,
-    borderColor: COLORS.border,
     borderWidth: 1,
-    borderRadius: 10,
+    borderColor: COLORS.border,
+    borderRadius: 12,
     padding: 15,
-    fontSize: 16,
-    color: COLORS.textPrimary,
     textAlignVertical: 'top',
-    lineHeight: 24,
+    fontSize: 16,
+    minHeight: 150,
     backgroundColor: COLORS.cardBackground,
-    ...Platform.select({
-      ios: {
-     
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+    margin: wp(4),
   },
-  charCountContainer: {
+  charCount: {
     alignSelf: 'flex-end',
-    marginTop: 10,
-    marginBottom: Platform.OS === 'ios' ? 0 : 20,
-  },
-  charCountText: {
-    fontSize: 14,
+    marginHorizontal: wp(4),
+    marginTop: 4,
     color: COLORS.textSecondary,
+    fontSize: 12,
   },
 });

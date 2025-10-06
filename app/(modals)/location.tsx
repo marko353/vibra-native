@@ -1,235 +1,204 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { 
-    View, 
-    Text, 
-    StyleSheet, 
-    TouchableOpacity, 
-    SafeAreaView, 
-    Platform, 
-    Switch, 
-    Dimensions, 
-    StatusBar, 
-    Alert 
-} from 'react-native';
-import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Switch, ActivityIndicator, TouchableOpacity, Linking, Platform, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import * as Location from 'expo-location';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '../../context/AuthContext';
 import { useProfileContext } from '../../context/ProfileContext';
 
-const { width } = Dimensions.get('window');
-
-// helpers
-const wp = (percentage: number) => (width * percentage) / 100;
-const RF = (size: number) => size * (width / 375);
-
-const COLORS = {
-  primary: '#E91E63',
-  background: '#F0F2F5',
-  cardBackground: '#FFFFFF',
-  textPrimary: '#1E1E1E',
-  textSecondary: '#666666',
-  placeholder: '#A0A0A0',
-  border: '#E0E0E0',
-  white: '#FFFFFF',
-  lightGray: '#D3D3D3',
-  headerShadow: 'rgba(0, 0, 0, 0.08)',
-};
-
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-export default function LocationScreen() {
-    console.log('[LocationScreen] Komponenta se renderuje');
-    const router = useRouter();
-    const params = useLocalSearchParams();
-    const { user } = useAuthContext();
-    const { setProfileField } = useProfileContext();
+const COLORS = {
+    primary: '#E91E63',
+    background: '#F0F2F5',
+    text: '#1A1A1A',
+    textSecondary: '#6B7280',
+    card: '#FFFFFF',
+};
 
-    const initialLocationEnabled = useMemo(
-        () => params.isLocationEnabled === 'true',
-        [params.isLocationEnabled]
-    );
-    const [isLocationEnabled, setIsLocationEnabled] = useState(initialLocationEnabled);
+export default function LocationSettingsModal() {
+    const router = useRouter();
+    const { user } = useAuthContext();
+    const queryClient = useQueryClient();
+    const { profile } = useProfileContext();
+
+    const [isLocationEnabled, setIsLocationEnabled] = useState(profile?.showLocation ?? false);
     const [isLoading, setIsLoading] = useState(false);
 
-    const hasChanges = isLocationEnabled !== initialLocationEnabled;
+    const hasChanged = isLocationEnabled !== (profile?.showLocation ?? false);
 
-    const handleSave = useCallback(async () => {
-        console.log('[LocationScreen] Pokrenuta funkcija handleSave');
-        setIsLoading(true);
-        try {
-            if (!API_BASE_URL) {
-                Alert.alert('Greška', 'API osnovni URL nije definisan. Proverite .env fajl.');
-                setIsLoading(false);
-                return;
-            }
-
-            if (!user || !user.token) {
-                Alert.alert('Greška', 'Korisnički token nije dostupan. Molimo pokušajte ponovo.');
-                setIsLoading(false);
-                return;
-            }
-
-            if (isLocationEnabled) {
-                // 1. Dozvola za lokaciju
-                let { status } = await Location.requestForegroundPermissionsAsync();
-                if (status !== 'granted') {
-                    Alert.alert('Greška', 'Pristup lokaciji je odbijen.');
-                    setIsLoading(false);
-                    return;
-                }
-
-                // 2. Trenutna lokacija
-                const location = await Location.getCurrentPositionAsync({
-                    accuracy: Location.Accuracy.High,
-                });
-                const { latitude, longitude } = location.coords;
-
-                // 3. Reverse geocode
-                const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
-                const city = geocode.length > 0 && geocode[0].city ? geocode[0].city : 'Nepoznato';
-
-                // 4. Slanje na backend (RAVNO latitude i longitude)
-                await axios.put(
-                    `${API_BASE_URL}/api/user/update-profile`,
-                    {
-                        latitude,
-                        longitude,
-                        showLocation: true,
-                    },
-                    { headers: { Authorization: `Bearer ${user.token}` } }
-                );
-
-                // 5. Ažuriranje konteksta
-                setProfileField('location', { latitude, longitude, locationCity: city });
-                setProfileField('showLocation', true);
-
-                router.back();
-            } else {
-                // isključivanje lokacije
-                await axios.put(
-                    `${API_BASE_URL}/api/user/update-profile`,
-                    { showLocation: false, location: null },
-                    { headers: { Authorization: `Bearer ${user.token}` } }
-                );
-
-                setProfileField('location', null);
-                setProfileField('showLocation', false);
-
-                router.back();
-            }
-        } catch (error: unknown) {
-            let errorMessage = 'Nije moguće sačuvati lokaciju. Pokušajte ponovo.';
-            if (axios.isAxiosError(error) && error.response) {
-                errorMessage = error.response.data.message || errorMessage;
-            } else if (error instanceof Error) {
-                errorMessage = error.message;
-            }
-            console.error("Greška pri ažuriranju lokacije:", errorMessage);
-            Alert.alert('Greška', errorMessage);
-        } finally {
+    const updateProfileMutation = useMutation({
+        mutationFn: async (data: Partial<{ location: object | null; showLocation: boolean }>) => {
+            if (!user?.token) throw new Error('Not authenticated');
+            const response = await axios.put(`${API_BASE_URL}/api/user/update-profile`, data, {
+                headers: { Authorization: `Bearer ${user.token}` },
+            });
+            return response.data;
+        },
+        onSuccess: (updatedProfileData) => {
+            queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => ({
+                ...oldData,
+                ...updatedProfileData,
+            }));
+            router.back();
+        },
+        onError: (error) => {
+            Alert.alert('Greška', 'Nije uspelo čuvanje podešavanja.');
+            setIsLocationEnabled(profile?.showLocation ?? false);
+        },
+        onSettled: () => {
             setIsLoading(false);
         }
-    }, [router, isLocationEnabled, user, setProfileField]);
+    });
+
+    const openAppSettings = () => {
+        if (Platform.OS === 'ios') Linking.openURL('app-settings:');
+        else Linking.openSettings();
+    };
+
+    const handleAccept = async () => {
+        if (!hasChanged) return;
+        setIsLoading(true);
+
+        if (isLocationEnabled) {
+            try {
+                let { status } = await Location.getForegroundPermissionsAsync();
+                if (status !== 'granted') {
+                    status = (await Location.requestForegroundPermissionsAsync()).status;
+                }
+
+                if (status !== 'granted') throw new Error('Permission denied');
+                
+                const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+                const geocode = await Location.reverseGeocodeAsync(location.coords);
+                const locationCity = geocode[0]?.subregion || geocode[0]?.city || null;
+                const locationPayload = { ...location.coords, locationCity };
+                
+                updateProfileMutation.mutate({ location: locationPayload, showLocation: true });
+
+            } catch (error: any) {
+                setIsLoading(false);
+                setIsLocationEnabled(false);
+                
+                if (error.message === 'Permission denied') {
+                    Alert.alert('Dozvola je potrebna', 'Omogućite pristup lokaciji u podešavanjima telefona.',
+                        [{ text: 'Otkaži', style: 'cancel'}, { text: 'Otvori podešavanja', onPress: openAppSettings }]
+                    );
+                } else {
+                    Alert.alert('Greška', 'Nije moguće preuzeti lokaciju.');
+                }
+            }
+        } else {
+            // ✨ KONAČNA ISPRAVKA: Šaljemo samo promenu za 'showLocation'.
+            // Ne šaljemo više 'location: null', čime se rešava problem.
+            updateProfileMutation.mutate({
+                showLocation: false
+            });
+        }
+    };
 
     return (
-        <SafeAreaView style={styles.safeArea}>
-            <StatusBar barStyle="dark-content" backgroundColor={COLORS.cardBackground} />
-            <Stack.Screen options={{ headerShown: false }} />
+        <View style={styles.container}>
             <View style={styles.header}>
-                <TouchableOpacity onPress={() => router.back()} style={styles.closeBtn}>
-                    <Ionicons name="close-outline" size={RF(30)} color={COLORS.textPrimary} />
+                <TouchableOpacity onPress={() => router.back()} style={styles.headerButton}>
+                    <Ionicons name="close" size={28} color={COLORS.textSecondary} />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Podešavanja lokacije</Text>
-                <TouchableOpacity
-                    onPress={handleSave}
-                    style={styles.saveBtn}
-                    disabled={!hasChanges || isLoading}
-                >
-                    <Text
-                        style={[
-                            styles.saveBtnText,
-                            { color: hasChanges && !isLoading ? COLORS.primary : COLORS.textSecondary },
-                        ]}
-                    >
-                        {isLoading ? 'Čuvanje...' : 'Sačuvaj'}
-                    </Text>
+                <Text style={styles.title}>Lokacija</Text>
+                <TouchableOpacity onPress={handleAccept} style={styles.headerButton} disabled={!hasChanged || isLoading}>
+                    {isLoading ? <ActivityIndicator size="small" color={COLORS.primary}/> : <Text style={[styles.acceptButtonText, !hasChanged && styles.acceptButtonTextDisabled]}>Prihvati</Text>}
                 </TouchableOpacity>
             </View>
-            <View style={styles.container}>
-                <View style={styles.cardContainer}>
-                    <View style={styles.cardContent}>
-                        <Text style={styles.cardTitle}>Prikaži lokaciju</Text>
-                        <Text style={styles.cardValue}>
-                            Omogućite da se vaša lokacija prikaže na profilu
-                        </Text>
-                    </View>
-                    <Switch
-                        trackColor={{ false: COLORS.lightGray, true: COLORS.primary }}
-                        thumbColor={COLORS.white}
-                        ios_backgroundColor={COLORS.lightGray}
-                        onValueChange={setIsLocationEnabled}
-                        value={isLocationEnabled}
-                    />
+
+            <View style={styles.card}>
+                <View style={styles.iconContainer}>
+                    <Ionicons name="location-sharp" size={24} color={COLORS.primary} />
                 </View>
+                <View style={styles.textContainer}>
+                    <Text style={styles.cardTitle}>Prikaži moju lokaciju</Text>
+                    <Text style={styles.cardDescription}>
+                        Ako je uključeno, grad u kojem se nalazite biće vidljiv na vašem profilu.
+                    </Text>
+                </View>
+                <Switch
+                    trackColor={{ false: '#d1d1d6', true: '#f8bbd0' }}
+                    thumbColor={isLocationEnabled ? COLORS.primary : '#f4f3f4'}
+                    ios_backgroundColor="#e5e5ea"
+                    onValueChange={setIsLocationEnabled}
+                    value={isLocationEnabled}
+                    disabled={isLoading}
+                />
             </View>
-        </SafeAreaView>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
-    safeArea: { flex: 1, backgroundColor: COLORS.background },
+    container: {
+        flex: 1,
+        backgroundColor: COLORS.background,
+        paddingTop: Platform.OS === 'android' ? 40 : 60,
+    },
     header: {
         flexDirection: 'row',
-        alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: wp(4),
-        paddingVertical: wp(2.5),
-        paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + wp(2) : wp(2.5),
+        alignItems: 'center',
+        paddingHorizontal: 10,
+        paddingBottom: 20,
         borderBottomWidth: 1,
-        borderBottomColor: COLORS.border,
-        backgroundColor: COLORS.cardBackground,
-        ...Platform.select({
-            ios: {
-                shadowColor: COLORS.headerShadow,
-                shadowOffset: { width: 0, height: 4 },
-                shadowOpacity: 0.2,
-                shadowRadius: 5,
-            },
-            android: {
-                elevation: 6,
-            },
-        }),
-        zIndex: 10,
+        borderBottomColor: '#EFEFEF',
     },
-    closeBtn: { padding: wp(1.5) },
-    saveBtn: { padding: wp(1.5) },
-    saveBtnText: { fontSize: RF(16), fontWeight: '600' },
-    headerTitle: {
-        fontSize: RF(18),
-        fontWeight: 'bold',
-        color: COLORS.textPrimary,
-        flex: 1,
-        textAlign: 'center',
-        marginHorizontal: wp(2),
+    title: {
+        fontSize: 18,
+        fontWeight: '600',
+        color: COLORS.text,
     },
-    container: { flex: 1, padding: 20, marginTop: 20 },
-    cardContainer: {
-        backgroundColor: COLORS.cardBackground,
-        borderRadius: 15,
+    headerButton: {
+        padding: 10,
+        minWidth: 70,
+        alignItems: 'center'
+    },
+    acceptButtonText: {
+        fontSize: 17,
+        fontWeight: '600',
+        color: COLORS.primary,
+    },
+    acceptButtonTextDisabled: {
+        color: COLORS.textSecondary,
+        opacity: 0.5,
+    },
+    card: {
+        backgroundColor: COLORS.card,
+        borderRadius: 12,
+        margin: 20,
         padding: 20,
-        marginBottom: 10,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'space-between',
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 8,
-        elevation: 5,
+        shadowOpacity: 0.08,
+        shadowRadius: 15,
+        shadowOffset: { width: 0, height: 5 },
+        elevation: 4,
     },
-    cardContent: { flex: 1 },
-    cardTitle: { fontSize: 16, fontWeight: 'bold', color: COLORS.textPrimary },
-    cardValue: { fontSize: 14, color: COLORS.textSecondary, marginTop: 5 },
+    iconContainer: {
+        backgroundColor: '#FCE4EC',
+        borderRadius: 8,
+        padding: 8,
+        marginRight: 15,
+    },
+    textContainer: {
+        flex: 1,
+    },
+    cardTitle: {
+        fontSize: 16,
+        fontWeight: '500',
+        color: COLORS.text,
+    },
+    cardDescription: {
+        fontSize: 13,
+        color: COLORS.textSecondary,
+        marginTop: 4,
+        lineHeight: 18,
+    },
 });

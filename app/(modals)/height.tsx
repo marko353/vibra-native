@@ -1,5 +1,3 @@
-// app/(modals)/height.tsx
-
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import {
   View,
@@ -21,6 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext'; // <-- DODATO ZA TRENUTNO AŽURIRANJE KONTEKSTA
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
@@ -47,10 +46,17 @@ const MAX_HEIGHT = 220;
 const HEIGHT_DATA = Array.from({ length: MAX_HEIGHT - MIN_HEIGHT + 1 }, (_, i) => MIN_HEIGHT + i);
 const ITEM_HEIGHT = RF(45);
 
+// Tipizacija
+interface MutationPayload { field: string; value: any; }
+type UpdateableProfileField = 'height';
+interface UserProfile { height: number | null; [key: string]: any; }
+
+
 export default function HeightScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext(); // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
   const queryClient = useQueryClient();
 
   const initialHeight: number = useMemo(() => {
@@ -77,7 +83,7 @@ export default function HeightScreen() {
   }, [initialHeight]);
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
+    mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
       const response = await axios.put(
         `${API_B}/api/user/update-profile`,
@@ -92,13 +98,25 @@ export default function HeightScreen() {
       return response.data;
     },
     onSuccess: (data, variables) => {
+      const fieldName = 'height' as const; // Explicitno castovanje za TS
+      const newValue = variables.value;
+
+      // KORAK A: AŽURIRANJE LOKALNOG CONTEXTA (Brza sinhronizacija)
+      setProfileField(fieldName, newValue);
+
+      // KORAK B: DIREKTNO AŽURIRANJE QUERY KEŠA (Optimistično ažuriranje)
       queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
-          [variables.field]: variables.value,
+          [fieldName]: newValue,
         };
       });
+
+      // KORAK C: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA (Vizuelna potvrda)
+      setSelectedHeight(newValue);
+      
+      // KORAK D: Zatvaranje modala
       router.back();
     },
     onError: (error: any) => {
@@ -114,8 +132,18 @@ export default function HeightScreen() {
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const yOffset = event.nativeEvent.contentOffset.y;
+    
+    // Računamo indeks najbliži centru vidljivog dela liste (sa uklonjenim snapToInterval, ovo je ključno)
     const centerIndex = Math.round(yOffset / ITEM_HEIGHT);
-    const newSelectedHeight = HEIGHT_DATA[centerIndex];
+    const limitedIndex = Math.max(0, Math.min(HEIGHT_DATA.length - 1, centerIndex));
+    const newSelectedHeight = HEIGHT_DATA[limitedIndex];
+
+    // Ručno skrolujemo da bi se element snap-ovao tačno na centar (umesto snapToInterval)
+    flatListRef.current?.scrollToOffset({
+        offset: limitedIndex * ITEM_HEIGHT,
+        animated: true,
+    });
+
     if (newSelectedHeight && newSelectedHeight !== selectedHeight) {
       setSelectedHeight(newSelectedHeight);
     }
@@ -180,19 +208,23 @@ export default function HeightScreen() {
               offset: ITEM_HEIGHT * index,
               index,
             })}
+            // Dodajemo padding za FlatList da bi se prvi i poslednji element prikazali na centru
+            contentContainerStyle={styles.flatlistContent}
+            
+            // Rešavanje greške pri prvom skrolovanju
             onScrollToIndexFailed={info => {
               setTimeout(() => {
                 flatListRef.current?.scrollToIndex({
                   index: info.index,
                   animated: true,
-                  viewPosition: 0.5
+                  viewPosition: 0.5 // Prikazuje element na sredini
                 });
               }, 500);
             }}
+            
             onMomentumScrollEnd={handleScrollEnd}
-            snapToInterval={ITEM_HEIGHT}
+            // UKLONJENO: snapToInterval je uklonjen da bi ručno skrolovanje radilo precizno
             decelerationRate="fast"
-            contentContainerStyle={styles.flatlistContent}
           />
           <View style={styles.unitTextContainer}>
             <Text style={styles.unitText}>cm</Text>
@@ -211,6 +243,7 @@ export default function HeightScreen() {
           <View style={styles.selectionLineTop} />
           <View style={styles.selectionLineBottom} />
         </View>
+        <Text style={styles.selectedHeightText}>Trenutna visina: {selectedHeight} cm</Text>
       </View>
     </SafeAreaView>
   );
@@ -289,7 +322,7 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   flatlistContent: {
-    paddingVertical: RF(100),
+    paddingVertical: RF(250 / 2) - ITEM_HEIGHT / 2, // Centriranje prvog i poslednjeg elementa
     alignItems: 'center',
   },
   itemContainer: {
@@ -331,8 +364,8 @@ const styles = StyleSheet.create({
     pointerEvents: 'none',
   },
   unitText: {
-    fontSize: RF(14),
-    lineHeight: RF(18),
+    fontSize: RF(18),
+    lineHeight: RF(22),
     color: COLORS.primary,
     fontWeight: '600',
   },
@@ -368,4 +401,10 @@ const styles = StyleSheet.create({
     right: 0,
     height: RF(60),
   },
+  selectedHeightText: {
+    marginTop: wp(8),
+    fontSize: RF(24),
+    fontWeight: 'bold',
+    color: COLORS.primary,
+  }
 });

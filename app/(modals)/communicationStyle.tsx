@@ -17,6 +17,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext'; // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
@@ -49,10 +50,17 @@ const communicationStyles = [
   { style: 'Organizovano i precizno', description: 'Preferira planirane, strukturirane razgovore.' },
 ];
 
+// Tipizacija
+interface MutationPayload { field: string; value: any; }
+type UpdateableProfileField = 'communicationStyle';
+interface UserProfile { communicationStyle: string | null; [key: string]: any; }
+
+
 export default function CommunicationStyleScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext(); // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
   const queryClient = useQueryClient();
 
   // Učitavanje početnog stila komunikacije iz params-a
@@ -73,7 +81,7 @@ export default function CommunicationStyleScreen() {
 
 
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
+    mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
       const response = await axios.put(
         `${API_B}/api/user/update-profile`,
@@ -88,13 +96,25 @@ export default function CommunicationStyleScreen() {
       return response.data;
     },
     onSuccess: (data, variables) => {
+      const fieldName = 'communicationStyle' as const;
+      const newValue = variables.value;
+
+      // KORAK A: AŽURIRANJE LOKALNOG CONTEXTA (Brza sinhronizacija)
+      setProfileField(fieldName, newValue);
+
+      // KORAK B: DIREKTNO AŽURIRANJE QUERY KEŠA (Optimistično ažuriranje)
       queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
-          [variables.field]: variables.value,
+          [fieldName]: newValue,
         };
       });
+      
+      // KORAK C: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA (Vizuelna potvrda)
+      setSelectedStyle(newValue);
+
+      // KORAK D: Zatvaranje modala
       router.back();
     },
     onError: (error: any) => {

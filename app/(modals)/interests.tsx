@@ -1,30 +1,35 @@
-// app/(modals)/interests.tsx - Implementacija kao standardni ekran
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
-  SafeAreaView,
+  TextInput,
   TouchableOpacity,
-  FlatList,
+  StyleSheet,
   Alert,
   ActivityIndicator,
+  KeyboardAvoidingView,
   Platform,
+  SafeAreaView,
   StatusBar,
   Dimensions,
+  ScrollView,
+  Keyboard,
+  FlatList, // Koristi se FlatList iz originalnog koda
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
+import { useProfileContext } from '../../context/ProfileContext'; // DODATO
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 
-const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
-
+// Konfiguracija i Konstante
+const API_B = process.env.EXPO_PUBLIC_API_BASE_URL; 
 const { width } = Dimensions.get('window');
 const wp = (percentage: number) => (width * percentage) / 100;
 const RF = (size: number) => size * (width / 375);
 
+// Podaci o interesovanjima iz vašeg koda:
 const interestsData = [
   {
     category: 'Društveni sadržaj',
@@ -131,6 +136,7 @@ const interestsData = [
 ];
 
 const MAX_INTERESTS_PER_CATEGORY = 5;
+const MAX_TOTAL_INTERESTS = 15; // Možete postaviti i ukupan limit ako želite
 
 const COLORS = {
   primary: '#E91E63',
@@ -146,37 +152,47 @@ const COLORS = {
   headerShadow: 'rgba(0, 0, 0, 0.08)',
 };
 
+// Tipizacija
+interface MutationPayload { field: string; value: any; }
+type UpdateableProfileField = 'languages' | 'bio' | 'interests'; 
+interface UserProfile { interests: string[]; [key: string]: any; } // Dodato za setQueryData
+
 export default function InterestsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
+  const { setProfileField } = useProfileContext(); // Korišćenje za trenutno ažuriranje
   const queryClient = useQueryClient();
 
+  // 1. Inicijalizacija iz params
   const initialInterests: string[] = useMemo(() => {
     if (typeof params.currentInterests === 'string') {
       try {
-        return JSON.parse(params.currentInterests);
+        const parsed = JSON.parse(params.currentInterests);
+        return Array.isArray(parsed) ? (parsed as string[]).map(String) : [];
       } catch (e) {
         console.error("Failed to parse currentInterests param:", e);
         return [];
       }
     }
     if (Array.isArray(params.currentInterests)) {
-      return params.currentInterests.map(String);
+      return (params.currentInterests as string[]).map(String);
     }
     return [];
   }, [params.currentInterests]);
 
   const [selectedTags, setSelectedTags] = useState<string[]>(initialInterests);
 
+  // 2. Provera promena
   const hasChanges = useMemo(() => {
     const sortedInitial = [...initialInterests].sort();
     const sortedSelected = [...selectedTags].sort();
     return JSON.stringify(sortedInitial) !== JSON.stringify(sortedSelected);
   }, [initialInterests, selectedTags]);
 
+  // 3. Mutacija sa optimističnim ažuriranjem
   const updateProfileMutation = useMutation({
-    mutationFn: async (payload: { field: string; value: any }) => {
+    mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
       const response = await axios.put(
         `${API_B}/api/user/update-profile`,
@@ -191,13 +207,25 @@ export default function InterestsScreen() {
       return response.data;
     },
     onSuccess: (data, variables) => {
+      const fieldName = variables.field as UpdateableProfileField;
+      const newValue = variables.value;
+      
+      // KORAK A: DIREKTNO AŽURIRANJE QUERY KEŠA (OPTIMISTIČNO)
       queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
         if (!oldData) return oldData;
         return {
           ...oldData,
-          [variables.field]: variables.value,
+          [fieldName]: newValue,
         };
       });
+
+      // KORAK B: AŽURIRANJE LOKALNOG CONTEXTA
+      setProfileField(fieldName, newValue as UserProfile['interests']); 
+
+      // KORAK C: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA (vizuelna potvrda)
+      setSelectedTags(newValue as string[]);
+
+      // KORAK D: Zatvaranje modala
       router.back();
     },
     onError: (error: any) => {
@@ -210,9 +238,12 @@ export default function InterestsScreen() {
     if (updateProfileMutation.isPending) return;
     setSelectedTags((prev) => {
       const isSelected = prev.includes(tag);
+      let newState: string[];
+
       if (isSelected) {
-        return prev.filter((t) => t !== tag);
+        newState = prev.filter((t) => t !== tag);
       } else {
+        // Logika ograničenja po kategoriji
         const categoryTags = interestsData.find(c => c.category === category)?.tags || [];
         const selectedInCategory = prev.filter(t => categoryTags.includes(t));
 
@@ -223,8 +254,19 @@ export default function InterestsScreen() {
           );
           return prev;
         }
-        return [...prev, tag];
+
+        // Provera ukupnog limita
+        if (prev.length >= MAX_TOTAL_INTERESTS) {
+             Alert.alert(
+              'Ukupan limit je dostignut',
+              `Možete odabrati maksimalno ${MAX_TOTAL_INTERESTS} interesovanja ukupno.`
+            );
+            return prev;
+        }
+
+        newState = [...prev, tag];
       }
+      return newState;
     });
   };
 
