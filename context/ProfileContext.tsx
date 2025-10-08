@@ -1,7 +1,6 @@
 
-// Fajl: context/ProfileContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthContext } from './AuthContext';
 
@@ -32,6 +31,10 @@ export interface UserProfile {
   fullName?: string;
   birthDate?: string;
   hasCompletedLocationPrompt?: boolean;
+  
+  // 👇 DODATA POLJA 👇
+  profilePictures?: string[];
+  avatar?: string;
 }
 
 const defaultProfile: UserProfile = {
@@ -146,4 +149,3 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
     </ProfileContext.Provider>
   );
 };
-

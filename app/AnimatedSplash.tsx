@@ -1,43 +1,39 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Animated, StyleSheet } from 'react-native';
-import * as SplashScreen from 'expo-splash-screen';
 
 export default function AnimatedSplash({ onFinish }: { onFinish: () => void }) {
-  const opacity = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
-    // Sakrij Expo splash čim animacija počne
-    async function hideSplash() {
-      try {
-        await SplashScreen.hideAsync();
-      } catch (e) {
-        console.warn(e);
-      }
-    }
-    hideSplash();
-
+    // Definišemo animaciju koja će se izvršiti
     Animated.sequence([
-      Animated.timing(opacity, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.delay(1000),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 1000,
-        useNativeDriver: true,
-      }),
+      // 1. Čekamo 1.5 sekundu
+      Animated.delay(1500),
+      // 2. Zatim, u isto vreme, smanjujemo i činimo sliku providnom u trajanju od 1 sekunde
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 0,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(scale, {
+          toValue: 0.85,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ]),
     ]).start(() => {
+      // Kada se animacija završi, pozivamo onFinish funkciju
       onFinish();
     });
-  }, []);
+  }, []); // Prazan niz osigurava da se useEffect izvrši samo jednom
 
   return (
     <View style={styles.container}>
       <Animated.Image
         source={require('../assets/images/1000006401.png')}
-        style={[styles.image, { opacity }]}
+        style={[styles.image, { opacity, transform: [{ scale }] }]}
         resizeMode="contain"
       />
     </View>
@@ -56,3 +52,4 @@ const styles = StyleSheet.create({
     height: 200,
   },
 });
+

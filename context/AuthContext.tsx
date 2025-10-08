@@ -1,5 +1,6 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface User {
   id: string;
@@ -25,6 +26,8 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -60,6 +63,9 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const logout = async () => {
     setUser(null);
     await AsyncStorage.removeItem('currentUser');
+    
+    // 👇 3. DODATO: Brišemo sav sačuvan keš prilikom odjavljivanja
+    queryClient.clear();
   };
 
   const updateUser = (newUserData: Partial<User>) => {

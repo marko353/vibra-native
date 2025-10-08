@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuthContext } from '../context/AuthContext';
-import  {ProfileProvider } from '../context/ProfileContext'; // ✨ Dodao sam ovu liniju
-import AnimatedSplash from '../app/AnimatedSplash';
+import { ProfileProvider } from '../context/ProfileContext';
+import AnimatedSplash from './AnimatedSplash';
 import { View, ActivityIndicator, Text } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -14,30 +14,25 @@ function AuthNavigator() {
   const segments = useSegments();
   const router = useRouter();
 
-  const inAuthGroup = useMemo(() => {
-    const currentSegment = segments[0];
-    return ['(auth)', 'login', 'signup', 'forgot-password', 'resetPassword'].includes(currentSegment as string);
-  }, [segments]);
-
-  const [initialCheckComplete, setInitialCheckComplete] = useState(false);
+  const inAuthGroup = useMemo(() => segments[0] === '(auth)', [segments]);
 
   useEffect(() => {
-    if (loading) return;
-
-    if (!user && !inAuthGroup) {
-      router.replace('../login');
-    } else if (user && inAuthGroup) {
-      router.replace('/home');
+    if (loading) {
+      return;
     }
 
-    setInitialCheckComplete(true);
-  }, [user, loading]);
+    if (!user && !inAuthGroup) {
+      router.replace('/(auth)/login');
+    } else if (user && inAuthGroup) {
+      // ISPRAVKA: Preusmeravamo na grupu, a ruter će sam naći početni 'index.tsx' ekran
+      router.replace('/(tabs)/home');
+    }
+  }, [user, loading, segments]);
 
-  if (loading || !initialCheckComplete) {
+  if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color="#ff7f00" />
-        <Text style={{ marginTop: 10, color: '#666' }}>Učitavanje aplikacije...</Text>
       </View>
     );
   }
@@ -45,19 +40,13 @@ function AuthNavigator() {
   return <Slot />;
 }
 
-export default function Layout() {
-  const [showSplash, setShowSplash] = useState(true);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setShowSplash(false), 3000);
-    return () => clearTimeout(timer);
-  }, []);
+export default function RootLayout() {
+  const [isSplashAnimationFinished, setSplashAnimationFinished] = useState(false);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {showSplash ? (
-        <AnimatedSplash onFinish={() => setShowSplash(false)} />
-      ) : (
+      {isSplashAnimationFinished ? (
+        // Lepo formatirano da se izbegnu greške sa tekstom
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
             <ProfileProvider>
@@ -65,7 +54,10 @@ export default function Layout() {
             </ProfileProvider>
           </AuthProvider>
         </QueryClientProvider>
+      ) : (
+        <AnimatedSplash onFinish={() => setSplashAnimationFinished(true)} />
       )}
     </GestureHandlerRootView>
   );
 }
+

@@ -1,6 +1,7 @@
 // Ažuriran fajl: ExploreScreen.js
 import React from 'react';
-import { View, Text, Button, SafeAreaView, StyleSheet } from 'react-native';
+import { View, Text, Button, StyleSheet, } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext'; // Import AuthContext
 import Header from '../../components/Header';
