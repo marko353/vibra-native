@@ -121,7 +121,7 @@ const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
         <View style={styles.overlayTextContainer}>
           <Text style={styles.overlayNameText} numberOfLines={1} ellipsizeMode="tail">
             {fullName || ''}
-            {age !== null && <Text style={styles.overlayAgeText}>, {age}</Text>}
+            {age !== null && <Text style={styles.overlayAgeText}>{`, ${age}`}</Text>}
           </Text>
 
           {showLocation && locationCity && (

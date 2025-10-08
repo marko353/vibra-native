@@ -1,10 +1,11 @@
-// app/(tabs)/_layout.tsx
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Text, Image } from 'react-native';
+import { Text, Image, View, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5, Feather } from '@expo/vector-icons';
+import { useProfileContext } from '../../context/ProfileContext';
+import LocationPermissionScreen from '../(auth)/location-permission'; 
 
-export default function TabsLayout() {
+function MainTabsLayout() {
   return (
     <Tabs
       screenOptions={{
@@ -55,4 +56,27 @@ export default function TabsLayout() {
       />
     </Tabs>
   );
+}
+
+export default function TabsGroupGateLayout() {
+  const { profile, isLoading: isProfileLoading } = useProfileContext();
+
+  if (isProfileLoading || !profile) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+        <Image
+          source={require('../../assets/images/1000006401.png')}
+          style={{ width: 200, height: 200 }}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="small" color="#555" style={{ marginTop: 20 }}/>
+      </View>
+    );
+  }
+
+  if (!profile.hasCompletedLocationPrompt) {
+    return <LocationPermissionScreen />;
+  }
+
+  return <MainTabsLayout />;
 }

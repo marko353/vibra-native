@@ -7,20 +7,20 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Dimensions,
-  SafeAreaView,
+ 
 } from 'react-native';
-import axios from 'axios';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQueryClient } from '@tanstack/react-query';
 import MonetizationPackages from '../../components/MonetizationPackages';
 import BenefitMarquee from '../../components/BenefitMarquee';
 import Header from '../../components/Header';
+// ✨ 1. DODATO: Uvozimo `useProfileContext`
+import { useProfileContext } from '../../context/ProfileContext';
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-
+// ... (calculateAge funkcija ostaje ista)
 const calculateAge = (birthDateString?: string | null): number | null => {
   if (!birthDateString) return null;
   const birthDate = new Date(birthDateString);
@@ -45,37 +45,25 @@ const COLORS = {
 };
 
 export default function ProfileScreen() {
-  const { user, loading: authContextLoading } = useAuthContext();
+  const { user } = useAuthContext();
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const { data: profile, isLoading: isProfileLoading, isError } = useQuery({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      if (!user?.token) return null;
-      try {
-        const response = await axios.get(`${API_BASE_URL}/api/user/profile`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
-        return response.data;
-      } catch (error) {
-        console.error('Greška pri preuzimanju profila:', error);
-        throw error;
-      }
-    },
-    enabled: !!user?.token,
-    retry: 1,
-  });
+  // ✨ 2. KLJUČNA IZMENA: Koristimo podatke direktno iz Contexta!
+  const { profile, isLoading: isProfileLoading, isRefetching } = useProfileContext();
+
+  // ✨ 3. UKLONJENO: Ceo `useQuery` blok koji je bio ovde je obrisan.
 
   useFocusEffect(
     useCallback(() => {
+      // Ovaj deo je i dalje koristan, on osvežava podatke kada se vratimo na ekran
       if (user?.id) {
         queryClient.invalidateQueries({ queryKey: ['userProfile', user.id] });
       }
     }, [user, queryClient])
   );
 
-  if (authContextLoading || isProfileLoading) {
+  if (isProfileLoading || isRefetching) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -84,7 +72,7 @@ export default function ProfileScreen() {
     );
   }
 
-  if (isError || !profile) {
+  if (!profile) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <Text style={{ color: COLORS.textSecondary }}>Došlo je do greške pri učitavanju profila.</Text>
@@ -122,7 +110,7 @@ export default function ProfileScreen() {
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.editButton}
-              onPress={() => router.push('/profile/edit-profile')}
+              onPress={() => router.push('/profile/editProfile')}
             >
               <Icon name="edit" size={18} color="#fff" style={{ marginRight: 6 }} />
               <Text style={styles.editButtonText}>Izmeni profil</Text>
@@ -136,6 +124,7 @@ export default function ProfileScreen() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   mainContainer: {
@@ -184,7 +173,7 @@ const styles = StyleSheet.create({
   },
   nameContainer: {
     marginLeft: 20,
-    flex: 1, // Omogućava da se ime raširi ako je dugačko
+    flex: 1, 
   },
   name: {
     fontSize: 28,
@@ -200,7 +189,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     alignItems: 'center',
     justifyContent: 'center',
-    alignSelf: 'flex-start', // Sprečava da se dugme raširi preko celog prostora
+    alignSelf: 'flex-start', 
     shadowColor: COLORS.editButton,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
