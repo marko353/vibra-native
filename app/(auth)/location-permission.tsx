@@ -1,124 +1,135 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
 import * as Location from 'expo-location';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthContext } from '../../context/AuthContext';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useProfileContext, UserProfile } from '../../context/ProfileContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-const HOME_ROUTE = '/(tabs)/home' as any;
 
-export default function LocationPermissionScreen() {
-    const { user } = useAuthContext();
-    const { profile, setProfileField } = useProfileContext();
-    const queryClient = useQueryClient();
-    const router = useRouter();
+// ✨ Komponenta prima 'onComplete' prop da obavesti TabsGroupGateLayout da je gotova
+export default function LocationPermissionScreen({ onComplete }: { onComplete: () => void }) {
+  const { user } = useAuthContext();
+  const queryClient = useQueryClient();
 
-    const updateProfileMutation = useMutation({
-        mutationFn: async (data: { location?: object | null; showLocation: boolean; hasCompletedLocationPrompt: boolean }): Promise<UserProfile> => {
-            if (!user?.token) throw new Error('Not authenticated');
-            const response = await axios.put(`${API_BASE_URL}/api/user/update-profile`, data, {
-                headers: { Authorization: `Bearer ${user.token}` },
-            });
-            // Važno: Vraćamo ceo objekat profila koji vrati server
-            return response.data.user;
-        },
-        onSuccess: (updatedProfileDataFromServer: UserProfile) => {
-            console.log("LOG: [LocationScreen] Mutacija uspešna. Ažuriram SVE.");
+  const updateProfileMutation = useMutation({
+    mutationFn: async (data: { location?: object | null; showLocation: boolean }) => {
+      if (!user?.token) throw new Error('Not authenticated');
+      // Uklonili smo slanje `hasCompletedLocationPrompt` na server
+      const response = await axios.put(`${API_BASE_URL}/api/user/update-profile`, data, {
+        headers: { Authorization: `Bearer ${user.token}` },
+      });
+      return response.data.user;
+    },
+    onSuccess: async () => {
+      console.log('LOG: [LocationScreen] Mutacija uspešna.');
+      // ✨ Upisujemo u AsyncStorage da je prompt završen
+      await AsyncStorage.setItem('location_prompt_completed', 'true');
+      // ✨ Obaveštavamo TabsGroupGateLayout da može dalje
+      onComplete();
+    },
+    onError: (error) => {
+      console.error('ERROR: [LocationScreen] Mutacija neuspešna:', error);
+      Alert.alert('Greška', 'Nije uspelo čuvanje podešavanja.');
+    },
+  });
 
-            // 1. Ažuriramo lokalno stanje u contextu (kao i do sada, za brzi odziv UI)
-            setProfileField('hasCompletedLocationPrompt', true);
+  const handleDecision = (locationData: { location: object | null; showLocation: boolean }) => {
+    updateProfileMutation.mutate(locationData);
+  };
 
-            // 2. ✨ KLJUČNI DODATAK: Ažuriramo i React Query keš ✨
-            // Ovo je "zvanična" promena koja sprečava da refetch pregazi naše stanje.
-            const queryKey = ['userProfile', user?.id];
-            queryClient.setQueryData<UserProfile>(queryKey, (oldData) => {
-                if (!oldData) return updatedProfileDataFromServer;
-                return {
-                    ...oldData,
-                    ...updatedProfileDataFromServer, // Spajamo podatke sa servera
-                    hasCompletedLocationPrompt: true // Osiguravamo da je ovo podešeno
-                };
-            });
-        },
-        onError: (error) => {
-            console.error("ERROR: [LocationScreen] Mutacija neuspešna:", error);
-            Alert.alert('Greška', 'Nije uspelo čuvanje podešavanja.');
-        },
-    });
-
-    useEffect(() => {
-        if (profile?.hasCompletedLocationPrompt === true) {
-            console.log("LOG: [useEffect] Detektovana promena, pokrećem navigaciju na home...");
-            router.replace(HOME_ROUTE);
-        }
-    }, [profile?.hasCompletedLocationPrompt]);
-
-    const handleActivateLocation = async () => {
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-            Alert.alert('Dozvola nije data', 'Ne možemo pristupiti lokaciji.');
-            updateProfileMutation.mutate({
-                location: null,
-                showLocation: false,
-                hasCompletedLocationPrompt: true
-            });
-            return;
-        }
-
-        const location = await Location.getCurrentPositionAsync({});
-        const geocode = await Location.reverseGeocodeAsync(location.coords);
-        const locationCity = geocode[0]?.subregion || geocode[0]?.city || null;
-
-        updateProfileMutation.mutate({
-            location: { ...location.coords, locationCity },
-            showLocation: true,
-            hasCompletedLocationPrompt: true
-        });
-    };
-
-    const handleDeclineLocation = () => {
-        updateProfileMutation.mutate({
-            location: null,
-            showLocation: false,
-            hasCompletedLocationPrompt: true
-        });
-    };
-
-    if (updateProfileMutation.isPending) {
-        return (
-            <View style={styles.container}>
-                <ActivityIndicator size="large" color="#E91E63" />
-            </View>
-        );
+  const handleActivateLocation = async () => {
+    let { status } = await Location.requestForegroundPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Dozvola nije data', 'Ne možemo pristupiti lokaciji.');
+      handleDecision({ location: null, showLocation: false });
+      return;
     }
 
-    return (
-        <View style={styles.container}>
-            <Ionicons name="location-outline" size={80} color="#E91E63" />
-            <Text style={styles.title}>Da li želiš da aplikacija koristi tvoju lokaciju?</Text>
-            <Text style={styles.description}>
-                Ako omogućiš lokaciju, tvoj grad će biti vidljiv na tvom profilu, što ti može pomoći da se povežeš sa ljudima u blizini. Možeš je isključiti kasnije u podešavanjima.
-            </Text>
-            <TouchableOpacity style={styles.buttonPrimary} onPress={handleActivateLocation} disabled={updateProfileMutation.isPending}>
-                <Text style={styles.buttonTextPrimary}>Da, prihvati lokaciju</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.buttonSecondary} onPress={handleDeclineLocation} disabled={updateProfileMutation.isPending}>
-                <Text style={styles.buttonTextSecondary}>Ne želim</Text>
-            </TouchableOpacity>
-        </View>
-    );
+    const location = await Location.getCurrentPositionAsync({});
+    const geocode = await Location.reverseGeocodeAsync(location.coords);
+    const locationCity = geocode[0]?.subregion || geocode[0]?.city || null;
+
+    handleDecision({
+      location: { ...location.coords, locationCity },
+      showLocation: true,
+    });
+  };
+
+  const handleDeclineLocation = () => {
+    handleDecision({ location: null, showLocation: false });
+  };
+
+  // 👇 JSX deo ekrana
+  return (
+    <View style={styles.container}>
+      <Ionicons name="location-outline" size={64} color="#ff7f00" style={{ marginBottom: 20 }} />
+      <Text style={styles.title}>Dozvoli pristup lokaciji</Text>
+      <Text style={styles.subtitle}>
+        VibrA koristi tvoju lokaciju da bi prikazala korisnike u tvojoj blizini.
+      </Text>
+
+      {updateProfileMutation.isPending ? (
+        <ActivityIndicator size="small" color="#ff7f00" style={{ marginTop: 20 }} />
+      ) : (
+        <>
+          <TouchableOpacity style={styles.allowButton} onPress={handleActivateLocation}>
+            <Text style={styles.allowText}>Dozvoli lokaciju</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.declineButton} onPress={handleDeclineLocation}>
+            <Text style={styles.declineText}>Preskoči</Text>
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
 }
 
+// 💅 Stilovi
 const styles = StyleSheet.create({
-    container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff', paddingHorizontal: 30 },
-    title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginTop: 20, marginBottom: 10 },
-    description: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 40, lineHeight: 24 },
-    buttonPrimary: { width: '100%', backgroundColor: '#E91E63', paddingVertical: 15, borderRadius: 30, alignItems: 'center', marginBottom: 15 },
-    buttonTextPrimary: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
-    buttonSecondary: { width: '100%', paddingVertical: 15, alignItems: 'center' },
-    buttonTextSecondary: { color: '#E91E63', fontSize: 16 },
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 30,
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 10,
+    color: '#333',
+  },
+  subtitle: {
+    fontSize: 14,
+    textAlign: 'center',
+    color: '#666',
+    marginBottom: 40,
+  },
+  allowButton: {
+    backgroundColor: '#ff7f00',
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+    marginBottom: 15,
+  },
+  allowText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  declineButton: {
+    backgroundColor: '#f2f2f2',
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    borderRadius: 30,
+  },
+  declineText: {
+    color: '#333',
+    fontSize: 16,
+  },
 });

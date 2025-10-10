@@ -15,7 +15,7 @@ export interface User {
 
 interface AuthContextType {
   user: User | null;
-  setUser: (user: User | null) => void;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
   loading: boolean;
   logout: () => Promise<void>;
   updateUser: (newUserData: Partial<User>) => void;
@@ -26,7 +26,6 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -61,11 +60,16 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   }, [user]);
 
   const logout = async () => {
+    console.log("[AuthContext] Pokrenuta logout funkcija.");
     setUser(null);
     await AsyncStorage.removeItem('currentUser');
     
-    // 👇 3. DODATO: Brišemo sav sačuvan keš prilikom odjavljivanja
+    // 👇 KLJUČNA IZMENA: Brišemo i odluku o lokaciji 👇
+    await AsyncStorage.removeItem('location_prompt_completed');
+    console.log("[AuthContext] Odluka o lokaciji obrisana iz AsyncStorage.");
+    
     queryClient.clear();
+    console.log("[AuthContext] React Query keš je obrisan!");
   };
 
   const updateUser = (newUserData: Partial<User>) => {
