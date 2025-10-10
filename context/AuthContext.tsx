@@ -1,5 +1,6 @@
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useQueryClient } from '@tanstack/react-query';
 
 export interface User {
   id: string;
@@ -25,6 +26,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const loadUser = async () => {
@@ -34,7 +36,7 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
           setUser(JSON.parse(storedUser));
         }
       } catch (error) {
-        console.error('Failed to load user from storage', error);
+        console.error('❌ Failed to load user from storage', error);
       } finally {
         setLoading(false);
       }
@@ -51,7 +53,7 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
           await AsyncStorage.removeItem('currentUser');
         }
       } catch (error) {
-        console.error('Failed to save user to storage', error);
+        console.error('❌ Failed to save user to storage', error);
       }
     };
     saveUser();
@@ -60,6 +62,7 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const logout = async () => {
     setUser(null);
     await AsyncStorage.removeItem('currentUser');
+    queryClient.clear(); // 🧹 Brišemo cache pri logoutu
   };
 
   const updateUser = (newUserData: Partial<User>) => {
@@ -77,7 +80,7 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
 };
 
 const useAuthContext = () => {
-  const context = React.useContext(AuthContext);
+  const context = useContext(AuthContext);
   if (!context) {
     throw new Error('useAuthContext must be used within an AuthProvider');
   }
