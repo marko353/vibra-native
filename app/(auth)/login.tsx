@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator, Alert
+  View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import axios from 'axios';
@@ -41,7 +41,7 @@ export default function LoginScreen() {
     formState: { errors },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
-    mode: 'onSubmit', 
+    mode: 'onSubmit',
   });
 
   const [request, response, promptAsync] = Google.useAuthRequest({
@@ -68,17 +68,13 @@ export default function LoginScreen() {
           await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
           await AsyncStorage.setItem('token', userData.token);
           Toast.show({ type: 'success', text1: 'Logged in with Google' });
-          
-          // ISPRAVLJENA LINIJA: Navigacija na (tabs)
-          router.replace('/(tabs)/profile'); 
+          router.replace('/(tabs)/profile');
         })
         .catch((err) => {
           console.error('Google login failed:', err);
           Toast.show({ type: 'error', text1: 'Google login failed' });
         })
         .finally(() => setLoading(false));
-    } else if (response?.type === 'error') {
-      Toast.show({ type: 'error', text1: 'Google login error' });
     }
   }, [response]);
 
@@ -98,9 +94,7 @@ export default function LoginScreen() {
       await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
       await AsyncStorage.setItem('token', userData.token);
       Toast.show({ type: 'success', text1: 'Login successful' });
-      
-      // ISPRAVLJENA LINIJA: Navigacija na (tabs)
-      router.replace('/(tabs)/home'); 
+      router.replace('/(tabs)/home');
     } catch (error: any) {
       console.error('Login error:', error);
       setApiError(error?.response?.data?.message || 'Invalid email or password');
@@ -122,8 +116,13 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      <Image source={require('@/assets/images/1000006380.png')} style={styles.logo} accessibilityLabel="Vibra logo" />
+      <Image 
+        source={require('@/assets/images/1000006380.png')} 
+        style={styles.logo} 
+        accessibilityLabel="Vibra logo" 
+      />
 
+      {/* EMAIL INPUT */}
       <Controller
         control={control}
         name="email"
@@ -139,18 +138,21 @@ export default function LoginScreen() {
               style={[styles.input, submitAttempted && errors.email && styles.inputError]}
               keyboardType="email-address"
               autoCapitalize="none"
-              accessible
-              accessibilityLabel="Email input"
               placeholderTextColor="#888"
-              selectionColor="#4c8bf5"
-              textContentType="username" 
-              autoComplete="email" 
+             selectionColor="#FF6A00" 
+              cursorColor="#FF6A00" // ✅ jasno vidljiv crni kursor
+              textAlignVertical="center"
+              autoCorrect={false}
+              autoFocus={false}
             />
-            {submitAttempted && errors.email && <Text style={styles.error}>{errors.email.message}</Text>}
+            {submitAttempted && errors.email && (
+              <Text style={styles.error}>{errors.email.message}</Text>
+            )}
           </>
         )}
       />
 
+      {/* PASSWORD INPUT */}
       <Controller
         control={control}
         name="password"
@@ -168,28 +170,29 @@ export default function LoginScreen() {
               accessible
               accessibilityLabel="Password input"
               placeholderTextColor="#888"
-              selectionColor="#4c8bf5"
-              textContentType="password" 
-              autoComplete="password" 
+              selectionColor="#FF6A00"
+              cursorColor="#FF6A00" // ✅ isto ovde
+              textAlignVertical="center"
             />
-            {submitAttempted && errors.password && <Text style={styles.error}>{errors.password.message}</Text>}
+            {submitAttempted && errors.password && (
+              <Text style={styles.error}>{errors.password.message}</Text>
+            )}
           </>
         )}
       />
 
       {submitAttempted && apiError && <Text style={styles.error}>{apiError}</Text>}
 
+      {/* LOGIN BUTTON */}
       <TouchableOpacity
         onPress={handleSubmit(onSubmit)}
         style={[styles.button, (emailValue === '' || passwordValue === '' || loading) && styles.buttonDisabled]}
         disabled={emailValue === '' || passwordValue === '' || loading}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel="Login button"
       >
-        {loading ? <ActivityIndicator color="#ffff" /> : <Text style={styles.buttonText}>Login</Text>}
+        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Login</Text>}
       </TouchableOpacity>
 
+      {/* GOOGLE BUTTON */}
       <TouchableOpacity
         onPress={() => {
           if (request) {
@@ -200,9 +203,6 @@ export default function LoginScreen() {
         }}
         disabled={!request || loading}
         style={[styles.googleButton, (loading || !request) && styles.buttonDisabled]}
-        accessible
-        accessibilityRole="button"
-        accessibilityLabel="Continue with Google"
       >
         <AntDesign name="google" size={20} color="#fff" style={{ marginRight: 12 }} />
         <Text style={styles.googleButtonText}>Continue with Google</Text>
@@ -210,9 +210,6 @@ export default function LoginScreen() {
 
       <TouchableOpacity 
         onPress={() => router.push('/forgot-password')} 
-        accessible 
-        accessibilityRole="button" 
-        accessibilityLabel="Forgot Password"
       >
         <Text style={styles.forgotPassword}>Forgot Password?</Text>
       </TouchableOpacity>
@@ -255,9 +252,10 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     paddingHorizontal: 14,
     marginBottom: 12,
-    backgroundColor: '#fafafa',
+    backgroundColor: '#fff', // ✅ čista bela pozadina
     fontSize: 16,
     color: '#222',
+    textAlignVertical: 'center',
   },
   inputError: {
     borderColor: '#d00', 
