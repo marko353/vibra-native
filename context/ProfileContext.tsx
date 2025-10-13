@@ -1,7 +1,6 @@
-
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { useAuthContext } from './AuthContext';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
@@ -31,13 +30,12 @@ export interface UserProfile {
   fullName?: string;
   birthDate?: string;
   hasCompletedLocationPrompt?: boolean;
-  
-  // 👇 DODATA POLJA 👇
   profilePictures?: string[];
   avatar?: string;
 }
 
 const defaultProfile: UserProfile = {
+  _id: undefined,
   bio: null,
   jobTitle: null,
   education: [],
@@ -81,20 +79,21 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   const { user, logout } = useAuthContext();
   const [profile, setProfileState] = useState<UserProfile | null>(null);
 
-  const { data: fetchedProfile, error, isLoading, isRefetching } = useQuery({
+  const { data: fetchedProfile, error, isLoading, isRefetching } = useQuery<UserProfile, AxiosError>({
     queryKey: ['userProfile', user?.id],
     queryFn: async () => {
       if (!user || !user.token) {
-        return null;
+        throw new Error('User not authenticated');
       }
       const res = await axios.get(`${API_BASE_URL}/api/user/profile`, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
       return res.data;
     },
+    // ✅ KLJUČNA ISPRAVKA: Upit se izvršava SAMO ako korisnik postoji
     enabled: !!user?.id && !!user.token,
     retry: (failureCount, err) => {
-      if (axios.isAxiosError(err) && err.response?.status === 401) {
+      if (err.response?.status === 401) {
         return false;
       }
       return failureCount < 3;
@@ -113,7 +112,7 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
       setProfileState(completeProfile);
     }
     if (error) {
-      if (axios.isAxiosError(error) && error.response?.status === 401) {
+      if (error.response?.status === 401) {
         console.error('[ProfileContext] Error 401 - logging out user.');
         logout();
       } else {

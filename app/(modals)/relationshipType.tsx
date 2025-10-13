@@ -38,10 +38,10 @@ const COLORS = {
 };
 
 const options = [
-    'Monogamna',
-    'Poliamorija',
-    'Otvorena veza',
-    'Nešto drugo',
+    'Dugorocni partner',
+    'Novi prijatelji',
+    'Kratka zabava',
+    'Jos uvek ne znam',
 ];
 
 interface MutationPayload { field: string; value: any; }

@@ -34,6 +34,15 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width * 0.95;
 const SWIPE_THRESHOLD = width * 0.25;
 
+const InfoChip = ({ icon, text }: { icon: string; text: string | number }) => (
+  <View style={styles.chip}>
+    <Icon name={icon} size={14} color="#FFFFFF" style={styles.chipIcon} />
+    <Text style={styles.chipText} numberOfLines={1}>
+      {text}
+    </Text>
+  </View>
+);
+
 const Card: React.FC<CardProps> = ({
   user,
   onSwipe,
@@ -99,7 +108,6 @@ const Card: React.FC<CardProps> = ({
       if (event.nativeEvent.state === State.ACTIVE) {
         const isLeftTap = event.nativeEvent.x < CARD_WIDTH / 2;
         runOnJS(onImageChange)(isLeftTap ? 'left' : 'right');
-
         scaleOnTap.value = withTiming(0.98, { duration: 100 }, () => {
           scaleOnTap.value = withTiming(1, { duration: 100 });
         });
@@ -111,7 +119,6 @@ const Card: React.FC<CardProps> = ({
   const animatedStyle = useAnimatedStyle(() => {
     const rotateZ = interpolate(translateX.value, [-width / 2, width / 2], [-15, 15], Extrapolate.CLAMP);
     const scale = interpolate(translateX.value, [-width * 0.9, 0, width * 0.9], [0.95, 1, 0.95], Extrapolate.CLAMP);
-
     return {
       transform: [
         { translateX: translateX.value },
@@ -121,73 +128,79 @@ const Card: React.FC<CardProps> = ({
       ],
     };
   });
+  
+  const CardView = ({ user, currentImageIndex }: { user: UserProfile; currentImageIndex: number }) => {
+    let infoComponents: React.ReactNode[] = [];
 
-  const CardView = ({ user, currentImageIndex }: { user: UserProfile; currentImageIndex: number }) => (
-    <View style={styles.card}>
-      <Animated.Image
-        source={{
-          uri:
-            (user.profilePictures && user.profilePictures[currentImageIndex]) ||
-            'https://placehold.co/500x700/e0e0e0/e0e0e0?text=.',
-        }}
-        style={styles.cardImage}
-      />
-      <LinearGradient
-        colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']}
-        locations={[0.5, 0.7, 1]}
-        style={styles.gradientOverlayBottom}
-      />
-      <LinearGradient
-        colors={['rgba(0,0,0,0.4)', 'transparent']}
-        locations={[0, 0.3]}
-        style={styles.gradientOverlayTop}
-      />
-      <View style={styles.imageIndicatorContainer}>
-        {(user.profilePictures || []).map((_, index: number) => (
-          <View key={index} style={[styles.indicator, currentImageIndex === index && styles.activeIndicator]} />
-        ))}
+    // --- Logika za grupisanje i prikazivanje informacija po slikama ---
+    switch (currentImageIndex) {
+        case 0:
+            // Na prvoj slici prikazujemo Osnovne Info
+            if (user.location?.locationCity) infoComponents.push(<InfoChip key="loc" icon="location-outline" text={user.location.locationCity} />);
+            if (user.relationshipType) infoComponents.push(<InfoChip key="rel" icon="heart-outline" text={user.relationshipType} />);
+            if (user.horoscope) infoComponents.push(<InfoChip key="horo" icon="star-outline" text={user.horoscope} />);
+            break;
+        case 1:
+            // Na drugoj slici prikazujemo Atribute i Posao
+            if (user.height) infoComponents.push(<InfoChip key="height" icon="resize-outline" text={`${user.height} cm`} />);
+            if (user.workout) infoComponents.push(<InfoChip key="work" icon="barbell-outline" text={user.workout} />);
+            if (user.jobTitle) infoComponents.push(<InfoChip key="job" icon="briefcase-outline" text={user.jobTitle} />);
+            break;
+        case 2:
+            // Na trećoj slici prikazujemo Interesovanja
+            if (user.interests && user.interests.length > 0) {
+                user.interests.slice(0, 4).forEach(interest => { // Prikazujemo najviše 4
+                    infoComponents.push(<InfoChip key={interest} icon="sparkles-outline" text={interest} />);
+                });
+            }
+            break;
+        case 3:
+            // Na četvrtoj slici prikazujemo Stil života
+            if (user.pets) infoComponents.push(<InfoChip key="pets" icon="paw-outline" text={user.pets} />);
+            if (user.drinks) infoComponents.push(<InfoChip key="drinks" icon="beer-outline" text={user.drinks} />);
+            if (user.smokes) infoComponents.push(<InfoChip key="smokes" icon="bonfire-outline" text={user.smokes} />);
+            break;
+        default:
+            // Na ostalim slikama nema dodatnih informacija
+            infoComponents = [];
+    }
+
+    return (
+      <View style={styles.card}>
+        <Animated.Image
+          source={{ uri: (user.profilePictures && user.profilePictures[currentImageIndex]) || 'https://placehold.co/500x700/e0e0e0/e0e0e0?text=.' }}
+          style={styles.cardImage}
+        />
+        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']} locations={[0.5, 0.7, 1]} style={styles.gradientOverlayBottom} />
+        <LinearGradient colors={['rgba(0,0,0,0.4)', 'transparent']} locations={[0, 0.3]} style={styles.gradientOverlayTop} />
+        
+        <View style={styles.imageIndicatorContainer}>
+          {(user.profilePictures || []).map((_, index: number) => (
+            <View key={index} style={[styles.indicator, currentImageIndex === index && styles.activeIndicator]} />
+          ))}
+        </View>
+
+        <View style={styles.cardInfo}>
+          <Text style={styles.name}>
+            {user.fullName}
+            {age !== null ? `, ${age}` : ''}
+          </Text>
+          
+          {infoComponents.length > 0 && (
+            <View style={styles.chipsContainer}>
+              {infoComponents}
+            </View>
+          )}
+        </View>
+
+        <TouchableOpacity style={styles.infoButton} onPress={() => onInfoPress(user)} activeOpacity={0.8}>
+          <Icon name="information-circle-outline" size={32} color="#fff" />
+        </TouchableOpacity>
+
+        {/* ... ostatak JSX-a za LIKE/NOPE ... */}
       </View>
-      <View style={styles.cardInfo}>
-        <Text style={styles.name}>
-          {user.fullName}
-          {age !== null ? `, ${age}` : ''}
-        </Text>
-        {user.location?.locationCity && (
-          <View style={styles.locationContainer}>
-            <Icon name="location-sharp" size={16} color="#fff" />
-            <Text style={styles.locationText}>{user.location.locationCity}</Text>
-          </View>
-        )}
-      </View>
-      <TouchableOpacity style={styles.infoButton} onPress={() => onInfoPress(user)} activeOpacity={0.8}>
-        <Icon name="information-circle-outline" size={40} color="#fff" />
-      </TouchableOpacity>
-
-      <Animated.View
-        style={[
-          styles.choiceOverlay,
-          { borderColor: '#4CCC93' },
-          {
-            opacity: interpolate(translateX.value, [0, SWIPE_THRESHOLD], [0, 1], Extrapolate.CLAMP),
-          },
-        ]}
-      >
-        <Text style={[styles.choiceText, { color: '#4CCC93' }]}>LIKE</Text>
-      </Animated.View>
-
-      <Animated.View
-        style={[
-          styles.choiceOverlay,
-          { borderColor: '#FF6B6B', right: null, left: 20 },
-          {
-            opacity: interpolate(translateX.value, [-SWIPE_THRESHOLD, 0], [1, 0], Extrapolate.CLAMP),
-          },
-        ]}
-      >
-        <Text style={[styles.choiceText, { color: '#FF6B6B' }]}>NOPE</Text>
-      </Animated.View>
-    </View>
-  );
+    );
+  };
 
   if (!isTopCard) {
     return (
@@ -198,14 +211,7 @@ const Card: React.FC<CardProps> = ({
   }
 
   return (
-    <PanGestureHandler
-      ref={panRef}
-      onGestureEvent={onGestureEvent}
-      onHandlerStateChange={onPanHandlerStateChange}
-      activeOffsetX={[-10, 10]}
-      maxPointers={1}
-      waitFor={tapRef}
-    >
+    <PanGestureHandler ref={panRef} onGestureEvent={onGestureEvent} onHandlerStateChange={onPanHandlerStateChange} activeOffsetX={[-10, 10]} maxPointers={1} waitFor={tapRef}>
       <Animated.View style={[styles.cardWrapper, { zIndex: 1 }, animatedStyle, cardStyle]}>
         <TapGestureHandler ref={tapRef} onHandlerStateChange={onTapHandlerStateChange} maxDurationMs={250}>
           <Animated.View style={{ flex: 1, borderRadius: 20, overflow: 'hidden' }}>
@@ -222,7 +228,7 @@ export default Card;
 const styles = StyleSheet.create({
   cardWrapper: {
     width: CARD_WIDTH,
-    height: '93%',
+    height: '95%',
     borderRadius: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 5 },
@@ -231,7 +237,7 @@ const styles = StyleSheet.create({
     elevation: 10,
     position: 'absolute',
     alignSelf: 'center',
-    top: '2%',
+    top: '1.5%',
   },
   card: {
     width: '100%',
@@ -240,96 +246,59 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0f0f0',
     overflow: 'hidden',
   },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-  },
-  gradientOverlayBottom: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: '50%',
-  },
-  gradientOverlayTop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '30%',
-  },
-  imageIndicatorContainer: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    zIndex: 2,
-  },
-  indicator: {
-    flex: 1,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: 'rgba(255, 255, 255, 0.5)',
-    marginHorizontal: 3,
-  },
-  activeIndicator: {
-    backgroundColor: '#fff',
-  },
+  cardImage: { width: '100%', height: '100%' },
+  gradientOverlayBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%' },
+  gradientOverlayTop: { position: 'absolute', top: 0, left: 0, right: 0, height: '30%' },
+  imageIndicatorContainer: { position: 'absolute', top: 10, left: 10, right: 10, flexDirection: 'row', zIndex: 2 },
+  indicator: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255, 255, 255, 0.5)', marginHorizontal: 3 },
+  activeIndicator: { backgroundColor: '#fff' },
   cardInfo: {
     position: 'absolute',
-    bottom: 70,
+    bottom: 90, 
     left: 20,
     right: 20,
   },
   name: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#fff',
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 1, height: 1 },
     textShadowRadius: 8,
-    marginBottom: 4,
+    marginBottom: 12,
   },
-  locationContainer: {
+  chipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    borderRadius: 15,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    marginRight: 8,
     marginBottom: 8,
+    borderColor: 'rgba(233, 30, 99, 0.5)',
+    borderWidth: 1.5,
   },
-  locationText: {
-    fontSize: 15,
-    color: '#fff',
-    fontWeight: '600',
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 6,
-    marginLeft: 5,
+  chipIcon: {
+    marginRight: 6,
   },
-  bio: {
+  chipText: {
+    color: '#FFFFFF',
     fontSize: 14,
-    color: 'rgba(255,255,255,0.98)',
-    textShadowColor: 'rgba(0,0,0,0.7)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 6,
-  },
-  choiceOverlay: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    padding: 10,
-    borderWidth: 4,
-    borderRadius: 5,
-    transform: [{ rotate: '15deg' }],
-  },
-  choiceText: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    letterSpacing: 2,
+    fontWeight: '600',
   },
   infoButton: {
     position: 'absolute',
-    bottom: 20,
+    top: 40,
     right: 20,
     zIndex: 3,
   },
+  choiceOverlay: {
+    position: 'absolute', top: 40, right: 20, padding: 10, borderWidth: 4, borderRadius: 5, transform: [{ rotate: '15deg' }],
+  },
+  choiceText: { fontSize: 28, fontWeight: 'bold', letterSpacing: 2 },
 });
