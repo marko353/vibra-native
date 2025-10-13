@@ -132,36 +132,30 @@ const Card: React.FC<CardProps> = ({
   const CardView = ({ user, currentImageIndex }: { user: UserProfile; currentImageIndex: number }) => {
     let infoComponents: React.ReactNode[] = [];
 
-    // --- Logika za grupisanje i prikazivanje informacija po slikama ---
     switch (currentImageIndex) {
         case 0:
-            // Na prvoj slici prikazujemo Osnovne Info
             if (user.location?.locationCity) infoComponents.push(<InfoChip key="loc" icon="location-outline" text={user.location.locationCity} />);
             if (user.relationshipType) infoComponents.push(<InfoChip key="rel" icon="heart-outline" text={user.relationshipType} />);
             if (user.horoscope) infoComponents.push(<InfoChip key="horo" icon="star-outline" text={user.horoscope} />);
             break;
         case 1:
-            // Na drugoj slici prikazujemo Atribute i Posao
             if (user.height) infoComponents.push(<InfoChip key="height" icon="resize-outline" text={`${user.height} cm`} />);
             if (user.workout) infoComponents.push(<InfoChip key="work" icon="barbell-outline" text={user.workout} />);
             if (user.jobTitle) infoComponents.push(<InfoChip key="job" icon="briefcase-outline" text={user.jobTitle} />);
             break;
         case 2:
-            // Na trećoj slici prikazujemo Interesovanja
             if (user.interests && user.interests.length > 0) {
-                user.interests.slice(0, 4).forEach(interest => { // Prikazujemo najviše 4
+                user.interests.slice(0, 4).forEach(interest => {
                     infoComponents.push(<InfoChip key={interest} icon="sparkles-outline" text={interest} />);
                 });
             }
             break;
         case 3:
-            // Na četvrtoj slici prikazujemo Stil života
             if (user.pets) infoComponents.push(<InfoChip key="pets" icon="paw-outline" text={user.pets} />);
             if (user.drinks) infoComponents.push(<InfoChip key="drinks" icon="beer-outline" text={user.drinks} />);
             if (user.smokes) infoComponents.push(<InfoChip key="smokes" icon="bonfire-outline" text={user.smokes} />);
             break;
         default:
-            // Na ostalim slikama nema dodatnih informacija
             infoComponents = [];
     }
 
@@ -183,7 +177,7 @@ const Card: React.FC<CardProps> = ({
         <View style={styles.cardInfo}>
           <Text style={styles.name}>
             {user.fullName}
-            {age !== null ? `, ${age}` : ''}
+            {age !== null ? ` ${age}` : ''}
           </Text>
           
           {infoComponents.length > 0 && (
@@ -211,7 +205,14 @@ const Card: React.FC<CardProps> = ({
   }
 
   return (
-    <PanGestureHandler ref={panRef} onGestureEvent={onGestureEvent} onHandlerStateChange={onPanHandlerStateChange} activeOffsetX={[-10, 10]} maxPointers={1} waitFor={tapRef}>
+    <PanGestureHandler
+      ref={panRef}
+      onGestureEvent={onGestureEvent}
+      onHandlerStateChange={onPanHandlerStateChange}
+      // ===== ISPRAVKA: Uklonjen `waitFor` i dodat `activeOffsetX` =====
+      activeOffsetX={[-20, 20]}
+      // waitFor={tapRef} // <-- Uklonjeno
+    >
       <Animated.View style={[styles.cardWrapper, { zIndex: 1 }, animatedStyle, cardStyle]}>
         <TapGestureHandler ref={tapRef} onHandlerStateChange={onTapHandlerStateChange} maxDurationMs={250}>
           <Animated.View style={{ flex: 1, borderRadius: 20, overflow: 'hidden' }}>
@@ -291,12 +292,18 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  infoButton: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
-    zIndex: 3,
-  },
+ infoButton: {
+  position: 'absolute',
+  top: 40,
+  right: 20,
+  zIndex: 3,
+  width: 44, // Definisana širina
+  height: 44, // Definisana visina
+  borderRadius: 22, // Polovina širine/visine za savršen krug
+  backgroundColor: 'rgba(0, 0, 0, 0.3)', // Polutransparentna pozadina
+  justifyContent: 'center', // Centriranje ikonice vertikalno
+  alignItems: 'center', // Centriranje ikonice horizontalno
+},
   choiceOverlay: {
     position: 'absolute', top: 40, right: 20, padding: 10, borderWidth: 4, borderRadius: 5, transform: [{ rotate: '15deg' }],
   },
