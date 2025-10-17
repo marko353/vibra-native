@@ -1,13 +1,16 @@
+// U datoteci: app/(tabs)/_layout.tsx
+
 import React, { useState, useEffect } from 'react';
-import { Tabs } from 'expo-router';
+import { Tabs, usePathname } from 'expo-router'; // ✅ Dodat usePathname
 import { Text, Image, View, ActivityIndicator } from 'react-native';
 import { Ionicons, MaterialIcons, FontAwesome5, Feather } from '@expo/vector-icons';
 import { useProfileContext } from '../../context/ProfileContext';
 import LocationPermissionScreen from '../(auth)/location-permission';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Komponenta koja definiše izgled i redosled tabova
 function MainTabsLayout() {
+  const pathname = usePathname(); // ✅ DOBIJANJE TRENUTNE PUTANJE
+  
   return (
     <Tabs
       initialRouteName="home"
@@ -56,12 +59,17 @@ function MainTabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="chat"
+        name="chat-stack"
         options={{
           tabBarLabel: ({ color }) => <Text style={{ color, fontSize: 10 }}>Chat</Text>,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="chatbubble-outline" size={size} color={color} />
           ),
+          // ✅ KLJUČNA IZMENA: Uslovno sakrivanje Tab Bar-a
+          tabBarStyle: { 
+            // Sakrij Tab Bar ako je putanja /chat-stack/[chatId]
+            display: pathname.includes('/chat-stack/') ? 'none' : 'flex' 
+          },
         }}
       />
       <Tabs.Screen
@@ -77,14 +85,10 @@ function MainTabsLayout() {
   );
 }
 
-// Čuvar koji odlučuje šta će se prikazati
 export default function TabsGroupGateLayout() {
   const { profile, isLoading: isProfileLoading } = useProfileContext();
-
-  // Stanje koje prati da li je korisnik prošao prompt na ovom uređaju
   const [locationPromptCompleted, setLocationPromptCompleted] = useState<boolean | null>(null);
 
-  // Efekat za proveru AsyncStorage-a pri učitavanju
   useEffect(() => {
     const checkStorage = async () => {
       const value = await AsyncStorage.getItem('location_prompt_completed');
@@ -93,7 +97,6 @@ export default function TabsGroupGateLayout() {
     checkStorage();
   }, []);
 
-  // 1. Prikazujemo splash dok se učitava profil ILI dok ne proverimo AsyncStorage
   if (isProfileLoading || !profile || locationPromptCompleted === null) {
     return (
       <View
@@ -114,11 +117,9 @@ export default function TabsGroupGateLayout() {
     );
   }
 
-  // 2. Ako AsyncStorage kaže da prompt NIJE završen, prikazujemo LocationPermissionScreen
   if (!locationPromptCompleted) {
     return <LocationPermissionScreen onComplete={() => setLocationPromptCompleted(true)} />;
   }
 
-  // 3. Ako je sve u redu, prikazujemo glavne tabove
   return <MainTabsLayout />;
 }

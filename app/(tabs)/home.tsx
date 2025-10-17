@@ -12,9 +12,11 @@ import Animated, {
   interpolate
 } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { useRouter } from 'expo-router'; // NOVO
 import Card from '../../components/CardComponent';
 import Header from '../../components/Header';
 import ProfileInfoPanel from '../../components/ProfileInfoPanel';
+import MatchAnimation from '../../components/MatchAnimation'; // NOVO
 import { UserProfile } from '../../context/ProfileContext';
 
 const { width, height } = Dimensions.get('window');
@@ -54,13 +56,14 @@ const ButterflyParticle = ({ onAnimationFinish, start }: ButterflyParticleProps)
 
 export default function HomeTab() {
   const { user } = useAuthContext();
+  const router = useRouter(); // NOVO
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [butterflyParticles, setButterflyParticles] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
-
   const [isPanelVisible, setPanelVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+  const [matchData, setMatchData] = useState<UserProfile | null>(null); // NOVO
 
   const fetchUsers = useCallback(async () => {
     if (!user?.token || !user?.id) {
@@ -106,18 +109,28 @@ export default function HomeTab() {
 
   const handleSwipe = useCallback(async (targetUserId: string, direction: 'left' | 'right') => {
     if (direction === 'right') triggerButterflyAnimation();
-    setUsers(prevUsers => prevUsers.filter(u => u._id !== targetUserId));
+    
+    // Optimistično uklanjanje kartice sa ekrana
+    setUsers(prevUsers => prevUsers.slice(1));
     setCurrentImageIndex(0);
 
     try {
-      await axios.post(`${API_BASE_URL}/api/user/swipe`, {
+      const response = await axios.post(`${API_BASE_URL}/api/user/swipe`, {
         targetUserId,
         action: direction === 'right' ? 'like' : 'dislike',
       }, { headers: { Authorization: `Bearer ${user?.token}` } });
+
+      // Proveravamo odgovor servera za "match"
+      if (response.data.match) {
+        console.log("MATCH!", response.data.matchedUser);
+        setMatchData(response.data.matchedUser); // Prikazujemo animaciju
+      }
+
     } catch (error) {
       console.error('Greška pri slanju swipe-a:', error);
+      // Opciono: Vrati korisnika u listu ako API poziv ne uspe
     }
-  }, [user, users]);
+  }, [user]); // Uklonjen `users` iz zavisnosti da se izbegne rekreiranje funkcije
 
   const handleLikeFromPanel = () => {
     if (!selectedUser?._id) return;
@@ -143,6 +156,23 @@ export default function HomeTab() {
       if (totalImages <= 1) return prevIndex;
       return direction === 'right' ? (prevIndex + 1) % totalImages : (prevIndex - 1 + totalImages) % totalImages;
     });
+  };
+
+  // NOVE funkcije za kontrolu MatchAnimation modala
+  const closeMatchAnimation = () => {
+    setMatchData(null);
+  };
+
+  const goToChat = () => {
+    if (!matchData) return;
+    const params = {
+        chatId: matchData._id,
+        userName: matchData.fullName,
+        userAvatar: matchData.avatar,
+    };
+    closeMatchAnimation();
+    // @ts-ignore
+    router.push({ pathname: `/chat/${params.chatId}`, params });
   };
 
   return (
@@ -190,17 +220,19 @@ export default function HomeTab() {
             <ButterflyParticle key={p.id} start={p.start} onAnimationFinish={() => removeParticle(p.id)} />
           ))}
 
-          <View style={styles.controlsContainer}>
-            <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('left')}>
-              <Icon name="close" size={40} color="#FF6B6B" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.starButton}>
-              <Icon name="star" size={25} color="#6C5CE7" />
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('right')}>
-              <Icon name="heart" size={40} color="#4CCC93" />
-            </TouchableOpacity>
-          </View>
+          {users.length > 0 && !isLoading && (
+            <View style={styles.controlsContainer}>
+                <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('left')}>
+                    <Icon name="close" size={40} color="#FF6B6B" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.starButton}>
+                    <Icon name="star" size={25} color="#6C5CE7" />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('right')}>
+                    <Icon name="heart" size={40} color="#4CCC93" />
+                </TouchableOpacity>
+            </View>
+          )}
         </View>
 
         <Modal
@@ -213,9 +245,23 @@ export default function HomeTab() {
             user={selectedUser}
             isVisible={isPanelVisible}
             onClose={handleClosePanel}
-            onLike={handleLikeFromPanel}
-            onNope={handleNopeFromPanel}
+            onLike={() => { if (selectedUser?._id) { handleSwipe(selectedUser._id, 'right'); handleClosePanel(); } }}
+            onNope={() => { if (selectedUser?._id) { handleSwipe(selectedUser._id, 'left'); handleClosePanel(); } }}
           />
+        </Modal>
+
+        {/* ===== NOVO: MODAL ZA PRIKAZ "IT'S A MATCH" ANIMACIJE ===== */}
+        <Modal
+            animationType="fade"
+            transparent={true}
+            visible={!!matchData}
+            onRequestClose={closeMatchAnimation}
+        >
+            <MatchAnimation 
+                matchedUser={matchData!}
+                onSendMessage={goToChat}
+                onClose={closeMatchAnimation}
+            />
         </Modal>
       </View>
     </GestureHandlerRootView>
