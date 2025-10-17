@@ -90,8 +90,10 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
       });
       return res.data;
     },
-    // ✅ KLJUČNA ISPRAVKA: Upit se izvršava SAMO ako korisnik postoji
+    // ===== KLJUČNA ISPRAVKA JE OVDE =====
+    // Upit se sada izvršava SAMO ako korisnik postoji i ima token
     enabled: !!user?.id && !!user.token,
+    
     retry: (failureCount, err) => {
       if (err.response?.status === 401) {
         return false;
