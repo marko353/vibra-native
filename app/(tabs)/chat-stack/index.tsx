@@ -6,14 +6,14 @@ import { useAuthContext } from '../../../context/AuthContext';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Header from '../../../components/Header';
-// ✅ KLJUČNI IMPORT: Za ponovno učitavanje podataka kada se ekran fokusira
 import { useFocusEffect } from 'expo-router'; 
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-// Sigurnosni fallback za avatar
 const DEFAULT_AVATAR = 'https://placekitten.com/70/70'; 
 
 export default function ChatScreen() {
+    console.log('🔄 [RENDER] Komponenta ChatScreen se renderuje.');
+    
     const { user } = useAuthContext();
     const router = useRouter();
     const queryClient = useQueryClient();
@@ -22,50 +22,46 @@ export default function ChatScreen() {
     const { data, isLoading, isError, refetch } = useQuery({
         queryKey: ['my-matches', user?.id],
         queryFn: async () => {
-            if (!user?.token) return { newMatches: [], conversations: [] };
-            const response = await axios.get(`${API_BASE_URL}/api/user/my-matches`, {
-                headers: { Authorization: `Bearer ${user.token}` },
-            });
-            return response.data;
+            if (!user?.token) {
+                console.warn('📥 [FETCH] Preskačem. Nedostaje token.');
+                return { newMatches: [], conversations: [] };
+            }
+            console.log('📥 [FETCH] Pokrećem `queryFn` za `my-matches`...');
+            try {
+                const response = await axios.get(`${API_BASE_URL}/api/user/my-matches`, {
+                    headers: { Authorization: `Bearer ${user.token}` },
+                });
+                console.log(`   -> ✅ [FETCH] Uspeh! Dobijeni podaci: ${response.data.newMatches.length} novih spojeva, ${response.data.conversations.length} razgovora.`);
+                return response.data;
+            } catch (fetchError) {
+                console.error('   -> ❌ [FETCH] Greška u `queryFn`!', fetchError);
+                throw fetchError;
+            }
         },
         enabled: !!user?.token,
     });
     
-    // ✅ 2. LOGIKA PONOVNOG UČITAVANJA NA FOKUS TAB-a
+    // 2. LOGIKA PONOVNOG UČITAVANJA NA FOKUS TAB-a
     useFocusEffect(
         React.useCallback(() => {
-            // Ponovo učitaj listu mečeva i chatova svaki put kada se ovaj ekran fokusira
+            console.log('✨ [FOCUS] Ekran je u fokusu, pokrećem refetch...');
             refetch(); 
         }, [refetch])
     );
 
-
-    const prefetchMessages = (chatId: string) => {
-        queryClient.prefetchQuery({
-            queryKey: ['chat', chatId],
-            queryFn: async () => {
-                const response = await axios.get(`${API_BASE_URL}/api/user/chat/${chatId}/messages`, {
-                    headers: { Authorization: `Bearer ${user!.token}` },
-                });
-                return response.data;
-            },
-        });
-    };
-
     // 3. FUNKCIJA ZA NAVIGACIJU (sa ispravljenim avatar fallback-om)
-    const handleOpenChat = (chatUser: any, conversationId?: string) => {
-        const id = conversationId || chatUser._id; 
-        
-        // Log za proveru putanje i avatara
-        console.log(`FRONTEND NAV LOG: Slanje chatu za ${chatUser.fullName}. Prosleđeni ID: ${id}. Avatar u listi: ${chatUser.avatar}`); 
+    const handleOpenChat = (chatUser: any, conversationId: string) => {
+        console.log('🚀 [NAVIGACIJA] Pokrenut handleOpenChat...');
         
         const params = {
-            chatId: String(id), 
+            chatId: conversationId,
             userName: chatUser.fullName,
-            // Dodajemo fallback za userAvatar pri navigaciji
-            userAvatar: chatUser.avatar || DEFAULT_AVATAR, 
+            userAvatar: chatUser.avatar || DEFAULT_AVATAR,
+            receiverId: chatUser._id, // ✅ KLJUČNA ISPRAVKA
         };
         
+        console.log('   -> Šaljem parametre:', params);
+
         router.push({ 
             pathname: `/chat-stack/[chatId]`, 
             params: params 
@@ -73,6 +69,7 @@ export default function ChatScreen() {
     };
     
     const { newMatches = [], conversations = [] } = data || {};
+    console.log(`📊 [DATA] Podaci spremni za prikaz. Loading: ${isLoading}, Error: ${isError}`);
 
     return (
         <SafeAreaView style={styles.container}>
@@ -83,11 +80,10 @@ export default function ChatScreen() {
                 <View style={styles.center}><Text>Došlo je do greške pri učitavanju.</Text></View>
             ) : (
                 <ScrollView
-                    // RefreshControl ostaje za ručno povlačenje liste
                     refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} />}
                 >
                     {newMatches.length === 0 && conversations.length === 0 ? (
-                             <View style={styles.center}><Text style={styles.emptyText}>Nemaš još nijedan spoj. Nastavi da prevlačiš!</Text></View>
+                        <View style={styles.center}><Text style={styles.emptyText}>Nemaš još nijedan spoj. Nastavi da prevlačiš!</Text></View>
                     ) : (
                         <>
                             {/* SEKCIJA NOVI SPOJEVI */}
@@ -97,7 +93,6 @@ export default function ChatScreen() {
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.newMatchesContainer}>
                                         {newMatches.map((match: any) => (
                                             <TouchableOpacity key={match._id} style={styles.matchItem} onPress={() => handleOpenChat(match, match.chatId)}>
-                                                {/* Prikaz avatara sa fallbackom */}
                                                 <Image source={{ uri: match.avatar || DEFAULT_AVATAR }} style={styles.matchAvatar} />
                                                 <Text style={styles.matchName} numberOfLines={1}>{match.fullName}</Text>
                                             </TouchableOpacity>
@@ -114,11 +109,10 @@ export default function ChatScreen() {
                                 ) : (
                                     conversations.map((item: any) => (
                                         <TouchableOpacity key={item.chatId} style={styles.conversationRow} onPress={() => handleOpenChat(item.user, item.chatId)}>
-                                            {/* Prikaz avatara sa fallbackom */}
                                             <Image source={{ uri: item.user.avatar || DEFAULT_AVATAR }} style={styles.conversationAvatar} />
                                             <View style={styles.conversationTextContainer}>
                                                 <Text style={styles.conversationName}>{item.user.fullName}</Text>
-                                                <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage.text}</Text>
+                                                <Text style={styles.lastMessage} numberOfLines={1}>{item.lastMessage?.text}</Text>
                                             </View>
                                         </TouchableOpacity>
                                     ))
