@@ -2,52 +2,43 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Slot, useRouter, useSegments } from 'expo-router';
 import { AuthProvider, useAuthContext } from '../context/AuthContext';
 import { ProfileProvider } from '../context/ProfileContext';
-// Pretpostavljamo da imate AnimatedSplash
-import AnimatedSplash from './AnimatedSplash'; 
-import { View, ActivityIndicator, Text } from 'react-native';
+import AnimatedSplash from './AnimatedSplash';
+import { View, ActivityIndicator } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { KeyboardProvider } from 'react-native-keyboard-controller';
+import { SocketProvider } from '../context/SocketContext';
 
 const queryClient = new QueryClient();
 
+// --- Auth navigator za preusmeravanje ---
 function AuthNavigator() {
   const { user, loading } = useAuthContext();
   const segments = useSegments();
   const router = useRouter();
 
-  // ✅ KRITIČNA IZMENA: Definišemo sve rute koje ne zahtevaju autentifikaciju
   const inAuthFlow = useMemo(() => {
     const rootSegment = segments[0];
-    return (
-      rootSegment === '(auth)' || 
-      rootSegment === 'signup' || // Dodato za sve rute registracije
-      rootSegment === 'forgot-password'
-    );
+    return rootSegment === '(auth)' || rootSegment === 'signup' || rootSegment === 'forgot-password';
   }, [segments]);
 
   useEffect(() => {
-    if (loading) {
-      return;
-    }
+    if (loading) return;
 
-    // 🛑 Logika preusmeravanja
-    
-    // 1. Ako NIJE prijavljen I NIJE u dozvoljenom (signup/auth) toku
+    // Ako nije prijavljen i nije u auth toku → login
     if (!user && !inAuthFlow) {
-      // Forsirano preusmeravanje na login
       router.replace('/(auth)/login');
     } 
-    // 2. Ako JESTE prijavljen I JESTE u toku za neautentifikaciju
+    // Ako jeste prijavljen i u auth toku → home
     else if (user && inAuthFlow) {
-      // Forsirano preusmeravanje na home tab
       router.replace('/(tabs)/home');
     }
-  }, [user, loading, segments, inAuthFlow]); // Dodat inAuthFlow u zavisnosti
+  }, [user, loading, segments, inAuthFlow]);
 
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-        <ActivityIndicator size="large" color="#ff7f00" />
+        <ActivityIndicator size="large" color="#FF6A00" />
       </View>
     );
   }
@@ -55,23 +46,27 @@ function AuthNavigator() {
   return <Slot />;
 }
 
+// --- RootLayout ---
 export default function RootLayout() {
   const [isSplashAnimationFinished, setSplashAnimationFinished] = useState(false);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      {isSplashAnimationFinished ? (
+      <KeyboardProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <ProfileProvider>
-              {/* AuthNavigator sadrži glavnu logiku rutiranja */}
-              <AuthNavigator />
-            </ProfileProvider>
+            <SocketProvider>
+              <ProfileProvider>
+                {isSplashAnimationFinished ? (
+                  <AuthNavigator />
+                ) : (
+                  <AnimatedSplash onFinish={() => setSplashAnimationFinished(true)} />
+                )}
+              </ProfileProvider>
+            </SocketProvider>
           </AuthProvider>
         </QueryClientProvider>
-      ) : (
-        <AnimatedSplash onFinish={() => setSplashAnimationFinished(true)} />
-      )}
+      </KeyboardProvider>
     </GestureHandlerRootView>
   );
 }

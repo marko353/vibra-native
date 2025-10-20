@@ -21,7 +21,6 @@ import { io, Socket } from 'socket.io-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-// ------------------ TIPOVI ------------------
 type BackendMessage = { _id: string; text: string; sender: string; createdAt: string; conversationId: string; };
 type CachedMessage = BackendMessage & { status?: 'sending' | 'error' | 'sent' };
 type UIMessage = {
@@ -32,13 +31,11 @@ type UIMessage = {
     status: 'sending' | 'sent' | 'error';
 };
 
-// ------------------ POMOĆNE FUNKCIJE ------------------
 const formatTime = (timestamp: string) =>
     timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
 const mapSender = (senderId: string, myId?: string): 'me' | 'other' => senderId === myId ? 'me' : 'other';
 
-// ------------------ KOMPONENTA ------------------
 export default function ChatScreen() {
     const params = useLocalSearchParams<{ chatId: string; receiverId: string; userName: string; userAvatar: string }>();
     const { chatId, receiverId, userName, userAvatar } = params;
@@ -53,16 +50,11 @@ export default function ChatScreen() {
     // ------------------ SOCKET.IO ------------------
     useEffect(() => {
         if (!user?.token) return;
-
         const socket = io(API_BASE_URL!, { auth: { token: user.token } });
         socketRef.current = socket;
-
         socket.on('connect', () => console.log('✅ Connected'));
         socket.on('disconnect', () => console.log('🔴 Disconnected'));
-
-        return () => {
-            socket.disconnect();
-        };
+        return () => { socket.disconnect(); };
     }, [user?.token]);
 
     // ------------------ FETCH PORUKA ------------------
@@ -92,24 +84,16 @@ export default function ChatScreen() {
     // ------------------ SLANJE PORUKE ------------------
     const handleSend = () => {
         if (!inputText.trim() || !socketRef.current?.connected || !receiverId || !user?.id) return;
-
         const messageText = inputText.trim();
         const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-
         const optimisticMessage: CachedMessage = {
-            _id: tempId,
-            text: messageText,
-            sender: user.id,
-            createdAt: new Date().toISOString(),
-            conversationId: chatId!,
-            status: 'sending'
+            _id: tempId, text: messageText, sender: user.id,
+            createdAt: new Date().toISOString(), conversationId: chatId!, status: 'sending'
         };
-
         queryClient.setQueryData<CachedMessage[]>(['chat', chatId], (oldData) => {
             const messages = Array.isArray(oldData) ? oldData : [];
             return [optimisticMessage, ...messages];
         });
-
         socketRef.current.emit(
             'sendMessage',
             { receiverId, text: messageText },
@@ -124,7 +108,6 @@ export default function ChatScreen() {
                 });
             }
         );
-
         setInputText('');
     };
 
@@ -132,29 +115,22 @@ export default function ChatScreen() {
     useEffect(() => {
         const socket = socketRef.current;
         if (!socket || !chatId || !user?.id) return;
-
         const handleReceiveMessage = (message: BackendMessage) => {
             if (message.conversationId !== chatId) return;
-
             queryClient.setQueryData<CachedMessage[]>(['chat', chatId], (oldData) => {
                 const messages = Array.isArray(oldData) ? oldData : [];
                 if (messages.find(msg => msg._id === message._id)) return messages;
-
                 const index = messages.findIndex(msg => msg.status === 'sending' && msg.text === message.text);
                 if (index !== -1) {
                     const newMessages = [...messages];
                     newMessages[index] = { ...message, status: 'sent' };
                     return newMessages;
                 }
-
                 return [message, ...messages];
             });
         };
-
         socket.on('receiveMessage', handleReceiveMessage);
-        return () => {
-            socket.off('receiveMessage', handleReceiveMessage);
-        };
+        return () => { socket.off('receiveMessage', handleReceiveMessage); };
     }, [chatId, user?.id, queryClient]);
 
     // ------------------ RENDER PORUKA ------------------
@@ -166,7 +142,6 @@ export default function ChatScreen() {
             if (status === 'error') return <Ionicons name="alert-circle" size={14} color="#FF3B30" style={{ marginLeft: 5 }} />;
             return null;
         };
-
         return (
             <View style={[styles.messageContainer, isMyMessage ? styles.myContainer : styles.otherContainer]}>
                 <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
@@ -180,7 +155,6 @@ export default function ChatScreen() {
         );
     };
 
-    // ------------------ UI ------------------
     return (
         <View style={styles.fullScreen}>
             <Stack.Screen options={{ headerShown: false }} />
@@ -225,6 +199,7 @@ export default function ChatScreen() {
                 </TouchableOpacity>
             </View>
 
+            {/* ------------------ Tvoj Modal ------------------ */}
             <Modal
                 visible={isMenuVisible}
                 transparent
@@ -247,9 +222,7 @@ export default function ChatScreen() {
                                         await axios.delete(`${API_BASE_URL}/api/user/match/${chatId}`, {
                                             headers: { Authorization: `Bearer ${user.token}` },
                                         });
-                                       queryClient.invalidateQueries({
-                                          queryKey: ['my-matches', user.id],
-                                    });
+                                        queryClient.invalidateQueries({ queryKey: ['my-matches', user.id] });
                                         router.replace('/(tabs)/chat-stack');
                                     } catch (err) {
                                         console.error("Greška pri brisanju korisnika:", err);
@@ -297,7 +270,6 @@ export default function ChatScreen() {
     );
 }
 
-// ------------------ STILOVI ------------------
 const styles = StyleSheet.create({
     fullScreen: { flex: 1, backgroundColor: '#fff' },
     loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
