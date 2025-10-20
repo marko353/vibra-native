@@ -8,7 +8,8 @@ import {
     ActivityIndicator,
     StyleSheet,
     Modal,
-    Platform
+    Platform,
+    KeyboardAvoidingView
 } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -156,22 +157,39 @@ export default function ChatScreen() {
     };
 
     return (
-        <View style={styles.fullScreen}>
-            <Stack.Screen options={{ headerShown: false }} />
-
-            <View style={[styles.customHeader, { paddingTop: insets.top }]}>
-                <TouchableOpacity onPress={() => router.replace('/(tabs)/chat-stack')} style={styles.headerButton}>
-                    <Ionicons name="arrow-back" size={24} color="#000" />
-                </TouchableOpacity>
-                <View style={styles.headerCenterContent}>
-                    <Image source={{ uri: userAvatar || 'https://placekitten.com/34/34' }} style={styles.headerAvatar} />
-                    <Text style={styles.headerName} numberOfLines={1}>{userName || 'Korisnik'}</Text>
-                </View>
-                <View style={styles.headerRightButtons}>
-                    <TouchableOpacity style={styles.headerButton}><Ionicons name="videocam-outline" size={24} color="#000" /></TouchableOpacity>
-                    <TouchableOpacity onPress={() => setIsMenuVisible(true)} style={styles.headerButton}><Ionicons name="ellipsis-horizontal" size={24} color="#000" /></TouchableOpacity>
-                </View>
-            </View>
+        <KeyboardAvoidingView
+            style={styles.fullScreen}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+        >
+            {/* ✅ Novi Expo header */}
+            <Stack.Screen
+                options={{
+                    title: '',
+                    headerLeft: () => (
+                        <TouchableOpacity onPress={() => router.replace('/(tabs)/chat-stack')} style={{ paddingHorizontal: 10 }}>
+                            <Ionicons name="arrow-back" size={24} color="#000" />
+                        </TouchableOpacity>
+                    ),
+                    headerTitleAlign: 'center',
+                    headerTitle: () => (
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                            <Image source={{ uri: userAvatar || 'https://placekitten.com/34/34' }} style={{ width: 34, height: 34, borderRadius: 17, marginRight: 10 }} />
+                            <Text numberOfLines={1} style={{ fontSize: 18, fontWeight: '600' }}>{userName || 'Korisnik'}</Text>
+                        </View>
+                    ),
+                    headerRight: () => (
+                        <View style={{ flexDirection: 'row' }}>
+                            <TouchableOpacity style={{ paddingHorizontal: 8 }}>
+                                <Ionicons name="videocam-outline" size={24} color="#000" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setIsMenuVisible(true)} style={{ paddingHorizontal: 8 }}>
+                                <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
+                            </TouchableOpacity>
+                        </View>
+                    ),
+                }}
+            />
 
             {isChatLoading ? (
                 <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#FF6A00" /></View>
@@ -183,10 +201,12 @@ export default function ChatScreen() {
                     inverted
                     style={{ flex: 1 }}
                     contentContainerStyle={{ padding: 10 }}
+                    keyboardShouldPersistTaps="handled"
                 />
             )}
 
-            <View style={[styles.inputContainer, { paddingBottom: insets.bottom + 10 }]}>
+            {/* Input polje */}
+            <View style={[styles.inputContainer, { paddingBottom: Platform.OS === "ios" ? insets.bottom  : insets.bottom +10 }]}>
                 <TextInput
                     value={inputText}
                     onChangeText={setInputText}
@@ -199,7 +219,7 @@ export default function ChatScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* ------------------ Tvoj Modal ------------------ */}
+            {/* Modal */}
             <Modal
                 visible={isMenuVisible}
                 transparent
@@ -266,29 +286,13 @@ export default function ChatScreen() {
                     </View>
                 </TouchableOpacity>
             </Modal>
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     fullScreen: { flex: 1, backgroundColor: '#fff' },
     loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-    customHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        height: 60,
-        backgroundColor: '#fff',
-        borderBottomWidth: 1,
-        borderBottomColor: '#f0f0f0',
-        paddingHorizontal: 10,
-    },
-    headerButton: { padding: 5 },
-    headerCenterContent: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 10 },
-    headerName: { fontSize: 18, fontWeight: '600', flexShrink: 1 },
-    headerRightButtons: { flexDirection: 'row', alignItems: 'center' },
-    headerAvatar: { width: 34, height: 34, borderRadius: 17, marginRight: 10 },
 
     messageContainer: { marginVertical: 5, paddingHorizontal: 10 },
     myContainer: { alignSelf: 'flex-end' },
