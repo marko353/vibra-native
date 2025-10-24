@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import axios, { AxiosError } from 'axios';
 import { useAuthContext } from './AuthContext';
 
@@ -79,70 +79,48 @@ export const ProfileProvider = ({ children }: { children: ReactNode }) => {
   const { user, logout } = useAuthContext();
   const [profile, setProfileState] = useState<UserProfile | null>(null);
 
-  const { data: fetchedProfile, error, isLoading, isRefetching } = useQuery<UserProfile, AxiosError>({
-    queryKey: ['userProfile', user?.id],
-    queryFn: async () => {
-      if (!user || !user.token) {
-        throw new Error('User not authenticated');
-      }
-      const res = await axios.get(`${API_BASE_URL}/api/user/profile`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      return res.data;
-    },
-    // ===== KLJUČNA ISPRAVKA JE OVDE =====
-    // Upit se sada izvršava SAMO ako korisnik postoji i ima token
-    enabled: !!user?.id && !!user.token,
-    
-    retry: (failureCount, err) => {
-      if (err.response?.status === 401) {
-        return false;
-      }
-      return failureCount < 3;
-    },
-  });
-
+  // Reset kad korisnik logoutuje ili token istekne
   useEffect(() => {
     if (!user) {
       setProfileState(null);
     }
   }, [user]);
 
-  useEffect(() => {
-    if (fetchedProfile) {
-      const completeProfile = { ...defaultProfile, ...fetchedProfile };
-      setProfileState(completeProfile);
-    }
-    if (error) {
-      if (error.response?.status === 401) {
-        console.error('[ProfileContext] Error 401 - logging out user.');
-        logout();
-      } else {
-        console.error('[ProfileContext] Error fetching profile:', error);
+  const { data, isLoading, isRefetching, error } = useQuery<UserProfile, AxiosError>({
+    queryKey: ['userProfile', user?.id],
+    queryFn: async () => {
+      if (!user?.token) return null;
+      try {
+        const res = await axios.get(`${API_BASE_URL}/api/user/profile`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+        return res.data;
+      } catch (err: any) {
+        if (err.response?.status === 401) {
+          logout(); // token istekao → logout
+          return null;
+        }
+        throw err;
       }
-    }
-  }, [fetchedProfile, error, logout]);
+    },
+    enabled: !!user?.id && !!user?.token,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: true,
+  });
+
+  useEffect(() => {
+    if (data) setProfileState({ ...defaultProfile, ...data });
+  }, [data]);
 
   const loadProfile = useCallback((data: Partial<UserProfile>) => {
-    setProfileState(prevProfile => ({
-      ...(prevProfile ?? defaultProfile),
-      ...data,
-    }));
+    setProfileState(prev => ({ ...(prev ?? defaultProfile), ...data }));
   }, []);
 
-  const setProfileField = useCallback(
-    <T extends keyof UserProfile>(field: T, value: UserProfile[T]) => {
-      setProfileState(prevProfile => {
-        if (!prevProfile) return null;
-        return { ...prevProfile, [field]: value };
-      });
-    },
-    []
-  );
-
-  const resetProfile = useCallback(() => {
-    setProfileState(null);
+  const setProfileField = useCallback(<T extends keyof UserProfile>(field: T, value: UserProfile[T]) => {
+    setProfileState(prev => (!prev ? { ...defaultProfile, [field]: value } : { ...prev, [field]: value }));
   }, []);
+
+  const resetProfile = useCallback(() => setProfileState(null), []);
 
   return (
     <ProfileContext.Provider value={{ profile, isLoading, isRefetching, loadProfile, setProfileField, resetProfile }}>

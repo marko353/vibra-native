@@ -1,320 +1,356 @@
-import React, { useState, useRef, useEffect } from 'react';
+// [chatId].tsx — Verzija sa Empty State dodatim u postojeću strukturu
+
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
-    View,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    Image,
-    ActivityIndicator,
-    StyleSheet,
-    Modal,
-    Platform,
-    KeyboardAvoidingView
+  View,
+  ActivityIndicator,
+  StyleSheet,
+  Platform,
+  Image,
+  TouchableOpacity,
+  Text,
+  Modal,
+  Keyboard, // Ostaje
+  KeyboardAvoidingView, // Ostaje
 } from 'react-native';
 import { Stack, useLocalSearchParams, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { KeyboardAwareFlatList } from 'react-native-keyboard-aware-scroll-view';
 import { useAuthContext } from '../../../context/AuthContext';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
+import axios, { AxiosError } from 'axios';
 import { io, Socket } from 'socket.io-client';
+import {
+  GiftedChat,
+  IMessage,
+  InputToolbar,
+  Send,
+  Bubble,
+  type InputToolbarProps,
+  type SendProps,
+  type BubbleProps,
+} from 'react-native-gifted-chat';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const DEFAULT_AVATAR = 'https://placekitten.com/120/120'; // Veći avatar za empty state
 
-type BackendMessage = { _id: string; text: string; sender: string; createdAt: string; conversationId: string; };
-type CachedMessage = BackendMessage & { status?: 'sending' | 'error' | 'sent' };
-type UIMessage = {
-    _id: string;
-    text: string;
-    sender: 'me' | 'other';
-    timestamp: string;
-    status: 'sending' | 'sent' | 'error';
+type BackendMessage = {
+  _id: string; text: string; sender: string; createdAt: string; conversationId: string;
 };
-
-const formatTime = (timestamp: string) =>
-    timestamp ? new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-
-const mapSender = (senderId: string, myId?: string): 'me' | 'other' => senderId === myId ? 'me' : 'other';
+type CachedMessage = BackendMessage & { status?: 'sending' | 'error' | 'sent' };
 
 export default function ChatScreen() {
-    const params = useLocalSearchParams<{ chatId: string; receiverId: string; userName: string; userAvatar: string }>();
-    const { chatId, receiverId, userName, userAvatar } = params;
-    const { user } = useAuthContext();
-    const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ chatId: string; receiverId: string; userName: string; userAvatar: string; }>();
+  const { chatId, receiverId, userName, userAvatar } = params;
+  const { user } = useAuthContext();
+  const queryClient = useQueryClient();
+  const socketRef = useRef<Socket | null>(null);
+  const isUnmounted = useRef(false);
 
-    const [inputText, setInputText] = useState('');
-    const [isMenuVisible, setIsMenuVisible] = useState(false);
-    const insets = useSafeAreaInsets();
-    const socketRef = useRef<Socket | null>(null);
+  const [isMenuVisible, setIsMenuVisible] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false); // Ostaje
 
-    // ------------------ SOCKET.IO ------------------
-    useEffect(() => {
-        if (!user?.token) return;
-        const socket = io(API_BASE_URL!, { auth: { token: user.token } });
-        socketRef.current = socket;
-        socket.on('connect', () => console.log('✅ Connected'));
-        socket.on('disconnect', () => console.log('🔴 Disconnected'));
-        return () => { socket.disconnect(); };
-    }, [user?.token]);
+  // Praćenje tastature (Ostaje)
+  useEffect(() => {
+    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
+    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
 
-    // ------------------ FETCH PORUKA ------------------
-    const { data: uiMessages = [], isLoading: isChatLoading } = useQuery({
-        queryKey: ['chat', chatId],
-        queryFn: async (): Promise<CachedMessage[]> => {
-            if (!chatId || !user?.token) return [];
-            const response = await axios.get(`${API_BASE_URL}/api/user/chat/${chatId}/messages`, {
-                headers: { Authorization: `Bearer ${user.token}` }
-            });
-            return response.data || [];
-        },
-        enabled: !!chatId && !!user?.token,
-        select: (data: CachedMessage[]): UIMessage[] => {
-            return data
-                .map(msg => ({
-                    _id: msg._id,
-                    text: msg.text,
-                    timestamp: msg.createdAt,
-                    sender: mapSender(msg.sender, user?.id),
-                    status: msg.status || 'sent'
-                }))
-                .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        }
-    });
+  const userId = useMemo(() => user?.id, [user?.id]);
+  const meUser = useMemo(() => ({ _id: userId! }), [userId]);
+  const otherUser = useMemo(() => ({ _id: receiverId, name: userName, avatar: userAvatar }), [receiverId, userName, userAvatar]);
 
-    // ------------------ SLANJE PORUKE ------------------
-    const handleSend = () => {
-        if (!inputText.trim() || !socketRef.current?.connected || !receiverId || !user?.id) return;
-        const messageText = inputText.trim();
-        const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-        const optimisticMessage: CachedMessage = {
-            _id: tempId, text: messageText, sender: user.id,
-            createdAt: new Date().toISOString(), conversationId: chatId!, status: 'sending'
-        };
-        queryClient.setQueryData<CachedMessage[]>(['chat', chatId], (oldData) => {
-            const messages = Array.isArray(oldData) ? oldData : [];
-            return [optimisticMessage, ...messages];
-        });
-        socketRef.current.emit(
-            'sendMessage',
-            { receiverId, text: messageText },
-            (response: { status: string; message: BackendMessage }) => {
-                queryClient.setQueryData<CachedMessage[]>(['chat', chatId], (oldData) => {
-                    const messages = Array.isArray(oldData) ? oldData : [];
-                    return messages.map(msg =>
-                        msg._id === tempId
-                            ? { ...response.message, status: response.status === 'ok' ? 'sent' : 'error' }
-                            : msg
-                    );
-                });
-            }
-        );
-        setInputText('');
-    };
+  // Fetch poruka (Ostaje isto)
+  const fetchMessages = async (): Promise<CachedMessage[]> => {
+      if (!chatId || !user?.token) return [];
+      const response = await axios.get(`${API_BASE_URL}/api/user/chat/${chatId}/messages`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+      });
+      return (response.data || []).map((msg: BackendMessage) => ({ ...msg, status: 'sent' }));
+  };
 
-    // ------------------ PRIMANJE PORUKA ------------------
-    useEffect(() => {
-        const socket = socketRef.current;
-        if (!socket || !chatId || !user?.id) return;
-        const handleReceiveMessage = (message: BackendMessage) => {
-            if (message.conversationId !== chatId) return;
-            queryClient.setQueryData<CachedMessage[]>(['chat', chatId], (oldData) => {
-                const messages = Array.isArray(oldData) ? oldData : [];
-                if (messages.find(msg => msg._id === message._id)) return messages;
-                const index = messages.findIndex(msg => msg.status === 'sending' && msg.text === message.text);
-                if (index !== -1) {
-                    const newMessages = [...messages];
-                    newMessages[index] = { ...message, status: 'sent' };
-                    return newMessages;
-                }
-                return [message, ...messages];
-            });
-        };
-        socket.on('receiveMessage', handleReceiveMessage);
-        return () => { socket.off('receiveMessage', handleReceiveMessage); };
-    }, [chatId, user?.id, queryClient]);
+  const queryKey = useMemo(() => ['chat', chatId], [chatId]);
+  const { data: uiMessages = [], isLoading: isChatLoading } = useQuery<CachedMessage[], Error, IMessage[]>({
+      queryKey: queryKey,
+      queryFn: fetchMessages,
+      enabled: !!chatId && !!user?.token && !!userId && !!receiverId,
+      select: (data): IMessage[] =>
+          data
+              .map((msg) => ({
+                  _id: msg._id,
+                  text: msg.text,
+                  createdAt: new Date(msg.createdAt),
+                  user: msg.sender === userId ? meUser : otherUser,
+                  pending: msg.status === 'sending',
+              }))
+              .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()),
+      staleTime: 1000 * 60 * 5,
+  });
 
-    // ------------------ RENDER PORUKA ------------------
-    const renderMessage = ({ item }: { item: UIMessage }) => {
-        const isMyMessage = item.sender === 'me';
-        const StatusIcon = ({ status }: { status: UIMessage['status'] }) => {
-            if (status === 'sent') return null;
-            if (status === 'sending') return <ActivityIndicator size={12} color='rgba(255,255,255,0.8)' style={{ marginLeft: 5 }} />;
-            if (status === 'error') return <Ionicons name="alert-circle" size={14} color="#FF3B30" style={{ marginLeft: 5 }} />;
-            return null;
-        };
-        return (
-            <View style={[styles.messageContainer, isMyMessage ? styles.myContainer : styles.otherContainer]}>
-                <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-                    <Text style={{ color: isMyMessage ? '#fff' : '#000' }}>{item.text}</Text>
-                    <View style={styles.timeAndStatusWrapper}>
-                        <Text style={isMyMessage ? styles.myTime : styles.otherTime}>{formatTime(item.timestamp)}</Text>
-                        {isMyMessage && <StatusIcon status={item.status} />}
-                    </View>
-                </View>
+  // markAsRead (Ostaje isto)
+  const markAsReadMutation = useMutation({
+      mutationFn: async () => {
+          if (!user?.token || !chatId) throw new Error('Missing data for markAsRead.');
+          return axios.post(`${API_BASE_URL}/api/user/chat/${chatId}/mark-as-read`, {}, { headers: { Authorization: `Bearer ${user.token}` } });
+      },
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ['my-matches', userId], exact: true }),
+      onError: (err: Error | AxiosError) => {
+          if (axios.isAxiosError(err) && err.response?.status === 404) {
+              console.log('Chat (404) not found, ignoring markAsRead.');
+          } else {
+              console.error('❌ markAsRead error:', err);
+          }
+      },
+  });
+
+  // Socket.io (Ostaje isto)
+  useEffect(() => {
+      isUnmounted.current = false;
+      if (!user?.token || !userId) return;
+      const socket = io(API_BASE_URL!, { auth: { token: user.token } });
+      socketRef.current = socket;
+      socket.on('connect', () => console.log('✅ Connected'));
+      socket.on('disconnect', () => console.log('🔴 Disconnected'));
+
+      const handleReceiveMessage = (msg: BackendMessage) => {
+          if (msg.conversationId === chatId) {
+              console.log("📩 Received message, invalidating query:", queryKey);
+              queryClient.invalidateQueries({ queryKey });
+          }
+      };
+      socket.on('receiveMessage', handleReceiveMessage);
+
+      return () => {
+          isUnmounted.current = true;
+          setTimeout(() => {
+              if (isUnmounted.current && !markAsReadMutation.isPending) {
+                 console.log("🧹 Unmounting, calling markAsRead");
+                 markAsReadMutation.mutate();
+              }
+          }, 100);
+          console.log("🔌 Disconnecting socket");
+          socket.disconnect();
+          socketRef.current = null;
+      };
+  }, [user?.token, userId, chatId, queryClient, queryKey, markAsReadMutation]);
+
+  // Slanje poruka (Ostaje isto)
+  const handleSend = useCallback((newMessages: IMessage[] = []) => {
+      const messageToSend = newMessages[0];
+      if (!messageToSend || !socketRef.current?.connected || !receiverId || !userId) return;
+      const tempId = messageToSend._id;
+      const optimisticMessage: CachedMessage = {
+          _id: tempId.toString(), text: messageToSend.text, sender: userId,
+          createdAt: new Date().toISOString(), conversationId: chatId!, status: 'sending',
+      };
+      queryClient.setQueryData<CachedMessage[]>(queryKey, (oldData = []) => [optimisticMessage, ...oldData]);
+      socketRef.current.emit(
+          'sendMessage', { receiverId, text: messageToSend.text },
+          (response: { status: string; message: BackendMessage }) => {
+              queryClient.setQueryData<CachedMessage[]>(queryKey, (oldData = []) =>
+                  oldData.map(msg =>
+                      msg._id === tempId.toString()
+                          ? { ...response.message, status: response.status === 'ok' ? 'sent' : 'error' }
+                          : msg
+                  )
+              );
+          }
+      );
+  }, [receiverId, userId, chatId, queryClient, queryKey]);
+
+  // Modal Actions (Ostaje isto)
+  const handleBreakMatch = async () => {
+      setIsMenuVisible(false);
+      if (!user?.token || !chatId) { console.error("❌ Cannot break match: Missing token or chatId."); return; }
+      try {
+          console.log(`📡 Attempting DELETE: ${API_BASE_URL}/api/user/match/${chatId}`);
+          await axios.delete(`${API_BASE_URL}/api/user/match/${chatId}`, { headers: { Authorization: `Bearer ${user.token}` } });
+          console.log("✅ Match successfully deleted.");
+          await queryClient.invalidateQueries({ queryKey: ['my-matches', user?.id], exact: true });
+          queryClient.removeQueries({ queryKey: queryKey });
+          console.log(`✅ Invalidated ['my-matches'] and removed query [${queryKey.join(', ')}].`);
+          router.replace('/(tabs)/chat-stack');
+      } catch (err) {
+          console.error('❌ Error deleting match:', err);
+      }
+  };
+
+  // Header
+  const renderHeaderLeft = useCallback(() => (
+    <TouchableOpacity onPress={() => router.replace('/(tabs)/chat-stack')} style={styles.headerButton}>
+      <Ionicons name="arrow-back" size={24} color="#000" />
+    </TouchableOpacity>
+  ), []);
+
+  const renderHeaderTitle = useCallback(() => (
+    <View style={styles.headerTitleContainer}>
+      <Image source={{ uri: userAvatar || 'https://placekitten.com/34/34' }} style={styles.avatar} />
+      <Text numberOfLines={1} style={styles.headerName}>{userName || 'User'}</Text>
+    </View>
+  ), [userAvatar, userName]);
+
+  const renderHeaderRight = useCallback(() => (
+    <View style={styles.headerRightContainer}>
+      <TouchableOpacity style={styles.headerButton}><Ionicons name="videocam-outline" size={24} color="#000" /></TouchableOpacity>
+      <TouchableOpacity onPress={() => setIsMenuVisible(true)} style={styles.headerButton}>
+        <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
+      </TouchableOpacity>
+    </View>
+  ), []);
+
+  // GiftedChat render funkcije
+  const renderInputToolbar = useCallback((props: InputToolbarProps<IMessage>) => (
+    <InputToolbar {...props} containerStyle={styles.inputToolbarContainer} primaryStyle={styles.inputPrimaryStyle} />
+  ), []);
+
+  const renderSend = useCallback((props: SendProps<IMessage>) => (
+    <Send {...props} containerStyle={styles.sendContainer}><Ionicons name="send" size={22} color="#FF6A00" /></Send>
+  ), []);
+
+  const renderBubble = useCallback((props: BubbleProps<IMessage>) => (
+    <Bubble {...props} wrapperStyle={{
+      right: { backgroundColor: '#FF6A00', borderRadius: 20, padding: 4 },
+      left: { backgroundColor: '#EFEFEF', borderRadius: 20, padding: 4 },
+    }} textStyle={{
+      right: { color: 'white', fontSize: 15 },
+      left: { color: 'black', fontSize: 15 },
+    }} />
+  ), []);
+
+  const renderLoading = useCallback(() => (
+    <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#FF6A00" /></View>
+  ), []);
+
+  // Empty State
+  const renderEmptyChat = useCallback(() => (
+    <View style={styles.emptyContainer}>
+      <Text style={[styles.emptyTextMatch, styles.flippedText]}>Spojio/la si se sa korisnikom</Text>
+      <Text style={[styles.emptyUserName, styles.flippedText]}>{userName || 'Korisnik'}</Text>
+      <Image
+        source={{ uri: userAvatar || DEFAULT_AVATAR }}
+        style={[styles.emptyAvatar, styles.flippedImage]}
+      />
+      <Text style={[styles.emptyPrompt, styles.flippedText]}>Započni razgovor!</Text>
+    </View>
+  ), [userName, userAvatar]);
+
+  return (
+    <View style={styles.fullScreen}>
+      <Stack.Screen
+        options={{
+          title: '', headerShadowVisible: false,
+          headerLeft: renderHeaderLeft, headerTitleAlign: 'center',
+          headerTitle: renderHeaderTitle, headerRight: renderHeaderRight,
+        }}
+      />
+
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+      >
+        <View style={[styles.chatWrapper, !keyboardVisible && styles.chatWrapperRaised]}>
+          {isChatLoading ? (
+            renderLoading()
+          ) : uiMessages.length === 0 ? (
+            <View style={{ flex: 1 }}>
+              {renderEmptyChat()}
+              <GiftedChat
+                messages={[]}
+                onSend={handleSend}
+                user={meUser}
+                renderChatEmpty={() => null}
+                renderMessage={() => <></>}
+                renderInputToolbar={renderInputToolbar}
+                renderSend={renderSend}
+                alwaysShowSend
+                minInputToolbarHeight={60}
+              />
             </View>
-        );
-    };
-
-    return (
-        <KeyboardAvoidingView
-            style={styles.fullScreen}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-        >
-            {/* ✅ Novi Expo header */}
-            <Stack.Screen
-                options={{
-                    title: '',
-                    headerLeft: () => (
-                        <TouchableOpacity onPress={() => router.replace('/(tabs)/chat-stack')} style={{ paddingHorizontal: 10 }}>
-                            <Ionicons name="arrow-back" size={24} color="#000" />
-                        </TouchableOpacity>
-                    ),
-                    headerTitleAlign: 'center',
-                    headerTitle: () => (
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                            <Image source={{ uri: userAvatar || 'https://placekitten.com/34/34' }} style={{ width: 34, height: 34, borderRadius: 17, marginRight: 10 }} />
-                            <Text numberOfLines={1} style={{ fontSize: 18, fontWeight: '600' }}>{userName || 'Korisnik'}</Text>
-                        </View>
-                    ),
-                    headerRight: () => (
-                        <View style={{ flexDirection: 'row' }}>
-                            <TouchableOpacity style={{ paddingHorizontal: 8 }}>
-                                <Ionicons name="videocam-outline" size={24} color="#000" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setIsMenuVisible(true)} style={{ paddingHorizontal: 8 }}>
-                                <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
-                            </TouchableOpacity>
-                        </View>
-                    ),
-                }}
+          ) : (
+            <GiftedChat
+              messages={uiMessages}
+              onSend={handleSend}
+              user={meUser}
+              placeholder="Type a message..."
+              alwaysShowSend
+              renderBubble={renderBubble}
+              renderInputToolbar={renderInputToolbar}
+              renderSend={renderSend}
+              renderLoading={renderLoading}
+              isLoadingEarlier={isChatLoading}
+              messagesContainerStyle={styles.messagesContainer}
+              showUserAvatar
             />
+          )}
+        </View>
+      </KeyboardAvoidingView>
 
-            {isChatLoading ? (
-                <View style={styles.loaderContainer}><ActivityIndicator size="large" color="#FF6A00" /></View>
-            ) : (
-                <KeyboardAwareFlatList
-                    data={uiMessages}
-                    keyExtractor={item => item._id}
-                    renderItem={renderMessage}
-                    inverted
-                    style={{ flex: 1 }}
-                    contentContainerStyle={{ padding: 10 }}
-                    keyboardShouldPersistTaps="handled"
-                />
-            )}
-
-            {/* Input polje */}
-            <View style={[styles.inputContainer, { paddingBottom: Platform.OS === "ios" ? insets.bottom  : insets.bottom +10 }]}>
-                <TextInput
-                    value={inputText}
-                    onChangeText={setInputText}
-                    placeholder="Pošalji poruku..."
-                    style={styles.input}
-                    multiline
-                />
-                <TouchableOpacity onPress={handleSend} style={styles.sendButton} disabled={!inputText.trim()}>
-                    <Ionicons name="send" size={22} color="#fff" />
-                </TouchableOpacity>
-            </View>
-
-            {/* Modal */}
-            <Modal
-                visible={isMenuVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setIsMenuVisible(false)}
-            >
-                <TouchableOpacity
-                    style={styles.modalOverlay}
-                    activeOpacity={1}
-                    onPress={() => setIsMenuVisible(false)}
-                >
-                    <View style={styles.actionSheetWrapper}>
-                        <View style={styles.actionSheetGroup}>
-                            <TouchableOpacity
-                                style={styles.menuItem}
-                                onPress={async () => {
-                                    setIsMenuVisible(false);
-                                    if (!user?.token || !chatId) return;
-                                    try {
-                                        await axios.delete(`${API_BASE_URL}/api/user/match/${chatId}`, {
-                                            headers: { Authorization: `Bearer ${user.token}` },
-                                        });
-                                        queryClient.invalidateQueries({ queryKey: ['my-matches', user.id] });
-                                        router.replace('/(tabs)/chat-stack');
-                                    } catch (err) {
-                                        console.error("Greška pri brisanju korisnika:", err);
-                                    }
-                                }}
-                            >
-                                <Text style={styles.menuTextDestructive}>Prekini spoj sa {userName}</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.separator} />
-
-                            <TouchableOpacity
-                                style={styles.menuItem}
-                                onPress={() => {
-                                    setIsMenuVisible(false);
-                                    alert(`Prijavljujem korisnika: ${userName}`);
-                                }}
-                            >
-                                <Text style={styles.menuText}>Prijavi korisnika {userName}</Text>
-                            </TouchableOpacity>
-
-                            <View style={styles.separator} />
-
-                            <TouchableOpacity
-                                style={styles.menuItem}
-                                onPress={() => {
-                                    setIsMenuVisible(false);
-                                    alert(`Blokiram korisnika: ${userName}`);
-                                }}
-                            >
-                                <Text style={styles.menuTextDestructive}>Blokiraj korisnika</Text>
-                            </TouchableOpacity>
-                        </View>
-
-                        <TouchableOpacity
-                            style={styles.cancelButton}
-                            onPress={() => setIsMenuVisible(false)}
-                        >
-                            <Text style={styles.cancelText}>Otkaži</Text>
-                        </TouchableOpacity>
-                    </View>
-                </TouchableOpacity>
-            </Modal>
-        </KeyboardAvoidingView>
-    );
+      <Modal visible={isMenuVisible} transparent animationType="fade" onRequestClose={() => setIsMenuVisible(false)}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setIsMenuVisible(false)}>
+              <View style={styles.actionSheetWrapper}>
+                  <View style={styles.actionSheetGroup}>
+                      <TouchableOpacity style={styles.menuItem} onPress={handleBreakMatch}>
+                          <Text style={styles.menuTextDestructive}>Prekini spoj sa {userName}</Text>
+                      </TouchableOpacity>
+                      <View style={styles.separator} />
+                      <TouchableOpacity style={styles.menuItem} onPress={() => { setIsMenuVisible(false); alert(`Prijavljujem korisnika: ${userName}`); }}>
+                          <Text style={styles.menuText}>Prijavi korisnika {userName}</Text>
+                      </TouchableOpacity>
+                      <View style={styles.separator} />
+                      <TouchableOpacity style={styles.menuItem} onPress={() => { setIsMenuVisible(false); alert(`Blokiram korisnika: ${userName}`); }}>
+                          <Text style={styles.menuTextDestructive}>Blokiraj korisnika</Text>
+                      </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity style={styles.cancelButton} onPress={() => setIsMenuVisible(false)}>
+                      <Text style={styles.cancelText}>Otkaži</Text>
+                  </TouchableOpacity>
+              </View>
+          </TouchableOpacity>
+      </Modal>
+    </View>
+  );
 }
 
+// Stilovi
 const styles = StyleSheet.create({
-    fullScreen: { flex: 1, backgroundColor: '#fff' },
-    loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-
-    messageContainer: { marginVertical: 5, paddingHorizontal: 10 },
-    myContainer: { alignSelf: 'flex-end' },
-    otherContainer: { alignSelf: 'flex-start' },
-    messageBubble: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 20, maxWidth: '80%' },
-    myMessage: { backgroundColor: '#FF6A00' },
-    otherMessage: { backgroundColor: '#E5E5EA' },
-    timeAndStatusWrapper: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 3 },
-    myTime: { color: 'rgba(255, 255, 255, 0.7)', fontSize: 10 },
-    otherTime: { color: '#666', fontSize: 10 },
-
-    inputContainer: { flexDirection: 'row', paddingHorizontal: 8, paddingTop: 8, borderTopColor: '#ddd', borderTopWidth: 1, alignItems: 'center', backgroundColor: '#fff' },
-    input: { flex: 1, paddingVertical: 10, paddingHorizontal: 15, backgroundColor: '#f2f2f2', borderRadius: 20, marginRight: 8, maxHeight: 100 },
-    sendButton: { backgroundColor: '#FF6A00', borderRadius: 20, width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-
-    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', paddingHorizontal: 10, paddingBottom: Platform.OS === 'ios' ? 40 : 20 },
-    actionSheetWrapper: { width: '100%' },
-    actionSheetGroup: { backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', marginBottom: 10 },
-    menuItem: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'white', alignItems: 'center' },
-    menuText: { fontSize: 16, color: '#333', textAlign: 'center' },
-    menuTextDestructive: { fontSize: 16, color: '#FF3B30', fontWeight: '600', textAlign: 'center' },
-    separator: { height: 1, backgroundColor: '#E0E0E0' },
-    cancelButton: { paddingHorizontal: 20, paddingVertical: 16, backgroundColor: 'white', borderRadius: 12, marginTop: 10, alignItems: 'center' },
-    cancelText: { fontSize: 16, color: '#007AFF', fontWeight: '600', textAlign: 'center' },
+  fullScreen: { flex: 1, backgroundColor: '#fff' },
+  chatWrapper: { flex: 1 },
+  chatWrapperRaised: { marginBottom: 28 },
+  loaderContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.8)', zIndex: 1 },
+  headerButton: { paddingHorizontal: 10 },
+  headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 34, height: 34, borderRadius: 17, marginHorizontal: 10 },
+  headerName: { fontSize: 18, fontWeight: '600' },
+  headerRightContainer: { flexDirection: 'row' },
+  messagesContainer: { paddingBottom: 10 },
+  inputToolbarContainer: {
+    borderTopWidth: 0, backgroundColor: '#f6f6f6', marginHorizontal: 8,
+    borderRadius: 25, marginBottom: 12,
+    paddingVertical: 4, paddingHorizontal: 8,
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+  },
+  inputPrimaryStyle: { alignItems: 'center' },
+  sendContainer: { justifyContent: 'center', alignItems: 'center', height: 44, marginRight: 6 },
+  emptyContainer: {
+    flex: 1,
+    alignItems: 'center', justifyContent: 'center', padding: 20,
+    transform: [{ scaleY: -1 }],
+    marginBottom: -15,
+  },
+  emptyTextMatch: { fontSize: 16, color: '#666', marginBottom: 5 },
+  emptyUserName: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 25 },
+  emptyAvatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
+  emptyPrompt: { fontSize: 16, color: '#555', marginTop: 10 },
+  flippedText: { transform: [{ scaleY: -1 }] },
+  flippedImage: { transform: [{ scaleY: -1 }] },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end', paddingHorizontal: 10, paddingBottom: Platform.OS === 'ios' ? 40 : 20 },
+  actionSheetWrapper: { width: '100%' },
+  actionSheetGroup: { backgroundColor: 'white', borderRadius: 12, overflow: 'hidden', marginBottom: 10 },
+  menuItem: { paddingVertical: 16, alignItems: 'center' },
+  menuText: { fontSize: 16, color: '#333' },
+  menuTextDestructive: { fontSize: 16, color: '#FF3B30', fontWeight: '600' },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#E0E0E0' },
+  cancelButton: { paddingVertical: 16, backgroundColor: 'white', borderRadius: 12, marginTop: 10, alignItems: 'center' },
+  cancelText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
 });

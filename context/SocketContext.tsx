@@ -17,12 +17,25 @@ const SocketContext = createContext<SocketContextType>({
   isConnected: false,
 });
 
-// 2. Kreiramo "custom hook" da bismo lakše koristili kontekst u drugim komponentama
-export const useSocket = () => {
-  return useContext(SocketContext);
+// =========================================================================
+// 2. ✅ ISPRAVKA: Promenili smo ime 'useSocket' u 'useSocketContext'
+//    da bi se slagalo sa importom u ChatScreen.js
+//    Takođe smo dodali proveru za 'context' (dobra praksa).
+// =========================================================================
+export const useSocketContext = () => {
+  const context = useContext(SocketContext);
+
+  if (context === undefined) {
+    // Ova greška će se desiti ako pokušaš da koristiš hook van Provider-a
+    throw new Error("useSocketContext mora da se koristi unutar SocketContextProvider-a");
+  }
+
+  return context;
 };
 
+// =========================================================================
 // 3. Kreiramo Provider komponentu koja će obmotati našu aplikaciju
+// =========================================================================
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuthContext(); // Uzimamo podatke o korisniku iz AuthContext-a
   const [socket, setSocket] = useState<Socket | null>(null);

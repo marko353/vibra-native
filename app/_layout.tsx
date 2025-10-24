@@ -6,7 +6,6 @@ import AnimatedSplash from './AnimatedSplash';
 import { View, ActivityIndicator } from 'react-native';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { KeyboardProvider } from 'react-native-keyboard-controller';
 import { SocketProvider } from '../context/SocketContext';
 
 const queryClient = new QueryClient();
@@ -52,21 +51,19 @@ export default function RootLayout() {
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
-      <KeyboardProvider>
-        <QueryClientProvider client={queryClient}>
-          <AuthProvider>
-            <SocketProvider>
-              <ProfileProvider>
-                {isSplashAnimationFinished ? (
-                  <AuthNavigator />
-                ) : (
-                  <AnimatedSplash onFinish={() => setSplashAnimationFinished(true)} />
-                )}
-              </ProfileProvider>
-            </SocketProvider>
-          </AuthProvider>
-        </QueryClientProvider>
-      </KeyboardProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <SocketProvider>
+            <ProfileProvider>
+              {isSplashAnimationFinished ? (
+                <AuthNavigator />
+              ) : (
+                <AnimatedSplash onFinish={() => setSplashAnimationFinished(true)} />
+              )}
+            </ProfileProvider>
+          </SocketProvider>
+        </AuthProvider>
+      </QueryClientProvider>
     </GestureHandlerRootView>
   );
 }
