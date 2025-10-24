@@ -24,14 +24,14 @@ export default function Header({ withShadow }: HeaderProps) {
           accessibilityLabel="Filter dugme"
           style={styles.iconButton}
         >
-          <MaterialCommunityIcons name="tune-variant" size={28} color="#E91E63" />
+          <MaterialCommunityIcons name="tune-variant" size={28} color="#FF6B6B" />
         </TouchableOpacity>
         <TouchableOpacity
           onPress={() => console.log('Otvorena pogodnost')}
           accessibilityLabel="Pogodnost dugme"
           style={styles.iconButton}
         >
-          <MaterialCommunityIcons name="star-four-points" size={28} color="#E91E63" />
+          <MaterialCommunityIcons name="star-four-points" size={28} color="#FF6B6B" />
         </TouchableOpacity>
       </View>
     </SafeAreaView>
