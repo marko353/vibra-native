@@ -27,7 +27,6 @@ import {
   type BubbleProps,
 } from 'react-native-gifted-chat';
 import { useSocketContext } from '../../../context/SocketContext';
-import type { Socket } from 'socket.io-client';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const DEFAULT_AVATAR = 'https://placekitten.com/120/120';
@@ -52,7 +51,6 @@ export default function ChatScreen() {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
   const { socket } = useSocketContext();
-  const isUnmounted = useRef(false);
 
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
@@ -174,29 +172,27 @@ export default function ChatScreen() {
     [socket, receiverId, userId, chatId, queryClient, queryKey]
   );
 
-const handleBreakMatch = async () => {
-  setIsMenuVisible(false);
+  const handleBreakMatch = async () => {
+    setIsMenuVisible(false);
 
-  try {
-    if (user?.token && chatId) {
-      await axios.delete(`${API_BASE_URL}/api/user/match/${chatId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
+    try {
+      if (user?.token && chatId) {
+        await axios.delete(`${API_BASE_URL}/api/user/match/${chatId}`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+      }
+    } catch (err) {
+      if (!(axios.isAxiosError(err) && err.response?.status === 404)) {
+        console.error('❌ Error deleting match:', err);
+      }
     }
-  } catch (err) {
-    // Ignoriši 404 jer znači da je match već obrisan
-    if (!(axios.isAxiosError(err) && err.response?.status === 404)) {
-      console.error('❌ Error deleting match:', err);
-    }
-  }
 
-  // Ukloni iz cache-a i navigiraj nazad
-  await queryClient.invalidateQueries({ queryKey: ['my-matches', user?.id], exact: true });
-  queryClient.removeQueries({ queryKey });
-  router.replace('/(tabs)/chat-stack');
-};
+    await queryClient.invalidateQueries({ queryKey: ['my-matches', user?.id], exact: true });
+    queryClient.removeQueries({ queryKey });
+    router.replace('/(tabs)/chat-stack');
+  };
 
-
+  // --- Render funkcije ---
   const renderHeaderLeft = useCallback(
     () => (
       <TouchableOpacity onPress={() => router.replace('/(tabs)/chat-stack')} style={styles.headerButton}>
@@ -209,7 +205,7 @@ const handleBreakMatch = async () => {
   const renderHeaderTitle = useCallback(
     () => (
       <View style={styles.headerTitleContainer}>
-        <Image source={{ uri: userAvatar || 'https://placekitten.com/34/34' }} style={styles.avatar} />
+        <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={styles.avatar} />
         <Text numberOfLines={1} style={styles.headerName}>
           {userName || 'User'}
         </Text>
@@ -277,15 +273,16 @@ const handleBreakMatch = async () => {
   const renderEmptyChat = useCallback(
     () => (
       <View style={styles.emptyContainer}>
-        <Text style={[styles.emptyTextMatch, styles.flippedText]}>Spojio/la si se sa korisnikom</Text>
-        <Text style={[styles.emptyUserName, styles.flippedText]}>{userName || 'Korisnik'}</Text>
-        <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={[styles.emptyAvatar, styles.flippedImage]} />
-        <Text style={[styles.emptyPrompt, styles.flippedText]}>Započni razgovor!</Text>
+        <Text style={styles.emptyTextMatch}>Spojio/la si se sa korisnikom</Text>
+        <Text style={styles.emptyUserName}>{userName || 'Korisnik'}</Text>
+        <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={styles.emptyAvatar} />
+        <Text style={styles.emptyPrompt}>Započni razgovor!</Text>
       </View>
     ),
     [userName, userAvatar]
   );
 
+  // --- JSX ---
   return (
     <View style={styles.fullScreen}>
       <Stack.Screen
@@ -320,6 +317,7 @@ const handleBreakMatch = async () => {
                 renderSend={renderSend}
                 alwaysShowSend
                 minInputToolbarHeight={60}
+                inverted={false} // prazni chat bez scroll problema
               />
             </View>
           ) : (
@@ -335,7 +333,7 @@ const handleBreakMatch = async () => {
               renderLoading={renderLoading}
               isLoadingEarlier={isChatLoading}
               messagesContainerStyle={styles.messagesContainer}
-              showUserAvatar
+              inverted // omogući scroll ka gore za stare poruke
             />
           )}
         </View>
@@ -392,11 +390,11 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   headerButton: { paddingHorizontal: 10 },
- headerTitleContainer: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  marginRight: 70, 
-},
+  headerTitleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 70,
+  },
   avatar: { width: 34, height: 34, borderRadius: 17, marginHorizontal: 10 },
   headerName: { fontSize: 18, fontWeight: '600' },
   headerRightContainer: { flexDirection: 'row' },
@@ -421,15 +419,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 20,
-    transform: [{ scaleY: -1 }],
     marginBottom: -70,
   },
   emptyTextMatch: { fontSize: 16, color: '#666', marginBottom: 5 },
   emptyUserName: { fontSize: 20, fontWeight: 'bold', color: '#333', marginBottom: 25 },
   emptyAvatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
   emptyPrompt: { fontSize: 16, color: '#555', marginTop: 10 },
-  flippedText: { transform: [{ scaleY: -1 }] },
-  flippedImage: { transform: [{ scaleY: -1 }] },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

@@ -12,16 +12,16 @@ import Animated, {
   interpolate
 } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useRouter } from 'expo-router'; // NOVO
 import Card from '../../components/CardComponent';
 import Header from '../../components/Header';
 import ProfileInfoPanel from '../../components/ProfileInfoPanel';
-import MatchAnimation from '../../components/MatchAnimation'; // NOVO
+import MatchAnimation from '../../components/MatchAnimation'; 
 import { UserProfile } from '../../context/ProfileContext';
 
 const { width, height } = Dimensions.get('window');
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
+// ❤️ Butterfly animacija
 interface ButterflyParticleProps {
   onAnimationFinish: () => void;
   start: boolean;
@@ -56,14 +56,19 @@ const ButterflyParticle = ({ onAnimationFinish, start }: ButterflyParticleProps)
 
 export default function HomeTab() {
   const { user } = useAuthContext();
-  const router = useRouter(); // NOVO
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [butterflyParticles, setButterflyParticles] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isPanelVisible, setPanelVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
-  const [matchData, setMatchData] = useState<UserProfile | null>(null); // NOVO
+  const [matchData, setMatchData] = useState<UserProfile | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error') => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 3000); 
+  }, []);
 
   const fetchUsers = useCallback(async () => {
     if (!user?.token || !user?.id) {
@@ -110,7 +115,6 @@ export default function HomeTab() {
   const handleSwipe = useCallback(async (targetUserId: string, direction: 'left' | 'right') => {
     if (direction === 'right') triggerButterflyAnimation();
     
-    // Optimistično uklanjanje kartice sa ekrana
     setUsers(prevUsers => prevUsers.slice(1));
     setCurrentImageIndex(0);
 
@@ -120,27 +124,15 @@ export default function HomeTab() {
         action: direction === 'right' ? 'like' : 'dislike',
       }, { headers: { Authorization: `Bearer ${user?.token}` } });
 
-      // Proveravamo odgovor servera za "match"
       if (response.data.match) {
         console.log("MATCH!", response.data.matchedUser);
-        setMatchData(response.data.matchedUser); // Prikazujemo animaciju
+        setMatchData(response.data.matchedUser);
       }
 
     } catch (error) {
       console.error('Greška pri slanju swipe-a:', error);
-      // Opciono: Vrati korisnika u listu ako API poziv ne uspe
     }
-  }, [user]); // Uklonjen `users` iz zavisnosti da se izbegne rekreiranje funkcije
-
-  const handleLikeFromPanel = () => {
-    if (!selectedUser?._id) return;
-    handleSwipe(selectedUser._id, 'right');
-  };
-
-  const handleNopeFromPanel = () => {
-    if (!selectedUser?._id) return;
-    handleSwipe(selectedUser._id, 'left');
-  };
+  }, [user]);
 
   const handleButtonSwipe = (direction: 'left' | 'right') => {
     const topUser = users[0];
@@ -158,22 +150,46 @@ export default function HomeTab() {
     });
   };
 
-  // NOVE funkcije za kontrolu MatchAnimation modala
   const closeMatchAnimation = () => {
     setMatchData(null);
   };
 
-  const goToChat = () => {
-    if (!matchData) return;
-    const params = {
-        chatId: matchData._id,
-        userName: matchData.fullName,
-        userAvatar: matchData.avatar,
-    };
+  const handleSendMessageFromMatch = useCallback(async (message: string) => { 
+    if (!matchData || !user?.token || !user?.id) {
+        closeMatchAnimation();
+        return;
+    }
+    
+    const targetUserId = matchData._id;
+    const targetUserName = matchData.fullName;
+    const trimmedMessage = message.trim();
+    
+    if (trimmedMessage) {
+        try {
+            const response = await axios.post(`${API_BASE_URL}/api/user/message`, {
+                recipientId: targetUserId,
+                text: trimmedMessage,
+            }, { 
+                headers: { Authorization: `Bearer ${user.token}` } 
+            });
+
+            if (response.status === 200 || response.status === 201) {
+                console.log(`Poruka uspešno poslata korisniku ${targetUserName}.`);
+                showToast(`Poruka uspešno poslata korisniku ${targetUserName}!`, 'success');
+            } else {
+                throw new Error('Neočekivan odgovor servera.');
+            }
+            
+        } catch (error) {
+            console.error('Greška pri slanju poruke:', error);
+            showToast('Greška pri slanju poruke. Pokušajte ponovo.', 'error');
+        }
+    } else {
+        showToast(`Match sa ${targetUserName} sačuvan!`, 'success');
+    }
+
     closeMatchAnimation();
-    // @ts-ignore
-    router.push({ pathname: `/chat/${params.chatId}`, params });
-  };
+  }, [matchData, user, showToast]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -222,19 +238,20 @@ export default function HomeTab() {
 
           {users.length > 0 && !isLoading && (
             <View style={styles.controlsContainer}>
-                <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('left')}>
-                    <Icon name="close" size={40} color="#FF6B6B" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.starButton}>
-                    <Icon name="star" size={25} color="#6C5CE7" />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('right')}>
-                    <Icon name="heart" size={40} color="#4CCC93" />
-                </TouchableOpacity>
+              <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('left')}>
+                <Icon name="close" size={40} color="#FF6B6B" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.starButton}>
+                <Icon name="star" size={25} color="#6C5CE7" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('right')}>
+                <Icon name="heart" size={40} color="#4CCC93" />
+              </TouchableOpacity>
             </View>
           )}
         </View>
 
+        {/* Modal za Profile Info */}
         <Modal
           animationType="none"
           transparent={true}
@@ -250,19 +267,36 @@ export default function HomeTab() {
           />
         </Modal>
 
-        {/* ===== NOVO: MODAL ZA PRIKAZ "IT'S A MATCH" ANIMACIJE ===== */}
-        <Modal
+        {/* ✅ MATCH FULLSCREEN MODAL */}
+        {!!matchData && (
+          <Modal
+            visible={true}
             animationType="fade"
             transparent={true}
-            visible={!!matchData}
             onRequestClose={closeMatchAnimation}
-        >
-            <MatchAnimation 
+          >
+            <View style={styles.fullScreenMatch}>
+              <MatchAnimation 
                 matchedUser={matchData!}
-                onSendMessage={goToChat}
+                onSendMessage={handleSendMessageFromMatch} 
                 onClose={closeMatchAnimation}
+              />
+            </View>
+          </Modal>
+        )}
+
+        {/* Toast */}
+        {!!toastMessage && (
+          <View style={[styles.toastContainer, toastMessage.type === 'success' ? styles.toastSuccess : styles.toastError]}>
+            <Icon 
+              name={toastMessage.type === 'success' ? "checkmark-circle" : "alert-circle"} 
+              size={20} 
+              color="#fff" 
+              style={{ marginRight: 10 }}
             />
-        </Modal>
+            <Text style={styles.toastText}>{toastMessage.message}</Text>
+          </View>
+        )}
       </View>
     </GestureHandlerRootView>
   );
@@ -331,4 +365,25 @@ const styles = StyleSheet.create({
   lottieLoader: { width: 250, height: 250 },
   lottieNoMore: { width: 200, height: 200 },
   butterflyParticle: { position: 'absolute', bottom: 50, alignSelf: 'center', zIndex: 999 },
+  fullScreenMatch: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  toastContainer: {
+    position: 'absolute',
+    top: 50, 
+    alignSelf: 'center',
+    padding: 15,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 99999,
+    elevation: 20,
+    maxWidth: '90%',
+  },
+  toastSuccess: { backgroundColor: '#4CAF50' },
+  toastError: { backgroundColor: '#F44336' },
+  toastText: { color: '#fff', fontWeight: '600', fontSize: 14, flexShrink: 1 },
 });
