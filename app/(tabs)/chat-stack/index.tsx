@@ -1,4 +1,4 @@
-// ChatScreen.tsx (Ažurirana verzija sa brojačem u crvenoj tački)
+// ChatScreen.tsx (Listing Konverzacija - Ažurirana verzija)
 
 import React, { useEffect, useMemo } from 'react';
 import {
@@ -15,7 +15,7 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import axios, { AxiosError } from 'axios';
 import { useAuthContext } from '../../../context/AuthContext';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+// ❌ UKLONJEN: import { SafeAreaView } from 'react-native-safe-area-context'; 
 import Header from '../../../components/Header';
 import { useSocketContext } from '../../../context/SocketContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -187,7 +187,8 @@ export default function ChatScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    // 🛠️ PROMENA: Korišćenje standardnog View-a umesto SafeAreaView
+    <View style={styles.container}> 
       <Header />
       {isLoading && !data ? (
         <ActivityIndicator style={styles.center} size="large" color="#FF6A00" />
@@ -297,12 +298,13 @@ export default function ChatScreen() {
           )}
         </ScrollView>
       )}
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  // 🛠️ PROMENA: Samo flex: 1, bez ikakvih kompenzacija safe area inzeta ovde.
+  container: { flex: 1, backgroundColor: '#fff' }, 
   scrollContent: { paddingBottom: 20 },
   center: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 30, minHeight: 400 },
   errorText: { color: '#666', fontSize: 16, textAlign: 'center', marginTop: 10, marginBottom: 20 },
