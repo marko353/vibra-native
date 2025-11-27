@@ -32,6 +32,7 @@ export interface UserProfile {
   hasCompletedLocationPrompt?: boolean;
   profilePictures?: string[];
   avatar?: string;
+  isVerified?: boolean;
 }
 
 const defaultProfile: UserProfile = {

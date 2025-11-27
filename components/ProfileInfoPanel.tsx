@@ -139,7 +139,7 @@ const ProfileInfoPanel: React.FC<ProfileInfoPanelProps> = ({ user, isVisible, on
                 <Animated.View style={[detailsStyles.headerImageContainer, { transform: [{ translateY: imageTranslateY }, { scale: imageScale }] }]}>
                     {images.length > 0 ? (
                         <Carousel
-                            loop={false}
+                            loop={true}
                             width={windowWidth}
                             height={HEADER_IMAGE_HEIGHT}
                             data={images}

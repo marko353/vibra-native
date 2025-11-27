@@ -13,6 +13,7 @@ export interface User {
   avatar?: string;
   profilePictures?: string[];
   birthDate?: string;
+  
 }
 
 interface AuthContextType {
