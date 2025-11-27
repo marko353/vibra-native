@@ -1,5 +1,14 @@
-import React, { useCallback, useRef } from 'react';
-import { View, Text, StyleSheet, Dimensions, StyleProp, ViewStyle, TouchableOpacity } from 'react-native';
+import React, { useCallback, useRef, useEffect, useState } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  StyleProp,
+  ViewStyle,
+  TouchableOpacity,
+  Image,
+} from 'react-native';
 import Icon from 'react-native-vector-icons/Ionicons';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, {
@@ -18,7 +27,19 @@ import {
   TapGestureHandler,
   TapGestureHandlerStateChangeEvent,
 } from 'react-native-gesture-handler';
+// Koristimo centralnu definiciju tipa
 import { UserProfile } from '../context/ProfileContext';
+
+const { width, height } = Dimensions.get('window');
+const CARD_WIDTH = width * 1;
+const SWIPE_THRESHOLD = width * 0.25;
+
+// Definisanje strukture za pojedinačnu info stavku
+interface InfoItemData {
+  icon: string;
+  text: string | number;
+  label?: string; // Koristi se za Interesovanja / Languages
+}
 
 interface CardProps {
   user: UserProfile;
@@ -30,16 +51,18 @@ interface CardProps {
   cardStyle?: StyleProp<ViewStyle>;
 }
 
-const { width } = Dimensions.get('window');
-const CARD_WIDTH = width * 0.95;
-const SWIPE_THRESHOLD = width * 0.25;
+// Komponenta za prikaz pojedinačne informacije (jedna ikonica + tekst)
+const InfoItem = ({ icon, text }: { icon: string; text: string | number }) => (
+  <View style={styles.infoItem}>
+    <Icon name={icon} size={18} color="#fff" />
+    <Text style={styles.infoText}>{text}</Text>
+  </View>
+);
 
-const InfoChip = ({ icon, text }: { icon: string; text: string | number }) => (
-  <View style={styles.chip}>
-    <Icon name={icon} size={14} color="#FFFFFF" style={styles.chipIcon} />
-    <Text style={styles.chipText} numberOfLines={1}>
-      {text}
-    </Text>
+// Komponenta za prikaz grupisanih tabova (za Interesovanja)
+const TabItem = ({ text }: { text: string | number }) => (
+  <View style={styles.tabItem}>
+    <Text style={styles.tabText}>{text}</Text>
   </View>
 );
 
@@ -54,6 +77,13 @@ const Card: React.FC<CardProps> = ({
 }) => {
   const tapRef = useRef(null);
   const panRef = useRef(null);
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const scaleOnTap = useSharedValue(1);
+
+  const [prevImageUri, setPrevImageUri] = useState<string | null>(null);
+  const imageOpacity = useSharedValue(1);
+  const prevImageOpacity = useSharedValue(0);
 
   const calculateAge = (birthDateString?: string | null): number | null => {
     if (!birthDateString) return null;
@@ -66,10 +96,24 @@ const Card: React.FC<CardProps> = ({
     return age;
   };
 
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scaleOnTap = useSharedValue(1);
   const age = calculateAge(user.birthDate);
+  const imageUri = user.profilePictures?.[currentImageIndex] || 'https://placehold.co/500x700?text=No+Image';
+
+  // 🔥 Crossfade između slika
+  useEffect(() => {
+    if (imageUri) {
+      setPrevImageUri((prev) => {
+        if (prev === imageUri) return prev;
+        return prev ? prev : imageUri;
+      });
+
+      prevImageOpacity.value = 1;
+      imageOpacity.value = 0;
+
+      prevImageOpacity.value = withTiming(0, { duration: 350 });
+      imageOpacity.value = withTiming(1, { duration: 350 });
+    }
+  }, [currentImageIndex, imageUri]); // Dodata imageUri u dependencies
 
   const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
     'worklet';
@@ -81,12 +125,10 @@ const Card: React.FC<CardProps> = ({
     (event: PanGestureHandlerGestureEvent) => {
       'worklet';
       const { state, translationX, velocityX } = event.nativeEvent;
-
       if (state === State.END) {
         const swipeSpeed = Math.abs(velocityX);
         const shouldSwipeRight = translationX > SWIPE_THRESHOLD || (translationX > 0 && swipeSpeed > 800);
         const shouldSwipeLeft = translationX < -SWIPE_THRESHOLD || (translationX < 0 && swipeSpeed > 800);
-
         if (shouldSwipeRight || shouldSwipeLeft) {
           const direction = shouldSwipeRight ? 'right' : 'left';
           const userId = user._id || '';
@@ -94,12 +136,12 @@ const Card: React.FC<CardProps> = ({
             runOnJS(onSwipe)(userId, direction);
           });
         } else {
-          translateX.value = withSpring(0, { damping: 10, stiffness: 100 });
-          translateY.value = withSpring(0, { damping: 10, stiffness: 100 });
+          translateX.value = withSpring(0);
+          translateY.value = withSpring(0);
         }
       }
     },
-    [user, onSwipe, translateX, translateY]
+    [user, onSwipe]
   );
 
   const onTapHandlerStateChange = useCallback(
@@ -108,17 +150,17 @@ const Card: React.FC<CardProps> = ({
       if (event.nativeEvent.state === State.ACTIVE) {
         const isLeftTap = event.nativeEvent.x < CARD_WIDTH / 2;
         runOnJS(onImageChange)(isLeftTap ? 'left' : 'right');
-        scaleOnTap.value = withTiming(0.98, { duration: 100 }, () => {
+        scaleOnTap.value = withTiming(0.97, { duration: 100 }, () => {
           scaleOnTap.value = withTiming(1, { duration: 100 });
         });
       }
     },
-    [onImageChange, scaleOnTap]
+    [onImageChange]
   );
 
   const animatedStyle = useAnimatedStyle(() => {
     const rotateZ = interpolate(translateX.value, [-width / 2, width / 2], [-15, 15], Extrapolate.CLAMP);
-    const scale = interpolate(translateX.value, [-width * 0.9, 0, width * 0.9], [0.95, 1, 0.95], Extrapolate.CLAMP);
+    const scale = interpolate(Math.abs(translateX.value), [0, width / 2], [1, 0.95], Extrapolate.CLAMP);
     return {
       transform: [
         { translateX: translateX.value },
@@ -128,95 +170,136 @@ const Card: React.FC<CardProps> = ({
       ],
     };
   });
-  
-  const CardView = ({ user, currentImageIndex }: { user: UserProfile; currentImageIndex: number }) => {
-    let infoComponents: React.ReactNode[] = [];
 
-    switch (currentImageIndex) {
-        case 0:
-            if (user.location?.locationCity) infoComponents.push(<InfoChip key="loc" icon="location-outline" text={user.location.locationCity} />);
-            if (user.relationshipType) infoComponents.push(<InfoChip key="rel" icon="heart-outline" text={user.relationshipType} />);
-            if (user.horoscope) infoComponents.push(<InfoChip key="horo" icon="star-outline" text={user.horoscope} />);
-            break;
-        case 1:
-            if (user.height) infoComponents.push(<InfoChip key="height" icon="resize-outline" text={`${user.height} cm`} />);
-            if (user.workout) infoComponents.push(<InfoChip key="work" icon="barbell-outline" text={user.workout} />);
-            if (user.jobTitle) infoComponents.push(<InfoChip key="job" icon="briefcase-outline" text={user.jobTitle} />);
-            break;
-        case 2:
-            if (user.interests && user.interests.length > 0) {
-                user.interests.slice(0, 4).forEach(interest => {
-                    infoComponents.push(<InfoChip key={interest} icon="sparkles-outline" text={interest} />);
-                });
-            }
-            break;
-        case 3:
-            if (user.pets) infoComponents.push(<InfoChip key="pets" icon="paw-outline" text={user.pets} />);
-            if (user.drinks) infoComponents.push(<InfoChip key="drinks" icon="beer-outline" text={user.drinks} />);
-            if (user.smokes) infoComponents.push(<InfoChip key="smokes" icon="bonfire-outline" text={user.smokes} />);
-            break;
-        default:
-            infoComponents = [];
+  const animatedImageStyle = useAnimatedStyle(() => ({ opacity: imageOpacity.value }));
+  const animatedPrevImageStyle = useAnimatedStyle(() => ({ opacity: prevImageOpacity.value }));
+
+  // --- NOVA LOGIKA ZA DINAMIČKI PRIKAZ INFORMACIJA ---
+  const allAvailableInfo: InfoItemData[][] = [];
+
+  // Helper za dodavanje pojedinačne stavke (koja se prikazuje kao InfoItem)
+  // Ispravljeno: Dodat 'null' u listu dozvoljenih tipova za ulazni argument 'text'
+  const addSingleInfo = (icon: string, text: string | number | undefined | null) => {
+    // Proverava da li je vrednost validna (nije undefined, null, ili prazan string)
+    if (text) {
+      // Svaka stavka je array od jednog elementa za InfoRow
+      allAvailableInfo.push([{ icon, text }]);
     }
+  };
 
-    return (
-      <View style={styles.card}>
-        <Animated.Image
-          source={{ uri: (user.profilePictures && user.profilePictures[currentImageIndex]) || 'https://placehold.co/500x700/e0e0e0/e0e0e0?text=.' }}
-          style={styles.cardImage}
-        />
-        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.6)', 'rgba(0,0,0,0.9)']} locations={[0.5, 0.7, 1]} style={styles.gradientOverlayBottom} />
-        <LinearGradient colors={['rgba(0,0,0,0.4)', 'transparent']} locations={[0, 0.3]} style={styles.gradientOverlayTop} />
-        
-        <View style={styles.imageIndicatorContainer}>
-          {(user.profilePictures || []).map((_, index: number) => (
-            <View key={index} style={[styles.indicator, currentImageIndex === index && styles.activeIndicator]} />
-          ))}
-        </View>
+  // 1. Prioritet: Lokacija
+  addSingleInfo('location-outline', user.location?.locationCity);
+  
+  // 2. Prioritet: Tip veze
+  addSingleInfo('heart-outline', user.relationshipType);
+  
+  // 3. Prioritet: Posao/Zanimanje
+  addSingleInfo('briefcase-outline', user.jobTitle);
 
-        <View style={styles.cardInfo}>
-          <Text style={styles.name}>
-            {user.fullName}
-            {age !== null ? ` ${age}` : ''}
-          </Text>
-          
-          {infoComponents.length > 0 && (
-            <View style={styles.chipsContainer}>
-              {infoComponents}
-            </View>
+  // 4. Prioritet: Jezici (prikazuje se kao jedna linija)
+  if (user.languages?.length) {
+      allAvailableInfo.push([{ 
+          icon: 'language-outline', 
+          // Spajamo sve jezike u jedan string
+          text: user.languages.join(', ') 
+      }]);
+  }
+
+  // 5. Prioritet: Interesovanja (Specijalni slučaj: Prikazuje se do 6 tabova)
+  const validInterests = (user.interests || []).slice(0, 6);
+  if (validInterests.length > 0) {
+      // Dodajemo poseban "slot" za interesovanja
+      allAvailableInfo.push([
+          // Prvi element je labela, ostali su tabovi
+          { icon: 'sparkles-outline', text: 'Interesovanja', label: 'header' },
+          ...validInterests.map(i => ({ icon: '', text: i, label: 'tab' })) 
+      ]);
+  }
+  // --- KRAJ LOGIKE ZA INFO LISTU ---
+
+  // Odabir seta informacija za trenutnu sliku (rotacija)
+  const infoCount = allAvailableInfo.length;
+  
+  // Prikazuje se samo ako je currentImageIndex manji od infoCount.
+  const visibleInfoSet = (currentImageIndex < infoCount) 
+    ? allAvailableInfo[currentImageIndex] 
+    : [];
+    
+  // Proveravamo da li je trenutni set Interesovanja
+  const isInterestsSet = visibleInfoSet.length > 0 && visibleInfoSet[0].label === 'header';
+
+
+  const CardView = () => (
+    <View style={styles.card}>
+      {/* Pozadinski blur sloj */}
+      <Image source={{ uri: imageUri }} style={styles.imageBackground} blurRadius={20} />
+
+      {/* Prethodna slika (fade out) */}
+      {prevImageUri && (
+        <Animated.Image source={{ uri: prevImageUri }} style={[styles.imageMain, animatedPrevImageStyle]} />
+      )}
+
+      {/* Nova slika (fade in) */}
+      <Animated.Image source={{ uri: imageUri }} style={[styles.imageMain, animatedImageStyle]} />
+
+      <LinearGradient
+        colors={['transparent', 'rgba(0,0,0,0.5)', 'rgba(0,0,0,0.9)']}
+        style={styles.gradientBottom}
+      />
+
+      {/* Indikatori */}
+      <View style={styles.indicators}>
+        {(user.profilePictures || []).map((_, index) => (
+          <View key={index} style={[styles.indicator, currentImageIndex === index && styles.indicatorActive]} />
+        ))}
+      </View>
+
+      {/* Info sekcija */}
+      <View style={styles.infoSection}>
+        <Text style={styles.name}>
+          {user.fullName} {age ? `${age}` : ''}
+        </Text>
+
+        {/* Prikazivanje Interesovanja (kao tabovi) ili jedne Info Stavke */}
+        <View style={styles.infoRow}>
+          {isInterestsSet ? (
+            <>
+              {/* Naslov za interesovanja */}
+              <Text style={styles.infoGroupHeader}>{visibleInfoSet[0].text}:</Text>
+              {/* Tabovi za interesovanja, počevši od drugog elementa u setu */}
+              {visibleInfoSet.slice(1).map((item, i) => (
+                  <TabItem key={i} text={item.text} />
+              ))}
+            </>
+          ) : (
+            // Prikaz jedne standardne info stavke
+            visibleInfoSet.map((item, i) => (
+                <InfoItem key={i} icon={item.icon} text={item.text} />
+            ))
           )}
         </View>
-
-        <TouchableOpacity style={styles.infoButton} onPress={() => onInfoPress(user)} activeOpacity={0.8}>
-          <Icon name="information-circle-outline" size={32} color="#fff" />
-        </TouchableOpacity>
-
-        {/* ... ostatak JSX-a za LIKE/NOPE ... */}
       </View>
-    );
-  };
+
+      <TouchableOpacity style={styles.infoButton} onPress={() => onInfoPress(user)}>
+        <Icon name="information-circle-outline" size={32} color="#fff" />
+      </TouchableOpacity>
+    </View>
+  );
 
   if (!isTopCard) {
     return (
-      <View style={[styles.cardWrapper, { zIndex: 0, transform: [{ scale: 0.9 }] }, cardStyle]}>
-        <CardView user={user} currentImageIndex={0} />
+      <View style={[styles.cardWrapper, { transform: [{ scale: 0.92 }], opacity: 0.9 }, cardStyle]}>
+        <CardView />
       </View>
     );
   }
 
   return (
-    <PanGestureHandler
-      ref={panRef}
-      onGestureEvent={onGestureEvent}
-      onHandlerStateChange={onPanHandlerStateChange}
-      // ===== ISPRAVKA: Uklonjen `waitFor` i dodat `activeOffsetX` =====
-      activeOffsetX={[-20, 20]}
-      // waitFor={tapRef} // <-- Uklonjeno
-    >
-      <Animated.View style={[styles.cardWrapper, { zIndex: 1 }, animatedStyle, cardStyle]}>
-        <TapGestureHandler ref={tapRef} onHandlerStateChange={onTapHandlerStateChange} maxDurationMs={250}>
-          <Animated.View style={{ flex: 1, borderRadius: 20, overflow: 'hidden' }}>
-            <CardView user={user} currentImageIndex={currentImageIndex} />
+    <PanGestureHandler onGestureEvent={onGestureEvent} onHandlerStateChange={onPanHandlerStateChange}>
+      <Animated.View style={[styles.cardWrapper, animatedStyle, cardStyle]}>
+        <TapGestureHandler onHandlerStateChange={onTapHandlerStateChange}>
+          <Animated.View style={{ flex: 1, borderRadius: 25, overflow: 'hidden' }}>
+            <CardView />
           </Animated.View>
         </TapGestureHandler>
       </Animated.View>
@@ -229,83 +312,113 @@ export default Card;
 const styles = StyleSheet.create({
   cardWrapper: {
     width: CARD_WIDTH,
-    height: '95%',
-    borderRadius: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 10,
+    height: height * 0.79,
+    borderRadius: 25,
     position: 'absolute',
     alignSelf: 'center',
-    top: '1.5%',
+   
   },
   card: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 20,
-    backgroundColor: '#f0f0f0',
+    flex: 1,
+    borderRadius: 25,
+    backgroundColor: '#000',
     overflow: 'hidden',
   },
-  cardImage: { width: '100%', height: '100%' },
-  gradientOverlayBottom: { position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%' },
-  gradientOverlayTop: { position: 'absolute', top: 0, left: 0, right: 0, height: '30%' },
-  imageIndicatorContainer: { position: 'absolute', top: 10, left: 10, right: 10, flexDirection: 'row', zIndex: 2 },
-  indicator: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255, 255, 255, 0.5)', marginHorizontal: 3 },
-  activeIndicator: { backgroundColor: '#fff' },
-  cardInfo: {
+  imageBackground: {
+    ...StyleSheet.absoluteFillObject,
+    opacity: 0.5,
+  },
+  imageMain: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
     position: 'absolute',
-    bottom: 90, 
+  },
+  gradientBottom: {
+    position: 'absolute',
+    bottom: 0,
+    height: '50%',
+    width: '100%',
+  },
+  indicators: {
+    position: 'absolute',
+    top: 10,
+    left: 15,
+    right: 15,
+    flexDirection: 'row',
+  },
+  indicator: {
+    flex: 1,
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.4)',
+    marginHorizontal: 3,
+  },
+  indicatorActive: {
+    backgroundColor: '#c2aeaeff',
+  },
+  infoSection: {
+    position: 'absolute',
+    bottom: 70,
     left: 20,
     right: 20,
   },
   name: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 34, // Malo veći font za bolji naglasak
+    fontWeight: '800', // Jači bold
     color: '#fff',
-    textShadowColor: 'rgba(0,0,0,0.8)',
+    marginBottom: 8, // Dodat razmak
+    textShadowColor: 'rgba(0, 0, 0, 0.7)',
     textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 8,
-    marginBottom: 12,
+    textShadowRadius: 3,
   },
-  chipsContainer: {
+  infoRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginTop: 8,
   },
-  chip: {
+  infoItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    // Sada je cela stavka samostalna, bez marginRight-a
+    marginRight: 12, 
+    marginBottom: 6,
+  },
+  infoText: {
+    color: '#fff',
+    fontSize: 18, // Malo veći font za samostalnu stavku
+    fontWeight: '600',
+    marginLeft: 10, // Veći razmak od ikonice
+  },
+  infoGroupHeader: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 10,
+    marginBottom: 10,
+  },
+  tabItem: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)', // Poluprovidna pozadina za tab
     borderRadius: 15,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     marginRight: 8,
     marginBottom: 8,
-    borderColor: 'rgba(233, 30, 99, 0.5)',
-    borderWidth: 1.5,
   },
-  chipIcon: {
-    marginRight: 6,
-  },
-  chipText: {
-    color: '#FFFFFF',
+  tabText: {
+    color: '#fff',
     fontSize: 14,
     fontWeight: '600',
   },
- infoButton: {
-  position: 'absolute',
-  top: 40,
-  right: 20,
-  zIndex: 3,
-  width: 44, // Definisana širina
-  height: 44, // Definisana visina
-  borderRadius: 22, // Polovina širine/visine za savršen krug
-  backgroundColor: 'rgba(0, 0, 0, 0.3)', // Polutransparentna pozadina
-  justifyContent: 'center', // Centriranje ikonice vertikalno
-  alignItems: 'center', // Centriranje ikonice horizontalno
-},
-  choiceOverlay: {
-    position: 'absolute', top: 40, right: 20, padding: 10, borderWidth: 4, borderRadius: 5, transform: [{ rotate: '15deg' }],
+  infoButton: {
+    position: 'absolute',
+    top: 40,
+    right: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  choiceText: { fontSize: 28, fontWeight: 'bold', letterSpacing: 2 },
 });

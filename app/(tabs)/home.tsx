@@ -1,5 +1,15 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Dimensions, StatusBar, TouchableOpacity, Modal } from 'react-native';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  TouchableOpacity,
+  Modal,
+  TouchableWithoutFeedback,
+} from 'react-native';
+// Pretpostavljeni importi za kontekste i komponente (koje vi imate)
 import { useAuthContext } from '../../context/AuthContext';
 import axios from 'axios';
 import LottieView from 'lottie-react-native';
@@ -7,21 +17,23 @@ import Icon from 'react-native-vector-icons/Ionicons';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  withSpring,
   withTiming,
   runOnJS,
-  interpolate
+  interpolate,
 } from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// Pretpostavljeni importi za komponente
 import Card from '../../components/CardComponent';
 import Header from '../../components/Header';
 import ProfileInfoPanel from '../../components/ProfileInfoPanel';
-import MatchAnimation from '../../components/MatchAnimation'; 
+import MatchAnimation from '../../components/MatchAnimation';
 import { UserProfile } from '../../context/ProfileContext';
 
-const { width, height } = Dimensions.get('window');
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const { height } = Dimensions.get('window');
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
 
-// ❤️ Butterfly animacija
+// --- ButterflyParticle (Nepromenjeno) ---
 interface ButterflyParticleProps {
   onAnimationFinish: () => void;
   start: boolean;
@@ -32,19 +44,25 @@ const ButterflyParticle = ({ onAnimationFinish, start }: ButterflyParticleProps)
 
   useEffect(() => {
     if (start) {
-      progress.value = withTiming(1, { duration: 1500 }, (isFinished) => {
-        if (isFinished) runOnJS(onAnimationFinish)();
-      });
+      progress.value = withTiming(
+        1,
+        { duration: 1500 },
+        (isFinished?: boolean) => {
+          if (isFinished) runOnJS(onAnimationFinish)();
+        }
+      );
     }
   }, [start]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const translateY = interpolate(progress.value, [0, 0.5, 1], [0, -height * 0.5, -height]);
+    const translateY = interpolate(progress.value, [0, 1], [0, -height]);
     const opacity = interpolate(progress.value, [0, 0.8, 1], [1, 1, 0]);
     const scale = interpolate(progress.value, [0, 1], [0.5, 1.5]);
     const rotate = interpolate(progress.value, [0, 1], [0, 360]);
-
-    return { opacity, transform: [{ translateY }, { scale }, { rotate: `${rotate}deg` }] };
+    return {
+      opacity,
+      transform: [{ translateY }, { scale }, { rotate: `${rotate}deg` }],
+    };
   });
 
   return (
@@ -54,22 +72,74 @@ const ButterflyParticle = ({ onAnimationFinish, start }: ButterflyParticleProps)
   );
 };
 
+// --- ControlButton (Nepromenjeno) ---
+const ControlButton = ({
+  icon,
+  color,
+  size,
+  onPress,
+  small,
+}: {
+  icon: string;
+  color: string;
+  size: number;
+  onPress?: () => void;
+  small?: boolean;
+}) => {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.9, { damping: 7, stiffness: 150 });
+  };
+
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 7, stiffness: 150 });
+    if (onPress) onPress();
+  };
+
+  return (
+    <TouchableWithoutFeedback onPressIn={handlePressIn} onPressOut={handlePressOut}>
+      <Animated.View
+        style={[
+          styles.controlButton,
+          small ? styles.smallButton : {},
+          { backgroundColor: color },
+          animatedStyle,
+        ]}
+      >
+        <Icon name={icon} size={size} color="#fff" />
+      </Animated.View>
+    </TouchableWithoutFeedback>
+  );
+};
+
+// --- HomeTab Komponenta ---
 export default function HomeTab() {
   const { user } = useAuthContext();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [butterflyParticles, setButterflyParticles] = useState<any[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+
+  // Stanja za Profile Info Panel
   const [isPanelVisible, setPanelVisible] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserProfile | null>(null);
+
+  // Stanje za Match i Toast (VRAĆENO)
   const [matchData, setMatchData] = useState<UserProfile | null>(null);
   const [toastMessage, setToastMessage] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
 
+  // --- Funkcije za Toast (VRAĆENO) ---
   const showToast = useCallback((message: string, type: 'success' | 'error') => {
     setToastMessage({ message, type });
-    setTimeout(() => setToastMessage(null), 3000); 
+    setTimeout(() => setToastMessage(null), 3000);
   }, []);
 
+  // --- Funkcija za dohvatanje korisnika (Nepromenjeno) ---
   const fetchUsers = useCallback(async () => {
     if (!user?.token || !user?.id) {
       setIsLoading(false);
@@ -80,7 +150,7 @@ export default function HomeTab() {
       const response = await axios.get(`${API_BASE_URL}/api/user/all-users`, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
-      const filteredUsers = response.data.users.filter((u: any) => u._id !== user.id);
+      const filteredUsers = (response.data.users || []).filter((u: any) => u._id !== user.id);
       setUsers(filteredUsers);
     } catch (error) {
       console.error('Greška pri dohvatanju korisnika:', error);
@@ -93,6 +163,7 @@ export default function HomeTab() {
     if (user?.token && user?.id) fetchUsers();
   }, [user, fetchUsers]);
 
+  // --- Funkcije za Info Panel (VRAĆENO) ---
   const handleInfoPress = (userToShow: UserProfile) => {
     setSelectedUser(userToShow);
     setPanelVisible(true);
@@ -111,57 +182,54 @@ export default function HomeTab() {
   const removeParticle = (id: number) => {
     setButterflyParticles(prev => prev.filter(p => p.id !== id));
   };
+  
+  // --- FUNKCIJA ZA SWIPE (POPRAVLJENO) ---
+  const handleSwipe = useCallback(
+    async (targetUserId: string, direction: 'left' | 'right') => {
+      // 1. Lokalne promene (prelazak na sledeću karticu)
+      if (direction === 'right') triggerButterflyAnimation();
+      setUsers(prev => prev.slice(1));
+      setCurrentImageIndex(0);
 
-  const handleSwipe = useCallback(async (targetUserId: string, direction: 'left' | 'right') => {
-    if (direction === 'right') triggerButterflyAnimation();
-    
-    setUsers(prevUsers => prevUsers.slice(1));
-    setCurrentImageIndex(0);
+      try {
+        // 2. Slanje zahteva i hvatanje odgovora
+        const response = await axios.post(
+          `${API_BASE_URL}/api/user/swipe`,
+          { targetUserId, action: direction === 'right' ? 'like' : 'dislike' },
+          { headers: { Authorization: `Bearer ${user?.token}` } }
+        );
 
-    try {
-      const response = await axios.post(`${API_BASE_URL}/api/user/swipe`, {
-        targetUserId,
-        action: direction === 'right' ? 'like' : 'dislike',
-      }, { headers: { Authorization: `Bearer ${user?.token}` } });
-
-      if (response.data.match) {
-        console.log("MATCH!", response.data.matchedUser);
-        setMatchData(response.data.matchedUser);
+        // 3. Provera Match-a i postavljanje stanja
+        if (response.data.match) {
+          console.log('MATCH DETEKTOVAN:', response.data.matchedUser);
+          setMatchData(response.data.matchedUser);
+        }
+        
+      } catch (error) {
+        console.error('Greška pri swipe-u:', error);
       }
-
-    } catch (error) {
-      console.error('Greška pri slanju swipe-a:', error);
-    }
-  }, [user]);
+    },
+    [user]
+  );
 
   const handleButtonSwipe = (direction: 'left' | 'right') => {
     const topUser = users[0];
-    if (topUser && topUser._id) {
-      handleSwipe(topUser._id, direction);
-    }
+    if (topUser && topUser._id) handleSwipe(topUser._id, direction);
   };
 
-  const handleImageChange = (direction: 'left' | 'right') => {
-    if (users.length === 0) return;
-    setCurrentImageIndex(prevIndex => {
-      const totalImages = users[0]?.profilePictures?.length || 0;
-      if (totalImages <= 1) return prevIndex;
-      return direction === 'right' ? (prevIndex + 1) % totalImages : (prevIndex - 1 + totalImages) % totalImages;
-    });
-  };
-
+  // --- Funkcije za rukovanje Match Modalom (VRAĆENO) ---
   const closeMatchAnimation = () => {
     setMatchData(null);
   };
 
-  const handleSendMessageFromMatch = useCallback(async (message: string) => { 
+  const handleSendMessageFromMatch = useCallback(async (message: string) => { 
     if (!matchData || !user?.token || !user?.id) {
         closeMatchAnimation();
         return;
     }
     
     const targetUserId = matchData._id;
-    const targetUserName = matchData.fullName;
+    const targetUserName = matchData.fullName || 'novog korisnika';
     const trimmedMessage = message.trim();
     
     if (trimmedMessage) {
@@ -169,12 +237,11 @@ export default function HomeTab() {
             const response = await axios.post(`${API_BASE_URL}/api/user/message`, {
                 recipientId: targetUserId,
                 text: trimmedMessage,
-            }, { 
-                headers: { Authorization: `Bearer ${user.token}` } 
+            }, { 
+                headers: { Authorization: `Bearer ${user.token}` } 
             });
 
             if (response.status === 200 || response.status === 201) {
-                console.log(`Poruka uspešno poslata korisniku ${targetUserName}.`);
                 showToast(`Poruka uspešno poslata korisniku ${targetUserName}!`, 'success');
             } else {
                 throw new Error('Neočekivan odgovor servera.');
@@ -185,12 +252,22 @@ export default function HomeTab() {
             showToast('Greška pri slanju poruke. Pokušajte ponovo.', 'error');
         }
     } else {
-        showToast(`Match sa ${targetUserName} sačuvan!`, 'success');
+      showToast(`Match sa ${targetUserName} sačuvan!`, 'success');
     }
 
     closeMatchAnimation();
   }, [matchData, user, showToast]);
 
+  const handleImageChange = (direction: 'left' | 'right') => {
+    if (users.length === 0) return;
+    setCurrentImageIndex(prevIndex => {
+      const totalImages = users[0]?.profilePictures?.length || 0;
+      if (totalImages <= 1) return prevIndex;
+      return direction === 'right' ? (prevIndex + 1) % totalImages : (prevIndex - 1 + totalImages) % totalImages;
+    });
+  };
+
+  // --- Render ---
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
@@ -200,6 +277,7 @@ export default function HomeTab() {
         <View style={styles.contentContainer}>
           {isLoading ? (
             <View style={styles.loadingContainer}>
+              {/* Proverite putanju: source={require('../../assets/animations/butterflies.json')} */}
               <LottieView source={require('../../assets/animations/butterflies.json')} autoPlay loop style={styles.lottieLoader} />
               <Text style={styles.loadingText}>Tražimo tvoju VIBRU...</Text>
             </View>
@@ -237,28 +315,24 @@ export default function HomeTab() {
           ))}
 
           {users.length > 0 && !isLoading && (
-            <View style={styles.controlsContainer}>
-              <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('left')}>
-                <Icon name="close" size={40} color="#FF6B6B" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.starButton}>
-                <Icon name="star" size={25} color="#6C5CE7" />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.controlButton} onPress={() => handleButtonSwipe('right')}>
-                <Icon name="heart" size={40} color="#4CCC93" />
-              </TouchableOpacity>
+            <View style={styles.controlsWrapper}>
+              <View style={styles.controlsContainer}>
+                <ControlButton icon="close" color="#ff7878ff" size={34} onPress={() => handleButtonSwipe('left')} />
+                <ControlButton icon="star" color="#a280faff" size={22} onPress={() => console.log('Super like')} small />
+                <ControlButton icon="heart" color="#46f2b3ff" size={34} onPress={() => handleButtonSwipe('right')} />
+              </View>
             </View>
           )}
         </View>
 
-        {/* Modal za Profile Info */}
+        {/* Modal za Profile Info (VRAĆENO) */}
         <Modal
           animationType="none"
           transparent={true}
           visible={isPanelVisible}
           onRequestClose={handleClosePanel}
         >
-          <ProfileInfoPanel 
+          <ProfileInfoPanel 
             user={selectedUser}
             isVisible={isPanelVisible}
             onClose={handleClosePanel}
@@ -267,7 +341,7 @@ export default function HomeTab() {
           />
         </Modal>
 
-        {/* ✅ MATCH FULLSCREEN MODAL */}
+        {/* ✅ MATCH FULLSCREEN MODAL (VRAĆENO) */}
         {!!matchData && (
           <Modal
             visible={true}
@@ -276,79 +350,74 @@ export default function HomeTab() {
             onRequestClose={closeMatchAnimation}
           >
             <View style={styles.fullScreenMatch}>
-              <MatchAnimation 
-                matchedUser={matchData!}
-                onSendMessage={handleSendMessageFromMatch} 
+              <MatchAnimation 
+                matchedUser={matchData} // Ne treba "!" ako je matchData već proveren u {!!matchData}
+                onSendMessage={handleSendMessageFromMatch} 
                 onClose={closeMatchAnimation}
               />
             </View>
           </Modal>
         )}
-
-        {/* Toast */}
+        
+        {/* Toast (VRAĆENO) */}
         {!!toastMessage && (
           <View style={[styles.toastContainer, toastMessage.type === 'success' ? styles.toastSuccess : styles.toastError]}>
-            <Icon 
-              name={toastMessage.type === 'success' ? "checkmark-circle" : "alert-circle"} 
-              size={20} 
-              color="#fff" 
+            <Icon 
+              name={toastMessage.type === 'success' ? "checkmark-circle" : "alert-circle"} 
+              size={20} 
+              color="#fff" 
               style={{ marginRight: 10 }}
             />
             <Text style={styles.toastText}>{toastMessage.message}</Text>
           </View>
         )}
+
       </View>
     </GestureHandlerRootView>
   );
 }
 
+// --- Styles (Ažurirano za Toast i Match Modal) ---
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  contentContainer: { flex: 1, position: 'relative' },
+  contentContainer: { flex: 1 },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  cardStack: { flex: 1 },
-  noMoreCardsContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
   loadingText: { fontSize: 18, color: '#E91E63', fontWeight: '600', marginTop: -20 },
-  noMoreCardsText: { fontSize: 24, fontWeight: 'bold', color: '#E91E63', marginTop: -20 },
-  noMoreCardsSubText: { fontSize: 16, color: '#AD1457', textAlign: 'center', marginTop: 10 },
-  refreshButtonText: { marginLeft: 10, color: '#E91E63', fontWeight: '600', fontSize: 16 },
-  controlsContainer: {
+  cardStack: { flex: 1 },
+  butterflyParticle: { position: 'absolute', bottom: 50, alignSelf: 'center', zIndex: 999 },
+
+  controlsWrapper: {
     position: 'absolute',
-    bottom: 0,
+    bottom: -15,
     left: 0,
     right: 0,
-    zIndex: 50,
+    alignItems: 'center',
+  },
+  controlsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-evenly',
     alignItems: 'center',
-    paddingHorizontal: 15,
+    width: '85%',
+    paddingVertical: 15,
+    borderRadius: 50,
+    overflow: 'hidden',
   },
   controlButton: {
     width: 70,
     height: 70,
-    borderRadius: 35,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 40,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.15)',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    elevation: 10,
   },
-  starButton: {
-    width: 55,
-    height: 55,
-    borderRadius: 27.5,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: 'rgba(0, 0, 0, 0.12)',
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 1,
-    shadowRadius: 10,
-    elevation: 8,
+  smallButton: {
+    width: 50,
+    height: 50,
+    borderRadius: 30,
   },
+  noMoreCardsContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  noMoreCardsText: { fontSize: 24, fontWeight: 'bold', color: '#E91E63', marginTop: -20 },
+  noMoreCardsSubText: { fontSize: 16, color: '#AD1457', textAlign: 'center', marginTop: 10 },
+  refreshButtonText: { marginLeft: 10, color: '#E91E63', fontWeight: '600', fontSize: 16 },
   refreshButton: {
     flexDirection: 'row',
     marginTop: 20,
@@ -357,14 +426,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     alignItems: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
   },
   lottieLoader: { width: 250, height: 250 },
   lottieNoMore: { width: 200, height: 200 },
-  butterflyParticle: { position: 'absolute', bottom: 50, alignSelf: 'center', zIndex: 999 },
+  // Dodati stilovi za Match Modal i Toast
   fullScreenMatch: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.85)',
@@ -373,7 +438,7 @@ const styles = StyleSheet.create({
   },
   toastContainer: {
     position: 'absolute',
-    top: 50, 
+    top: 50, 
     alignSelf: 'center',
     padding: 15,
     borderRadius: 8,

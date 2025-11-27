@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import LottieView from 'lottie-react-native';
 import Animated, { useSharedValue, useAnimatedStyle, withTiming } from 'react-native-reanimated';
-import { BlurView } from 'expo-blur';
+
 import Icon from 'react-native-vector-icons/Ionicons';
 import { UserProfile } from '../context/ProfileContext';
 import { useAuthContext } from '../context/AuthContext';
@@ -60,9 +60,7 @@ export default function MatchAnimation({ matchedUser, onSendMessage, onClose }: 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       pointerEvents="box-none" 
     >
-      
-      {/* BlurView je pozadina, zIndex: 1 */}
-      <BlurView intensity={70} tint="dark" style={styles.blurBackground} />
+     
 
       {/* ✨ OMOTAČ ZA LottieView: REŠENJE ZA TYPESCRIPT GREŠKU */}
       <View 
