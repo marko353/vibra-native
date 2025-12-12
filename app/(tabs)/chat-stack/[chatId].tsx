@@ -62,7 +62,7 @@ export default function ChatScreen() {
 
   const { chatId, receiverId, userName, userAvatar } = params;
   const { user } = useAuthContext();
-  const { socket } = useSocketContext();
+  const { socket, setHasUnread } = useSocketContext();
   const queryClient = useQueryClient();
 
   const [isMenuVisible, setIsMenuVisible] = useState(false);
@@ -134,17 +134,21 @@ export default function ChatScreen() {
     },
   });
 
-  useFocusEffect(
-    useCallback(() => {
-      queryClient.refetchQueries({ queryKey });
+ useFocusEffect(
+  useCallback(() => {
+    console.log('👀 Ušao u chat → gasim badge');
+    setHasUnread(false); // 🔥 OVO JE KLJUČNO
 
-      if (!markAsReadMutation.isPending && !markAsReadMutation.isSuccess) {
-        markAsReadMutation.mutate();
-      }
+    queryClient.refetchQueries({ queryKey });
 
-      return () => {};
-    }, [queryKey])
-  );
+    if (!markAsReadMutation.isPending && !markAsReadMutation.isSuccess) {
+      markAsReadMutation.mutate();
+    }
+
+    return () => {};
+  }, [queryKey])
+);
+
 useEffect(() => {
   if (!socket) {
     console.log("🔌 useEffect[Socket]: socket nije inicijalizovan");
