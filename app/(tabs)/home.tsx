@@ -140,24 +140,30 @@ export default function HomeTab() {
   }, []);
 
   // --- Funkcija za dohvatanje korisnika (Nepromenjeno) ---
-  const fetchUsers = useCallback(async () => {
-    if (!user?.token || !user?.id) {
-      setIsLoading(false);
-      return;
-    }
-    try {
-      setIsLoading(true);
-      const response = await axios.get(`${API_BASE_URL}/api/user/all-users`, {
+const fetchUsers = useCallback(async () => {
+  if (!user?.token || !user?.id) {
+    setIsLoading(false);
+    return;
+  }
+  try {
+    setIsLoading(true);
+
+    // ✅ OVDE JE KLJUČNA PROMENA
+    const response = await axios.get(
+      `${API_BASE_URL}/api/user/potential-matches`,
+      {
         headers: { Authorization: `Bearer ${user.token}` },
-      });
-      const filteredUsers = (response.data.users || []).filter((u: any) => u._id !== user.id);
-      setUsers(filteredUsers);
-    } catch (error) {
-      console.error('Greška pri dohvatanju korisnika:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [user]);
+      }
+    );
+
+    setUsers(response.data.users || []);
+  } catch (error) {
+    console.error('Greška pri dohvatanju korisnika:', error);
+  } finally {
+    setIsLoading(false);
+  }
+}, [user]);
+
 
   useEffect(() => {
     if (user?.token && user?.id) fetchUsers();
