@@ -1,93 +1,129 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  ReactNode,
+} from 'react';
 import { io, Socket } from 'socket.io-client';
-import { useAuthContext } from './AuthContext'; // Uvozimo AuthContext da bismo znali da li je korisnik ulogovan
+import { useAuthContext } from './AuthContext';
 
-// Adresa tvog backend servera
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-// Definišemo tip vrednosti koje će naš kontekst pružati
+// ================= TYPES =================
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
+
+  // 🔴 CHAT BADGE
+  hasUnread: boolean;
+  setHasUnread: (value: boolean) => void;
 }
 
-// 1. Kreiramo Kontekst sa početnom, praznom vrednošću
+// ================= CONTEXT =================
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
+  hasUnread: false,
+  setHasUnread: () => {},
 });
 
-// =========================================================================
-// 2. ✅ ISPRAVKA: Promenili smo ime 'useSocket' u 'useSocketContext'
-//    da bi se slagalo sa importom u ChatScreen.js
-//    Takođe smo dodali proveru za 'context' (dobra praksa).
-// =========================================================================
+// ================= HOOK =================
 export const useSocketContext = () => {
   const context = useContext(SocketContext);
-
-  if (context === undefined) {
-    // Ova greška će se desiti ako pokušaš da koristiš hook van Provider-a
-    throw new Error("useSocketContext mora da se koristi unutar SocketContextProvider-a");
+  if (!context) {
+    throw new Error(
+      'useSocketContext mora da se koristi unutar SocketProvider-a'
+    );
   }
-
   return context;
 };
 
-// =========================================================================
-// 3. Kreiramo Provider komponentu koja će obmotati našu aplikaciju
-// =========================================================================
+// ================= PROVIDER =================
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
-  const { user } = useAuthContext(); // Uzimamo podatke o korisniku iz AuthContext-a
+  const { user } = useAuthContext();
+
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // useEffect je "srce" ovog fajla. On upravlja životnim ciklusom konekcije.
+  // 🔴 BADGE STATE
+  const [hasUnread, setHasUnread] = useState(false);
+
+  // ================= SOCKET CONNECT =================
   useEffect(() => {
-    // Ako korisnik POSTOJI (ulogovan je i ima token)
-    if (user?.token) {
-      // Kreiramo novu socket konekciju
-      const newSocket = io(API_BASE_URL!, {
-        // Šaljemo token serveru radi autentifikacije
-        auth: {
-          token: user.token,
-        },
-      });
-
-      // Postavljamo socket u stanje da bude dostupan celoj aplikaciji
-      setSocket(newSocket);
-
-      // Slušamo za događaje
-      newSocket.on('connect', () => {
-        console.log('✅ SocketContext: Povezan na server, ID:', newSocket.id);
-        setIsConnected(true);
-      });
-
-      newSocket.on('disconnect', () => {
-        console.log('🔴 SocketContext: Diskonektovan sa servera.');
-        setIsConnected(false);
-      });
-
-      // Cleanup funkcija: Ovo se izvršava kada se korisnik izloguje.
-      // Ključno je da se konekcija prekine da ne bi ostala da "visi".
-      return () => {
-        console.log('🧹 SocketContext: Zatvaram socket konekciju.');
-        newSocket.disconnect();
-      };
-    } 
-    // Ako korisnik NE POSTOJI (izlogovao se)
-    else {
-      // Ako postoji stara konekcija, obavezno je ugasi
+    if (!user?.token) {
       if (socket) {
         socket.disconnect();
         setSocket(null);
         setIsConnected(false);
       }
+      return;
     }
-    // Ovaj efekat se ponovo pokreće SAMO kada se `user` objekat promeni (login/logout)
+
+    const newSocket = io(API_BASE_URL!, {
+      auth: { token: user.token },
+    });
+
+    setSocket(newSocket);
+
+    newSocket.on('connect', () => {
+      console.log('✅ SocketContext: Povezan, ID:', newSocket.id);
+      setIsConnected(true);
+    });
+
+    newSocket.on('disconnect', () => {
+      console.log('🔴 SocketContext: Diskonektovan');
+      setIsConnected(false);
+    });
+
+    return () => {
+      console.log('🧹 SocketContext: Gasim socket');
+      newSocket.disconnect();
+    };
   }, [user]);
 
+  // ================= 📩 MESSAGE LISTENER =================
+  useEffect(() => {
+    if (!socket) return;
+
+    const onReceiveMessage = (data: any) => {
+      console.log('📩 Nova poruka → palim badge', data);
+      setHasUnread(true);
+    };
+
+    socket.on('receiveMessage', onReceiveMessage);
+
+    return () => {
+      socket.off('receiveMessage', onReceiveMessage);
+    };
+  }, [socket]);
+
+  // ================= 💖 MATCH LISTENER =================
+  useEffect(() => {
+    if (!socket) return;
+
+    const onNewMatch = (data: any) => {
+      console.log('💖 Novi match → palim badge', data);
+      setHasUnread(true);
+    };
+
+    socket.on('newMatch', onNewMatch);
+
+    return () => {
+      socket.off('newMatch', onNewMatch);
+    };
+  }, [socket]);
+
+  // ================= PROVIDER =================
   return (
-    <SocketContext.Provider value={{ socket, isConnected }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        hasUnread,
+        setHasUnread,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );
