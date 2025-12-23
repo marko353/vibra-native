@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 // Definišemo novi, logičniji prop
 interface HeaderProps {
   withShadow?: boolean;
+  title?: string;
 }
 
 export default function Header({ withShadow }: HeaderProps) {

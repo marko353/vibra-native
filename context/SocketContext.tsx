@@ -7,6 +7,7 @@ import React, {
 } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthContext } from './AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -42,11 +43,12 @@ export const useSocketContext = () => {
 // ================= PROVIDER =================
 export const SocketProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuthContext();
+  const queryClient = useQueryClient();
 
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // 🔴 BADGE STATE
+  // 🔴 CHAT BADGE STATE
   const [hasUnread, setHasUnread] = useState(false);
 
   // ================= SOCKET CONNECT =================
@@ -87,7 +89,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     if (!socket) return;
 
     const onReceiveMessage = (data: any) => {
-      console.log('📩 Nova poruka → palim badge', data);
+      console.log('📩 Nova poruka → palim chat badge', data);
       setHasUnread(true);
     };
 
@@ -103,16 +105,36 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     if (!socket) return;
 
     const onNewMatch = (data: any) => {
-      console.log('💖 Novi match → palim badge', data);
+      console.log('💖 Novi match → palim chat badge', data);
       setHasUnread(true);
     };
 
-    socket.on('newMatch', onNewMatch);
+    socket.on('match', onNewMatch);
 
     return () => {
-      socket.off('newMatch', onNewMatch);
+      socket.off('match', onNewMatch);
     };
   }, [socket]);
+
+  // ================= ❤️ LIKE RECEIVED LISTENER (NOVO) =================
+  useEffect(() => {
+    if (!socket || !user?.id) return;
+
+    const onLikeReceived = (data: any) => {
+      console.log('❤️ Like received → invalidiram Likes tab', data);
+
+      // 🔥 INVALIDACIJA LIKES QUERY-JA ZA OVOG USERA
+      queryClient.invalidateQueries({
+        queryKey: ['incoming-likes', user.id],
+      });
+    };
+
+    socket.on('likeReceived', onLikeReceived);
+
+    return () => {
+      socket.off('likeReceived', onLikeReceived);
+    };
+  }, [socket, user?.id, queryClient]);
 
   // ================= PROVIDER =================
   return (
