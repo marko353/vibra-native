@@ -29,9 +29,13 @@ import Header from '../../components/Header';
 import ProfileInfoPanel from '../../components/ProfileInfoPanel';
 import MatchAnimation from '../../components/MatchAnimation';
 import { UserProfile } from '../../context/ProfileContext';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSocketContext } from '../../context/SocketContext';
+
 
 const { height } = Dimensions.get('window');
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || '';
+
 
 // --- ButterflyParticle (Nepromenjeno) ---
 interface ButterflyParticleProps {
@@ -120,6 +124,9 @@ const ControlButton = ({
 // --- HomeTab Komponenta ---
 export default function HomeTab() {
   const { user } = useAuthContext();
+  const { socket } = useSocketContext();
+
+  const queryClient = useQueryClient();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [butterflyParticles, setButterflyParticles] = useState<any[]>([]);
@@ -189,34 +196,56 @@ const fetchUsers = useCallback(async () => {
     setButterflyParticles(prev => prev.filter(p => p.id !== id));
   };
   
-  // --- FUNKCIJA ZA SWIPE (POPRAVLJENO) ---
-  const handleSwipe = useCallback(
-    async (targetUserId: string, direction: 'left' | 'right') => {
-      // 1. Lokalne promene (prelazak na sledeću karticu)
-      if (direction === 'right') triggerButterflyAnimation();
-      setUsers(prev => prev.slice(1));
-      setCurrentImageIndex(0);
+// --- FUNKCIJA ZA SWIPE ---
+const handleSwipe = useCallback(
+  async (targetUserId: string, direction: 'left' | 'right') => {
+    // 🔹 UI odmah reaguje
+    if (direction === 'right') triggerButterflyAnimation();
+    setUsers(prev => prev.slice(1));
+    setCurrentImageIndex(0);
 
-      try {
-        // 2. Slanje zahteva i hvatanje odgovora
-        const response = await axios.post(
-          `${API_BASE_URL}/api/user/swipe`,
-          { targetUserId, action: direction === 'right' ? 'like' : 'dislike' },
-          { headers: { Authorization: `Bearer ${user?.token}` } }
-        );
-
-        // 3. Provera Match-a i postavljanje stanja
-        if (response.data.match) {
-          console.log('MATCH DETEKTOVAN:', response.data.matchedUser);
-          setMatchData(response.data.matchedUser);
+    try {
+      const response = await axios.post(
+        `${API_BASE_URL}/api/user/swipe`,
+        {
+          targetUserId,
+          action: direction === 'right' ? 'like' : 'dislike',
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${user?.token}`,
+          },
         }
-        
-      } catch (error) {
-        console.error('Greška pri swipe-u:', error);
+      );
+
+      // ❤️ LIKE (ALI NIJE MATCH)
+      if (direction === 'right' && !response.data.match) {
+        socket?.emit('likeSent', { targetUserId });
+        console.log('❤️ likeSent emitted →', targetUserId);
       }
-    },
-    [user]
-  );
+
+      // 🔥 MATCH
+      if (response.data.match) {
+        console.log('🔥 MATCH DETEKTOVAN');
+
+        queryClient.invalidateQueries({
+          queryKey: ['incoming-likes', user?.id],
+        });
+
+        queryClient.invalidateQueries({
+          queryKey: ['matches-and-conversations'],
+        });
+
+        // ⬅️ MATCH SCREEN
+        setMatchData(response.data.matchedUser);
+      }
+    } catch (error) {
+      console.error('❌ Greška pri swipe-u:', error);
+    }
+  },
+  [user?.token, user?.id, socket, queryClient]
+);
+
 
   const handleButtonSwipe = (direction: 'left' | 'right') => {
     const topUser = users[0];
