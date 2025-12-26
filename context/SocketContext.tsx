@@ -55,12 +55,15 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user?.token) {
       if (socket) {
+        console.log('🧹 SocketContext: logout → gasim socket');
         socket.disconnect();
         setSocket(null);
         setIsConnected(false);
       }
       return;
     }
+
+    console.log('🔌 SocketContext: pokušavam konekciju…');
 
     const newSocket = io(API_BASE_URL!, {
       auth: { token: user.token },
@@ -79,7 +82,7 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => {
-      console.log('🧹 SocketContext: Gasim socket');
+      console.log('🧹 SocketContext: Cleanup → gasim socket');
       newSocket.disconnect();
     };
   }, [user]);
@@ -89,13 +92,15 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     if (!socket) return;
 
     const onReceiveMessage = (data: any) => {
-      console.log('📩 Nova poruka → palim chat badge', data);
+      console.log('📩 receiveMessage → palim chat badge', data);
       setHasUnread(true);
     };
 
+    console.log('🔌 SocketContext: slušam receiveMessage');
     socket.on('receiveMessage', onReceiveMessage);
 
     return () => {
+      console.log('🧹 SocketContext: skidam receiveMessage');
       socket.off('receiveMessage', onReceiveMessage);
     };
   }, [socket]);
@@ -105,36 +110,67 @@ export const SocketProvider = ({ children }: { children: ReactNode }) => {
     if (!socket) return;
 
     const onNewMatch = (data: any) => {
-      console.log('💖 Novi match → palim chat badge', data);
+      console.log('💖 match → palim chat badge', data);
       setHasUnread(true);
     };
 
+    console.log('🔌 SocketContext: slušam match');
     socket.on('match', onNewMatch);
 
     return () => {
+      console.log('🧹 SocketContext: skidam match');
       socket.off('match', onNewMatch);
     };
   }, [socket]);
 
-  // ================= ❤️ LIKE RECEIVED LISTENER (NOVO) =================
+  // ================= ❤️ LIKE RECEIVED =================
   useEffect(() => {
     if (!socket || !user?.id) return;
 
     const onLikeReceived = (data: any) => {
-      console.log('❤️ Like received → invalidiram Likes tab', data);
+      console.log('❤️ likeReceived → invalidiram incoming-likes', data);
 
-      // 🔥 INVALIDACIJA LIKES QUERY-JA ZA OVOG USERA
       queryClient.invalidateQueries({
         queryKey: ['incoming-likes', user.id],
       });
     };
 
+    console.log('🔌 SocketContext: slušam likeReceived');
     socket.on('likeReceived', onLikeReceived);
 
     return () => {
+      console.log('🧹 SocketContext: skidam likeReceived');
       socket.off('likeReceived', onLikeReceived);
     };
   }, [socket, user?.id, queryClient]);
+
+  // ================= 🗑️ CONVERSATION REMOVED (NOVO) =================
+  useEffect(() => {
+    if (!socket) return;
+
+    const onConversationRemoved = (data: any) => {
+      console.log(
+        '🗑️ conversationRemoved → gasim chat badge',
+        data
+      );
+
+      // 🔴 GASI BADGE JER CHAT VIŠE NE POSTOJI
+      setHasUnread(false);
+
+      // 🔄 (opciono ali korisno)
+      queryClient.invalidateQueries({
+        queryKey: ['my-matches'],
+      });
+    };
+
+    console.log('🔌 SocketContext: slušam conversationRemoved');
+    socket.on('conversationRemoved', onConversationRemoved);
+
+    return () => {
+      console.log('🧹 SocketContext: skidam conversationRemoved');
+      socket.off('conversationRemoved', onConversationRemoved);
+    };
+  }, [socket, queryClient]);
 
   // ================= PROVIDER =================
   return (
