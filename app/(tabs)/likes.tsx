@@ -22,14 +22,12 @@ export default function LikesTab() {
 
   const isPremium = false;
 
-  /* ================= DEBUG LOGS ================= */
+  /* ================= DEBUG MOUNT ================= */
 
   useEffect(() => {
-    console.log('📌 LikesTab mounted');
-    console.log('👤 User from AuthContext:', user);
-    console.log('🔑 Token exists:', !!user?.token);
-    console.log('🆔 User ID:', user?.id);
-  }, [user]);
+    console.log('📌 [LikesTab] Component Mounted');
+    console.log('👤 [LikesTab] Current User ID:', user?.id);
+  }, []);
 
   /* ================= QUERY ================= */
 
@@ -38,12 +36,13 @@ export default function LikesTab() {
     isLoading,
     isError,
     error,
+    isFetching,
   } = useQuery({
-    // 🔥 KLJUČNA PROMENA
+    // ✅ Sinhronizovan ključ sa SocketProvider-om i TabsLayout-om
     queryKey: ['incoming-likes', user?.id],
 
     queryFn: async () => {
-      console.log('🚀 incoming-likes queryFn CALLED');
+      console.log('🚀 [LikesTab] queryFn START: Fetching from API...');
 
       const res = await axios.get(
         `${API_BASE_URL}/api/user/incoming-likes`,
@@ -54,52 +53,72 @@ export default function LikesTab() {
         }
       );
 
-      console.log('📦 RAW response:', res.data);
-      console.log('❤️ Likes from response:', res.data?.likes);
-      console.log('🔢 Likes count:', res.data?.likes?.length ?? 0);
-
-      return res.data?.likes || [];
+      // ✅ Osiguravamo da vraćamo niz, bez obzira na strukturu response-a
+      const fetchedLikes = res.data?.likes || res.data || [];
+      
+      console.log('📦 [LikesTab] API Response received. Count:', fetchedLikes.length);
+      return fetchedLikes;
     },
 
-    // 🔥 KLJUČNA PROMENA
+    // ✅ Pokreći samo ako imamo korisnika
     enabled: !!user?.token && !!user?.id,
-
-    // 🔥 KLJUČNA PROMENA
+    
+    // Osveži podatke pri svakom ulasku u tab
     refetchOnMount: true,
+    // Podaci se smatraju "svežim" 10 sekundi, nakon toga će API biti pozvan u pozadini
+    staleTime: 1000 * 10, 
   });
 
   /* ================= RENDER LOGS ================= */
 
-  console.log('🌀 isLoading:', isLoading);
-  console.log('❌ isError:', isError);
-  if (isError) {
-    console.log('🔥 Query error:', error);
-  }
-  console.log('📊 Likes in state:', likes);
-  console.log('📊 Likes length:', likes.length);
+  // Ovi logovi će se okinuti svaki put kada SocketProvider uradi setQueryData
+  useEffect(() => {
+    console.log('📊 [LikesTab] UI Update detected. Current likes count:', likes.length);
+    if (likes.length > 0) {
+       console.log('👀 [LikesTab] First user in list:', likes[0].fullName || likes[0]._id);
+    }
+  }, [likes]);
 
   /* ================= RENDER ================= */
 
   return (
     <View style={styles.container}>
+      {/* Prikazujemo broj lajkova u headeru */}
       <Header title={`${likes.length} sviđanja`} />
+       
+  <View style={styles.likesHeader}>
+  <View style={styles.likesBadge}>
+    <Text style={styles.likesCount}>{likes.length}</Text>
+    <Text style={styles.likesLabel}>sviđanja</Text>
+  </View>
+</View>
 
-      {isLoading ? (
+      {/* Indikator učitavanja ili osvežavanja u pozadini */}
+      {(isLoading || (isFetching && likes.length === 0)) ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color="#ff7f00" />
+          <Text style={{ marginTop: 10 }}>Učitavanje...</Text>
         </View>
       ) : isError ? (
         <View style={styles.center}>
           <Text>Greška pri učitavanju sviđanja.</Text>
+          <Text style={{ fontSize: 12, color: 'red' }}>{error?.message}</Text>
         </View>
       ) : (
         <>
-          {console.log('✅ Rendering SUCCESS state')}
+          {/* Ako nema lajkova, ovde možete dodati Empty State komponentu */}
+          {likes.length === 0 && (
+            <View style={styles.center}>
+               <Text>Još uvek nemaš lajkova.</Text>
+            </View>
+          )}
+
           <LikesGrid data={likes} isPremium={isPremium} />
+          
           <LikesCTA
             isPremium={isPremium}
             onPress={() => {
-              console.log('💳 OPEN PREMIUM PAYWALL');
+              console.log('💳 [LikesTab] Premium Button Pressed');
             }}
           />
         </>
@@ -119,5 +138,38 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 20,
   },
+likesHeader: {
+  alignItems: 'center',
+  marginVertical: 12,
+},
+
+likesBadge: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  backgroundColor: '#FFE4EA',
+  paddingHorizontal: 16,
+  paddingVertical: 6,
+  borderRadius: 30,
+  elevation: 3,
+  shadowColor: '#000',
+  shadowOpacity: 0.1,
+  shadowRadius: 6,
+  shadowOffset: { width: 0, height: 2 },
+},
+
+likesCount: {
+  fontSize: 20,
+  fontWeight: '700',
+  color: '#ff3b5c',
+  marginRight: 6,
+},
+
+likesLabel: {
+  fontSize: 15,
+  color: '#ff3b5c',
+  fontWeight: '500',
+},
+
 });

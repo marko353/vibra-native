@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
 import {
   View,
   ActivityIndicator,
@@ -11,11 +11,11 @@ import {
   Keyboard,
   KeyboardAvoidingView,
 } from 'react-native';
-import { Stack, useLocalSearchParams, router, useFocusEffect } from 'expo-router';
+import { Stack, useLocalSearchParams, router, useFocusEffect, useNavigation } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthContext } from '../../../context/AuthContext';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import {
   GiftedChat,
   IMessage,
@@ -64,9 +64,11 @@ export default function ChatScreen() {
   const { user } = useAuthContext();
   const { socket, setHasUnread } = useSocketContext();
   const queryClient = useQueryClient();
+  const navigation = useNavigation();
 
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+
 
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
@@ -104,7 +106,6 @@ export default function ChatScreen() {
     queryKey,
     queryFn: fetchMessages,
     enabled: !!chatId && !!user?.token,
-
     select: (data) => {
       const mapped = data
         .map((msg) => ({
@@ -115,7 +116,6 @@ export default function ChatScreen() {
           pending: msg.status === 'sending',
         }))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-
       return dedupe(mapped);
     },
   });
@@ -134,57 +134,39 @@ export default function ChatScreen() {
     },
   });
 
- useFocusEffect(
-  useCallback(() => {
-    console.log('👀 Ušao u chat → gasim badge');
-    setHasUnread(false); // 🔥 OVO JE KLJUČNO
+  useFocusEffect(
+    useCallback(() => {
+      setHasUnread(false);
+      queryClient.refetchQueries({ queryKey });
+      if (!markAsReadMutation.isPending && !markAsReadMutation.isSuccess) {
+        markAsReadMutation.mutate();
+      }
+      return () => {};
+    }, [queryKey])
+  );
 
-    queryClient.refetchQueries({ queryKey });
+  useEffect(() => {
+    if (!socket) return;
 
-    if (!markAsReadMutation.isPending && !markAsReadMutation.isSuccess) {
+    const handleReceive = (msg: BackendMessage) => {
+      if (msg.conversationId !== chatId) {
+        queryClient.invalidateQueries({ queryKey: ["my-matches", userId] });
+        return;
+      }
       markAsReadMutation.mutate();
-    }
+      const incoming: CachedMessage = { ...msg, status: "sent" };
+      queryClient.setQueryData<CachedMessage[]>(["chat", chatId], (old = []) => {
+        const filtered = old.filter((m) => m._id !== incoming._id);
+        return [incoming, ...filtered];
+      });
+      queryClient.invalidateQueries({ queryKey: ["chat", chatId] });
+    };
 
-    return () => {};
-  }, [queryKey])
-);
-
-useEffect(() => {
-  if (!socket) {
-    console.log("🔌 useEffect[Socket]: socket nije inicijalizovan");
-    return;
-  }
-
-  console.log("🔌 useEffect[Socket]: aktiviram listener za receiveMessage");
-
-const handleReceive = (msg: BackendMessage) => {
-  if (msg.conversationId !== chatId) {
-    queryClient.invalidateQueries({ queryKey: ["my-matches", userId] });
-    return;
-  }
-
-  // 🔥 REŠENJE: čim si u otvorenom chatu – odmah markiraj poruke kao pročitane
-  markAsReadMutation.mutate();
-
-  const incoming: CachedMessage = { ...msg, status: "sent" };
-
-  queryClient.setQueryData<CachedMessage[]>(["chat", chatId], (old = []) => {
-    const filtered = old.filter((m) => m._id !== incoming._id);
-    return [incoming, ...filtered];
-  });
-  
-  queryClient.invalidateQueries({ queryKey: ["chat", chatId] });
-};
-
-
-  socket.on("receiveMessage", handleReceive);
-
-  return () => {
-    console.log("🔌 useEffect[Socket cleanup]: skidam listener receiveMessage");
-    socket.off("receiveMessage", handleReceive);
-  };
-}, [socket, chatId, queryClient, userId]);
-
+    socket.on("receiveMessage", handleReceive);
+    return () => {
+      socket.off("receiveMessage", handleReceive);
+    };
+  }, [socket, chatId, queryClient, userId]);
 
   const handleSend = useCallback(
     (newMessages: IMessage[] = []) => {
@@ -192,7 +174,6 @@ const handleReceive = (msg: BackendMessage) => {
       if (!m || !socket?.connected || !receiverId || !userId) return;
 
       const tempId = `temp-${Date.now()}-${Math.random()}`;
-
       const optimistic: CachedMessage = {
         _id: tempId,
         text: m.text,
@@ -202,7 +183,6 @@ const handleReceive = (msg: BackendMessage) => {
         status: 'sending',
       };
 
-      // optimistic insert
       queryClient.setQueryData<CachedMessage[]>(queryKey, (old = []) => {
         return dedupe([optimistic, ...old]);
       });
@@ -215,10 +195,8 @@ const handleReceive = (msg: BackendMessage) => {
             ...response.message,
             status: response.status === 'ok' ? 'sent' : 'error',
           };
-
           queryClient.setQueryData<CachedMessage[]>(queryKey, (old = []) => {
             let replaced = false;
-
             const updated = old.map((msg) => {
               if (msg._id === tempId && !replaced) {
                 replaced = true;
@@ -226,14 +204,8 @@ const handleReceive = (msg: BackendMessage) => {
               }
               return msg;
             });
-
-            if (!replaced) {
-              return dedupe([final, ...old]);
-            }
-
-            return dedupe(updated);
+            return !replaced ? dedupe([final, ...old]) : dedupe(updated);
           });
-
           queryClient.invalidateQueries({ queryKey: ['my-matches', userId], exact: true });
         }
       );
@@ -243,7 +215,6 @@ const handleReceive = (msg: BackendMessage) => {
 
   const handleBreakMatch = async () => {
     setIsMenuVisible(false);
-
     try {
       if (user?.token && chatId) {
         await axios.delete(`${API_BASE_URL}/api/user/match/${chatId}`, {
@@ -251,7 +222,6 @@ const handleReceive = (msg: BackendMessage) => {
         });
       }
     } catch (err) {}
-
     await queryClient.invalidateQueries({ queryKey: ['my-matches', user?.id], exact: true });
     queryClient.removeQueries({ queryKey });
     router.replace('/(tabs)/chat-stack');
@@ -263,14 +233,15 @@ const handleReceive = (msg: BackendMessage) => {
     </TouchableOpacity>
   );
 
-  const renderHeaderTitle = () => (
-    <View style={styles.headerTitleContainer}>
-      <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={styles.avatar} />
-      <Text numberOfLines={1} style={styles.headerName}>
-        {userName || 'User'}
-      </Text>
-    </View>
-  );
+ const renderHeaderTitle = () => (
+  <View style={styles.headerTitleContainer}>
+    <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={styles.avatar} />
+    <Text numberOfLines={1} style={styles.headerName}>
+      {userName || 'User'}
+    </Text>
+  </View>
+);
+
 
   const renderHeaderRight = () => (
     <View style={styles.headerRightContainer}>
@@ -333,7 +304,7 @@ const handleReceive = (msg: BackendMessage) => {
           title: '',
           headerShadowVisible: false,
           headerLeft: renderHeaderLeft,
-          headerTitleAlign: 'center',
+          headerTitleAlign: 'left',
           headerTitle: renderHeaderTitle,
           headerRight: renderHeaderRight,
         }}
@@ -381,7 +352,6 @@ const handleReceive = (msg: BackendMessage) => {
         </View>
       </KeyboardAvoidingView>
 
-      {/* MENU */}
       <Modal visible={isMenuVisible} transparent animationType="fade">
         <TouchableOpacity
           style={styles.modalOverlay}
@@ -393,9 +363,7 @@ const handleReceive = (msg: BackendMessage) => {
               <TouchableOpacity style={styles.menuItem} onPress={handleBreakMatch}>
                 <Text style={styles.menuTextDestructive}>Prekini spoj sa {userName}</Text>
               </TouchableOpacity>
-
               <View style={styles.separator} />
-
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -405,9 +373,7 @@ const handleReceive = (msg: BackendMessage) => {
               >
                 <Text style={styles.menuText}>Prijavi korisnika {userName}</Text>
               </TouchableOpacity>
-
               <View style={styles.separator} />
-
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={() => {
@@ -418,7 +384,6 @@ const handleReceive = (msg: BackendMessage) => {
                 <Text style={styles.menuTextDestructive}>Blokiraj korisnika</Text>
               </TouchableOpacity>
             </View>
-
             <TouchableOpacity style={styles.cancelButton} onPress={() => setIsMenuVisible(false)}>
               <Text style={styles.cancelText}>Otkaži</Text>
             </TouchableOpacity>
@@ -440,15 +405,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.8)',
     zIndex: 1,
   },
-
   headerButton: { paddingHorizontal: 10 },
-  headerTitleContainer: { flexDirection: 'row', alignItems: 'center', marginRight: 70 },
-  avatar: { width: 34, height: 34, borderRadius: 17, marginHorizontal: 10 },
-  headerName: { fontSize: 18, fontWeight: '600' },
+  headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
+  avatar: { width: 40, height: 40, borderRadius: 17, marginHorizontal: 15 },
+  headerName: { fontSize: 18, fontWeight: '600',},
   headerRightContainer: { flexDirection: 'row' },
-
   messagesContainer: { paddingBottom: 10 },
-
   inputToolbarContainer: {
     borderTopWidth: 0,
     backgroundColor: '#f6f6f6',
@@ -460,14 +422,12 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   inputPrimaryStyle: { alignItems: 'center' },
-
   sendContainer: {
     justifyContent: 'center',
     alignItems: 'center',
     height: 44,
     marginRight: 6,
   },
-
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
@@ -479,7 +439,6 @@ const styles = StyleSheet.create({
   emptyUserName: { fontSize: 20, fontWeight: 'bold', marginBottom: 25 },
   emptyAvatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
   emptyPrompt: { fontSize: 16, color: '#555' },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
@@ -487,7 +446,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingBottom: Platform.OS === 'ios' ? 40 : 20,
   },
-
   actionSheetWrapper: { width: '100%' },
   actionSheetGroup: {
     backgroundColor: 'white',
@@ -495,12 +453,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 10,
   },
-
   menuItem: { paddingVertical: 16, alignItems: 'center' },
   menuText: { fontSize: 16, color: '#333' },
   menuTextDestructive: { fontSize: 16, color: '#FF3B30', fontWeight: '600' },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#E0E0E0' },
-
   cancelButton: {
     paddingVertical: 16,
     backgroundColor: 'white',
