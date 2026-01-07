@@ -10,14 +10,35 @@ import {
   Feather,
 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios'; 
+import { useQuery } from '@tanstack/react-query'; 
 
 import { useProfileContext } from '../../context/ProfileContext';
 import { useSocketContext } from '../../context/SocketContext';
+import { useAuthContext } from '../../context/AuthContext'; 
 import LocationPermissionScreen from '../(auth)/location-permission';
+
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 function MainTabsLayout() {
   const pathname = usePathname();
-  const { hasUnread } = useSocketContext(); // 🔴 CHAT BADGE STATE
+  const { hasUnread } = useSocketContext();
+  const { user } = useAuthContext(); 
+
+  /* 🔴 BROJAČ ZA LIKES */
+  const { data: likes = [] } = useQuery({
+    queryKey: ['incoming-likes', user?.id],
+    enabled: !!user?.token && !!user?.id,
+    queryFn: async () => {
+      const res = await axios.get(
+        `${API_BASE_URL}/api/user/incoming-likes`,
+        {
+          headers: { Authorization: `Bearer ${user?.token}` },
+        }
+      );
+      return res.data?.likes || res.data || [];
+    },
+  });
 
   return (
     <Tabs
@@ -26,9 +47,9 @@ function MainTabsLayout() {
         headerShown: false,
         tabBarActiveTintColor: '#ff7f00',
         tabBarStyle: {
-          borderTopWidth: 0,
-          elevation: 0,
-          shadowOpacity: 0,
+          borderTopWidth: 0,    // ✅ Uklanja liniju
+          elevation: 0,         // ✅ Uklanja senku (Android)
+          shadowOpacity: 0,     // ✅ Uklanja senku (iOS)
           backgroundColor: '#fff',
         },
       }}
@@ -81,10 +102,17 @@ function MainTabsLayout() {
               color={color}
             />
           ),
+          // ✅ DODAT BROJAČ
+          tabBarBadge: likes.length > 0 ? likes.length : undefined,
+          tabBarBadgeStyle: {
+            backgroundColor: '#ff7f00',
+            color: 'white',
+            fontSize: 10,
+          }
         }}
       />
 
-      {/* ---------------- CHAT (SA BADGE-OM) ---------------- */}
+      {/* ---------------- CHAT ---------------- */}
       <Tabs.Screen
         name="chat-stack"
         options={{
@@ -98,8 +126,6 @@ function MainTabsLayout() {
                 size={size}
                 color={color}
               />
-
-              {/* 🔴 CRVENA TAČKICA */}
               {hasUnread && (
                 <View
                   style={{
@@ -117,6 +143,9 @@ function MainTabsLayout() {
           ),
           tabBarStyle: {
             display: pathname.includes('/chat-stack/') ? 'none' : 'flex',
+            borderTopWidth: 0, // ✅ Osigurava da nema linije ni ovde
+            elevation: 0,      // ✅ Bez senke
+            backgroundColor: '#fff',
           },
         }}
       />
@@ -139,51 +168,27 @@ function MainTabsLayout() {
 
 export default function TabsGroupGateLayout() {
   const { profile, isLoading: isProfileLoading } = useProfileContext();
-  const [locationPromptCompleted, setLocationPromptCompleted] =
-    useState<boolean | null>(null);
+  const [locationPromptCompleted, setLocationPromptCompleted] = useState<boolean | null>(null);
 
   useEffect(() => {
     const checkStorage = async () => {
-      const value = await AsyncStorage.getItem(
-        'location_prompt_completed'
-      );
+      const value = await AsyncStorage.getItem('location_prompt_completed');
       setLocationPromptCompleted(value === 'true');
     };
     checkStorage();
   }, []);
 
-  // ⏳ LOADING
   if (isProfileLoading || !profile || locationPromptCompleted === null) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: 'center',
-          alignItems: 'center',
-          backgroundColor: '#ffffff',
-        }}
-      >
-        <Image
-          source={require('../../assets/images/1000006401.png')}
-          style={{ width: 200, height: 200 }}
-          resizeMode="contain"
-        />
-        <ActivityIndicator
-          size="small"
-          color="#555"
-          style={{ marginTop: 20 }}
-        />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
+        <Image source={require('../../assets/images/1000006401.png')} style={{ width: 200, height: 200 }} resizeMode="contain" />
+        <ActivityIndicator size="small" color="#555" style={{ marginTop: 20 }} />
       </View>
     );
   }
 
-  // 📍 LOCATION PERMISSION
   if (!locationPromptCompleted) {
-    return (
-      <LocationPermissionScreen
-        onComplete={() => setLocationPromptCompleted(true)}
-      />
-    );
+    return <LocationPermissionScreen onComplete={() => setLocationPromptCompleted(true)} />;
   }
 
   return <MainTabsLayout />;

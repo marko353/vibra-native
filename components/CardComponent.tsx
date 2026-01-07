@@ -31,7 +31,7 @@ import {
 import { UserProfile } from '../context/ProfileContext';
 
 const { width, height } = Dimensions.get('window');
-const CARD_WIDTH = width * 1;
+const CARD_WIDTH = width * 1
 const SWIPE_THRESHOLD = width * 0.25;
 
 // Definisanje strukture za pojedinačnu info stavku
@@ -310,14 +310,22 @@ const Card: React.FC<CardProps> = ({
 export default Card;
 
 const styles = StyleSheet.create({
-  cardWrapper: {
-    width: CARD_WIDTH,
-    height: height * 0.79,
-    borderRadius: 25,
-    position: 'absolute',
-    alignSelf: 'center',
-   
-  },
+ cardWrapper: {
+  width: CARD_WIDTH,
+
+  height: height * 0.78, 
+  borderRadius: 25,
+  position: 'absolute',
+  alignSelf: 'center',
+
+  
+  // Dodaj senku da kartica ne izgleda ravno na pravom ekranu
+  shadowColor: "#000",
+  shadowOffset: { width: 0, height: 4 },
+  shadowOpacity: 0.3,
+  shadowRadius: 10,
+  elevation: 10, // Za Android
+},
   card: {
     flex: 1,
     borderRadius: 25,

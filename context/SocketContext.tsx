@@ -2,8 +2,8 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
-  ReactNode,
 } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuthContext } from './AuthContext';
@@ -11,17 +11,13 @@ import { useQueryClient } from '@tanstack/react-query';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-// ================= TYPES =================
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
-
-  // 🔴 CHAT BADGE
   hasUnread: boolean;
   setHasUnread: (value: boolean) => void;
 }
 
-// ================= CONTEXT =================
 const SocketContext = createContext<SocketContextType>({
   socket: null,
   isConnected: false,
@@ -29,159 +25,105 @@ const SocketContext = createContext<SocketContextType>({
   setHasUnread: () => {},
 });
 
-// ================= HOOK =================
-export const useSocketContext = () => {
-  const context = useContext(SocketContext);
-  if (!context) {
-    throw new Error(
-      'useSocketContext mora da se koristi unutar SocketProvider-a'
-    );
-  }
-  return context;
-};
+export const useSocketContext = () => useContext(SocketContext);
 
-// ================= PROVIDER =================
-export const SocketProvider = ({ children }: { children: ReactNode }) => {
+export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { user } = useAuthContext();
   const queryClient = useQueryClient();
 
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-
-  // 🔴 CHAT BADGE STATE
   const [hasUnread, setHasUnread] = useState(false);
 
-  // ================= SOCKET CONNECT =================
   useEffect(() => {
-    if (!user?.token) {
-      if (socket) {
-        console.log('🧹 SocketContext: logout → gasim socket');
-        socket.disconnect();
-        setSocket(null);
-        setIsConnected(false);
-      }
-      return;
-    }
+    if (!user?.token || !user?.id) return;
+    if (socketRef.current) return;
 
-    console.log('🔌 SocketContext: pokušavam konekciju…');
-
-    const newSocket = io(API_BASE_URL!, {
+    const socket = io(API_BASE_URL!, {
       auth: { token: user.token },
+      transports: ['websocket'],
     });
 
-    setSocket(newSocket);
+    socketRef.current = socket;
 
-    newSocket.on('connect', () => {
-      console.log('✅ SocketContext: Povezan, ID:', newSocket.id);
+    socket.on('connect', () => {
+      console.log('✅ Socket povezan');
       setIsConnected(true);
     });
 
-    newSocket.on('disconnect', () => {
-      console.log('🔴 SocketContext: Diskonektovan');
+    socket.on('disconnect', () => {
       setIsConnected(false);
     });
 
-    return () => {
-      console.log('🧹 SocketContext: Cleanup → gasim socket');
-      newSocket.disconnect();
-    };
-  }, [user]);
+    // ❤️ NOVI LAJK
+ socket.on('likeReceived', (payload) => {
+  console.log('❤️ Primljen likeReceived:', payload);
+  
+  queryClient.setQueryData(['incoming-likes', user.id], (old: any) => {
+    const currentLikes = Array.isArray(old) ? old : [];
+    
+    // 1. Provera da duplikate
+    if (currentLikes.some((u: any) => u._id === payload.fromUserId)) return currentLikes;
 
-  // ================= 📩 MESSAGE LISTENER =================
-  useEffect(() => {
-    if (!socket) return;
-
-    const onReceiveMessage = (data: any) => {
-      console.log('📩 receiveMessage → palim chat badge', data);
-      setHasUnread(true);
-    };
-
-    console.log('🔌 SocketContext: slušam receiveMessage');
-    socket.on('receiveMessage', onReceiveMessage);
-
-    return () => {
-      console.log('🧹 SocketContext: skidam receiveMessage');
-      socket.off('receiveMessage', onReceiveMessage);
-    };
-  }, [socket]);
-
-  // ================= 💖 MATCH LISTENER =================
-  useEffect(() => {
-    if (!socket) return;
-
-    const onNewMatch = (data: any) => {
-      console.log('💖 match → palim chat badge', data);
-      setHasUnread(true);
+    // 2. Dodajemo birthDate u novi objekat
+    const newEntry = { 
+      _id: payload.fromUserId, 
+      avatar: payload.avatar ?? '', 
+      fullName: payload.fullName ?? 'Novi lajk', 
+      birthDate: payload.birthDate, // <--- OVO JE FALILO
+      createdAt: new Date().toISOString() 
     };
 
-    console.log('🔌 SocketContext: slušam match');
-    socket.on('match', onNewMatch);
+    return [newEntry, ...currentLikes];
+  });
+});
 
-    return () => {
-      console.log('🧹 SocketContext: skidam match');
-      socket.off('match', onNewMatch);
-    };
-  }, [socket]);
+    // 🔥 NOVI MATCH
+    socket.on('match', (payload) => {
+      console.log('🔥 Primljen MATCH:', payload);
+      setHasUnread(true); // Aktivira bedž na Chat tabu
 
-  // ================= ❤️ LIKE RECEIVED =================
-  useEffect(() => {
-    if (!socket || !user?.id) return;
-
-    const onLikeReceived = (data: any) => {
-      console.log('❤️ likeReceived → invalidiram incoming-likes', data);
-
-      queryClient.invalidateQueries({
-        queryKey: ['incoming-likes', user.id],
+      queryClient.setQueryData(['incoming-likes', user.id], (old: any) => {
+        if (!old || !Array.isArray(old)) return [];
+        return old.filter((item: any) => item._id !== payload.userId);
       });
-    };
 
-    console.log('🔌 SocketContext: slušam likeReceived');
-    socket.on('likeReceived', onLikeReceived);
+      queryClient.invalidateQueries({ queryKey: ['incoming-likes', user.id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+    });
 
-    return () => {
-      console.log('🧹 SocketContext: skidam likeReceived');
-      socket.off('likeReceived', onLikeReceived);
-    };
-  }, [socket, user?.id, queryClient]);
+    // 📩 NOVA PORUKA (Ovo ti je falilo)
+    socket.on('receiveMessage', (message) => {
+      console.log('📩 Primljena poruka:', message);
+      setHasUnread(true); // Aktivira bedž
+      
+      // Osvežava listu konverzacija da bi se nova poruka odmah videla
+      queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+    });
 
-  // ================= 🗑️ CONVERSATION REMOVED (NOVO) =================
-  useEffect(() => {
-    if (!socket) return;
+    socket.on('conversationRemoved', (payload) => {
+  console.log('🗑️ Unmatch detektovan, sklanjam bedž...');
+  
+  // 1. Osveži liste (da konverzacija nestane iz UI-ja)
+  queryClient.invalidateQueries({ queryKey: ['incoming-likes', user.id] });
+  queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
 
-    const onConversationRemoved = (data: any) => {
-      console.log(
-        '🗑️ conversationRemoved → gasim chat badge',
-        data
-      );
-
-      // 🔴 GASI BADGE JER CHAT VIŠE NE POSTOJI
-      setHasUnread(false);
-
-      // 🔄 (opciono ali korisno)
-      queryClient.invalidateQueries({
-        queryKey: ['my-matches'],
-      });
-    };
-
-    console.log('🔌 SocketContext: slušam conversationRemoved');
-    socket.on('conversationRemoved', onConversationRemoved);
+  // 2. ISKLJUČI BEDŽ
+  // Čim je konverzacija uklonjena, pretpostavljamo da taj "unread" više ne važi
+  setHasUnread(false); 
+});
 
     return () => {
-      console.log('🧹 SocketContext: skidam conversationRemoved');
-      socket.off('conversationRemoved', onConversationRemoved);
+      if (socketRef.current) {
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
     };
-  }, [socket, queryClient]);
+  }, [user?.token, user?.id]); 
 
-  // ================= PROVIDER =================
   return (
-    <SocketContext.Provider
-      value={{
-        socket,
-        isConnected,
-        hasUnread,
-        setHasUnread,
-      }}
-    >
+    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, hasUnread, setHasUnread }}>
       {children}
     </SocketContext.Provider>
   );

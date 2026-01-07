@@ -1,5 +1,3 @@
-// ChatScreen.tsx (Listing Konverzacija - Ažurirana verzija)
-
 import React, { useEffect, useMemo } from 'react';
 import {
   View,
@@ -12,10 +10,9 @@ import {
   RefreshControl,
 } from 'react-native';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import axios, { AxiosError } from 'axios';
+import axios from 'axios';
 import { useAuthContext } from '../../../context/AuthContext';
-import { useRouter, useFocusEffect } from 'expo-router';
-// ❌ UKLONJEN: import { SafeAreaView } from 'react-native-safe-area-context'; 
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router'; // ✅ Dodat useNavigation
 import Header from '../../../components/Header';
 import { useSocketContext } from '../../../context/SocketContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -81,6 +78,7 @@ const formatTimestamp = (isoString?: string): string | null => {
 export default function ChatScreen() {
   const { user } = useAuthContext();
   const router = useRouter();
+  const navigation = useNavigation(); // ✅ Za praćenje navigacionog stanja
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['my-matches', user?.id], [user?.id]);
   const { socket } = useSocketContext();
@@ -89,6 +87,7 @@ export default function ChatScreen() {
     queryKey,
     queryFn: async () => {
       if (!user?.token) return { newMatches: [], conversations: [] };
+      console.log('--- Fetching Matches & Conversations ---'); // ✅ Log za query
       const response = await axios.get(`${API_BASE_URL}/api/user/my-matches`, {
         headers: { Authorization: `Bearer ${user.token}` },
       });
@@ -96,30 +95,44 @@ export default function ChatScreen() {
     },
     enabled: !!user?.token,
     staleTime: 1000 * 60 * 2,
-    refetchOnWindowFocus: true,
   });
 
+  // ✅ LOG ZA FOKUS I TAB BAR
   useFocusEffect(
     React.useCallback(() => {
+      const parent = navigation.getParent();
+      
+      // Provera da li je neko nasilno ostavio display: none
+      if (parent) {
+        const state = parent.getState();
+      
+      }
+
       queryClient.invalidateQueries({ queryKey });
-    }, [queryClient, queryKey])
+
+      return () => {
+       
+      };
+    }, [queryClient, queryKey, navigation])
   );
 
   useEffect(() => {
     if (!socket) return;
-
-    const handleReceiveMessage = () => queryClient.invalidateQueries({ queryKey });
-    const handleUserDeleted = () => queryClient.invalidateQueries({ queryKey });
-    const handleNewMatch = () => queryClient.invalidateQueries({ queryKey });
-
-    socket.on('receiveMessage', handleReceiveMessage);
-    socket.on('user_deleted', handleUserDeleted);
-    socket.on('new_match', handleNewMatch);
-
+    
+    console.log('Socket listener initialized on Chat List'); // ✅ Log za socket
+    const handleRefresh = () => {
+      console.log('Socket message received - Refreshing list');
+      queryClient.invalidateQueries({ queryKey });
+    };
+    
+    socket.on('receiveMessage', handleRefresh);
+    socket.on('user_deleted', handleRefresh);
+    socket.on('new_match', handleRefresh);
+    
     return () => {
-      socket.off('receiveMessage', handleReceiveMessage);
-      socket.off('user_deleted', handleUserDeleted);
-      socket.off('new_match', handleNewMatch);
+      socket.off('receiveMessage', handleRefresh);
+      socket.off('user_deleted', handleRefresh);
+      socket.off('new_match', handleRefresh);
     };
   }, [socket, queryClient, queryKey]);
 
@@ -133,6 +146,7 @@ export default function ChatScreen() {
       );
     },
     onMutate: async (chatId: string) => {
+      console.log('Mutation: Marking chat as read:', chatId); // ✅ Log za mutaciju
       await queryClient.cancelQueries({ queryKey });
       const previousData = queryClient.getQueryData<ApiData>(queryKey);
       if (previousData) {
@@ -150,33 +164,20 @@ export default function ChatScreen() {
       }
       return { previousData };
     },
-    onError: (err, chatId, context) => {
-      if (context?.previousData) {
-        queryClient.setQueryData<ApiData>(queryKey, context.previousData);
-      }
-    },
-    onSettled: () => {
-      queryClient.invalidateQueries({ queryKey });
-    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const { newMatches = [], conversations = [] } = data || {};
 
-  const markAsReadSafe = (chatId: string) => {
-    const chatExists =
-      conversations.some(c => c.chatId === chatId) ||
-      newMatches.some(m => m.chatId === chatId);
-    if (!chatExists) return;
-    markAsReadMutation.mutate(chatId);
-  };
-
   const handleOpenChat = (chatUser: Match | Conversation['user'], chatId: string) => {
+    console.log('Action: Opening Chat with ID:', chatId); // ✅ Log pre navigacije
+    
     const match = newMatches.find(m => m.chatId === chatId);
     const conv = conversations.find(c => c.chatId === chatId);
-    if (match?.has_unread || conv?.has_unread) markAsReadSafe(chatId);
+    if (match?.has_unread || conv?.has_unread) markAsReadMutation.mutate(chatId);
 
     router.push({
-      pathname: `/chat-stack/[chatId]`,
+      pathname: `/(tabs)/chat-stack/[chatId]`,
       params: {
         chatId,
         userName: chatUser.fullName,
@@ -187,7 +188,6 @@ export default function ChatScreen() {
   };
 
   return (
-    // 🛠️ PROMENA: Korišćenje standardnog View-a umesto SafeAreaView
     <View style={styles.container}> 
       <Header />
       {isLoading && !data ? (
@@ -222,7 +222,6 @@ export default function ChatScreen() {
             <>
               {newMatches.length > 0 && (
                 <View style={styles.section}>
-                  {/* 🔴 Sekcija sa brojačem */}
                   <View style={styles.sectionTitleRow}>
                     <Text style={styles.sectionTitle}>Novi spojevi</Text>
                     {newMatches.some(m => m.has_unread) && (
@@ -261,39 +260,40 @@ export default function ChatScreen() {
                 </View>
               )}
 
-              {(newMatches.length > 0 || conversations.length > 0) && (
-                <View style={styles.sectionMessages}>
-                  <Text style={styles.sectionTitle}>Poruke</Text>
-                  {conversations.map((conv, index) => (
-                    <React.Fragment key={conv.chatId}>
-                      <TouchableOpacity
-                        style={styles.conversationRow}
-                        onPress={() => handleOpenChat(conv.user, conv.chatId)}
-                      >
-                        <View style={styles.avatarContainer}>
-                          <Image
-                            source={{ uri: conv.user.avatar || DEFAULT_AVATAR }}
-                            style={styles.conversationAvatar}
-                          />
-                          {conv.has_unread && <View style={styles.notificationDotConv} />}
-                        </View>
-                        <View style={styles.conversationTextContainer}>
-                          <Text style={[styles.conversationName, conv.has_unread && styles.unreadText]} numberOfLines={1}>
-                            {conv.user.fullName}
-                          </Text>
-                          <Text style={[styles.lastMessage, conv.has_unread && styles.unreadText]} numberOfLines={1}>
-                            {conv.lastMessage?.text || '...'}
-                          </Text>
-                        </View>
-                        <Text style={[styles.timestamp, conv.has_unread && styles.unreadTimestamp]}>
-                          {formatTimestamp(conv.lastMessage?.timestamp)}
+              <View style={styles.sectionMessages}>
+                <Text style={styles.sectionTitle}>Poruke</Text>
+                {conversations.length === 0 && newMatches.length > 0 && (
+                   <Text style={styles.noMessagesText}>Još uvek nemaš aktivnih razgovora.</Text>
+                )}
+                {conversations.map((conv, index) => (
+                  <React.Fragment key={conv.chatId}>
+                    <TouchableOpacity
+                      style={styles.conversationRow}
+                      onPress={() => handleOpenChat(conv.user, conv.chatId)}
+                    >
+                      <View style={styles.avatarContainer}>
+                        <Image
+                          source={{ uri: conv.user.avatar || DEFAULT_AVATAR }}
+                          style={styles.conversationAvatar}
+                        />
+                        {conv.has_unread && <View style={styles.notificationDotConv} />}
+                      </View>
+                      <View style={styles.conversationTextContainer}>
+                        <Text style={[styles.conversationName, conv.has_unread && styles.unreadText]} numberOfLines={1}>
+                          {conv.user.fullName}
                         </Text>
-                      </TouchableOpacity>
-                      {index < conversations.length - 1 && <View style={styles.separator} />}
-                    </React.Fragment>
-                  ))}
-                </View>
-              )}
+                        <Text style={[styles.lastMessage, conv.has_unread && styles.unreadText]} numberOfLines={1}>
+                          {conv.lastMessage?.text || 'Pošalji poruku...'}
+                        </Text>
+                      </View>
+                      <Text style={[styles.timestamp, conv.has_unread && styles.unreadTimestamp]}>
+                        {formatTimestamp(conv.lastMessage?.timestamp)}
+                      </Text>
+                    </TouchableOpacity>
+                    {index < conversations.length - 1 && <View style={styles.separator} />}
+                  </React.Fragment>
+                ))}
+              </View>
             </>
           )}
         </ScrollView>
@@ -303,24 +303,20 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  // 🛠️ PROMENA: Samo flex: 1, bez ikakvih kompenzacija safe area inzeta ovde.
   container: { flex: 1, backgroundColor: '#fff' }, 
-  scrollContent: { paddingBottom: 20 },
+  scrollContent: { paddingBottom: 100 },
   center: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 30, minHeight: 400 },
   errorText: { color: '#666', fontSize: 16, textAlign: 'center', marginTop: 10, marginBottom: 20 },
   retryButton: { backgroundColor: '#FF6A00', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 20 },
   retryButtonText: { color: '#fff', fontWeight: 'bold' },
   section: { marginBottom: 15 },
   sectionMessages: { marginBottom: 0 },
-  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#111',marginLeft: 25 },
+  sectionTitle: { fontSize: 20, fontWeight: '700', color: '#111', marginLeft: 25 },
   newMatchesContainer: { paddingLeft: 15, paddingRight: 5, paddingBottom: 10 },
-
-  // 🔴 Novi naslov sa brojačem
   sectionTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    
     marginBottom: 15,
   },
   dotWithNumber: {
@@ -331,97 +327,34 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  dotNumberText: {
-    color: '#fff',
-    fontWeight: '700',
-    fontSize: 11,
-  },
-
-  matchItem: {
-    marginRight: 6,
-    alignItems: 'center',
-    width: 78,
-    position: 'relative',
-    paddingBottom: 5,
-  },
+  dotNumberText: { color: '#fff', fontWeight: '700', fontSize: 11 },
+  matchItem: { marginRight: 6, alignItems: 'center', width: 78, position: 'relative' },
   matchAvatarWrapper: {
-    width: 70,
-    height: 90,
-    borderRadius: 12,
-    overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: '#eee',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-    backgroundColor: '#fff',
+    width: 70, height: 90, borderRadius: 12, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: '#eee', backgroundColor: '#fff',
   },
   matchAvatar: { width: '100%', height: '100%' },
-  matchName: {
-    marginTop: 6,
-    fontSize: 12,
-    fontWeight: '500',
-    color: '#444',
-    textAlign: 'center',
-  },
+  matchName: { marginTop: 6, fontSize: 12, fontWeight: '500', color: '#444', textAlign: 'center' },
   notificationDotMatch: {
-    width: 16,
-    height: 16,
-    backgroundColor: '#FF3B30',
-    borderRadius: 8,
-    position: 'absolute',
-    top: 5,
-    right: 5,
-    borderWidth: 2.5,
-    borderColor: '#fff',
-    zIndex: 1,
+    width: 16, height: 16, backgroundColor: '#FF3B30', borderRadius: 8,
+    position: 'absolute', top: 5, right: 5, borderWidth: 2.5, borderColor: '#fff', zIndex: 1,
   },
-
-  conversationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 15,
-    paddingVertical: 12,
-    backgroundColor: '#fff',
-  },
+  conversationRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 12 },
   avatarContainer: { position: 'relative', marginRight: 12 },
   conversationAvatar: { width: 56, height: 56, borderRadius: 28 },
   conversationTextContainer: { flex: 1, justifyContent: 'center' },
   conversationName: { fontSize: 16, fontWeight: '600', color: '#111', marginBottom: 2 },
   lastMessage: { fontSize: 14, color: '#666' },
-  timestamp: { fontSize: 12, color: '#999', marginLeft: 8, textAlign: 'right' },
+  timestamp: { fontSize: 12, color: '#999', marginLeft: 8 },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#e8e8e8', marginLeft: 85 },
   notificationDotConv: {
-    width: 10,
-    height: 10,
-    backgroundColor: '#FF6A00',
-    borderRadius: 5,
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    borderWidth: 1.5,
-    borderColor: '#fff',
-    zIndex: 1,
+    width: 12, height: 12, backgroundColor: '#FF6A00', borderRadius: 6,
+    position: 'absolute', bottom: 0, right: 0, borderWidth: 2, borderColor: '#fff',
   },
-  unreadText: {
-    fontWeight: '700',
-    color: '#000',
-  },
-  unreadTimestamp: {
-    color: '#FF6A00',
-    fontWeight: '600',
-  },
+  unreadText: { fontWeight: '700', color: '#000' },
+  unreadTimestamp: { color: '#FF6A00', fontWeight: '600' },
   emptyTextTitle: { fontSize: 22, fontWeight: '600', color: '#333', marginBottom: 8, textAlign: 'center' },
-  emptyText: { paddingHorizontal: 20, color: '#888', fontSize: 15, textAlign: 'center', lineHeight: 21 },
-  noMessagesText: { paddingHorizontal: 15, color: '#999', fontSize: 14, marginTop: 10 },
+  emptyText: { paddingHorizontal: 20, color: '#888', fontSize: 15, textAlign: 'center' },
+  noMessagesText: { marginLeft: 25, color: '#999', fontSize: 14, marginTop: 10 },
 });
