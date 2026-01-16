@@ -12,7 +12,7 @@ import {
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import axios from 'axios';
 import { useAuthContext } from '../../../context/AuthContext';
-import { useRouter, useFocusEffect, useNavigation } from 'expo-router'; // ✅ Dodat useNavigation
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import Header from '../../../components/Header';
 import { useSocketContext } from '../../../context/SocketContext';
 import { Ionicons } from '@expo/vector-icons';
@@ -78,7 +78,7 @@ const formatTimestamp = (isoString?: string): string | null => {
 export default function ChatScreen() {
   const { user } = useAuthContext();
   const router = useRouter();
-  const navigation = useNavigation(); // ✅ Za praćenje navigacionog stanja
+  const navigation = useNavigation();
   const queryClient = useQueryClient();
   const queryKey = useMemo(() => ['my-matches', user?.id], [user?.id]);
   const { socket } = useSocketContext();
@@ -87,52 +87,63 @@ export default function ChatScreen() {
     queryKey,
     queryFn: async () => {
       if (!user?.token) return { newMatches: [], conversations: [] };
-      console.log('--- Fetching Matches & Conversations ---'); // ✅ Log za query
-      const response = await axios.get(`${API_BASE_URL}/api/user/my-matches`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      return response.data;
+      
+      console.log('📡 [ChatScreen] POZIVAM API: /api/user/my-matches...');
+      
+      try {
+        const response = await axios.get(`${API_BASE_URL}/api/user/my-matches`, {
+          headers: { Authorization: `Bearer ${user.token}` },
+        });
+
+        console.log('📦 [ChatScreen] SIROVI PODACI SA SERVERA:', JSON.stringify(response.data, null, 2));
+        
+        return response.data;
+      } catch (err) {
+        console.error('❌ [ChatScreen] API GREŠKA:', err);
+        throw err;
+      }
     },
     enabled: !!user?.token,
-    staleTime: 1000 * 60 * 2,
+    staleTime: 0, // Postavljeno na 0 da bi invalidacija uvek radila pravi fetch
   });
 
-  // ✅ LOG ZA FOKUS I TAB BAR
   useFocusEffect(
     React.useCallback(() => {
-      const parent = navigation.getParent();
-      
-      // Provera da li je neko nasilno ostavio display: none
-      if (parent) {
-        const state = parent.getState();
-      
-      }
-
+      console.log('👀 [ChatScreen] Ekran u fokusu - osvežavam query...');
       queryClient.invalidateQueries({ queryKey });
-
-      return () => {
-       
-      };
-    }, [queryClient, queryKey, navigation])
+      return () => {};
+    }, [queryClient, queryKey])
   );
 
+  // ✅ DODATI SOCKET LISTENERI
   useEffect(() => {
     if (!socket) return;
     
-    console.log('Socket listener initialized on Chat List'); // ✅ Log za socket
-    const handleRefresh = () => {
-      console.log('Socket message received - Refreshing list');
-      queryClient.invalidateQueries({ queryKey });
+    console.log('🔌 [ChatScreen] Socket slušač inicijalizovan');
+    
+    const handleRefresh = (payload: any) => {
+      console.log('⚡ [ChatScreen] Socket događaj primljen, osvežavam listu za 800ms:', payload);
+      // Mala pauza osigurava da backend završi upis u DB pre nego što mi pitamo "ima li šta novo"
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey });
+      }, 800);
     };
     
     socket.on('receiveMessage', handleRefresh);
     socket.on('user_deleted', handleRefresh);
     socket.on('new_match', handleRefresh);
     
+    // Ključni dodatak: slušamo kada mi sami pošaljemo lajk koji rezultira mečom
+    socket.on('likeSent', (data) => {
+      console.log('❤️ [ChatScreen] Emitovan likeSent, pokrećem osvežavanje...');
+      handleRefresh(data);
+    });
+    
     return () => {
       socket.off('receiveMessage', handleRefresh);
       socket.off('user_deleted', handleRefresh);
       socket.off('new_match', handleRefresh);
+      socket.off('likeSent', handleRefresh);
     };
   }, [socket, queryClient, queryKey]);
 
@@ -146,7 +157,7 @@ export default function ChatScreen() {
       );
     },
     onMutate: async (chatId: string) => {
-      console.log('Mutation: Marking chat as read:', chatId); // ✅ Log za mutaciju
+      console.log('📝 [ChatScreen] Označavam kao pročitano:', chatId);
       await queryClient.cancelQueries({ queryKey });
       const previousData = queryClient.getQueryData<ApiData>(queryKey);
       if (previousData) {
@@ -169,8 +180,18 @@ export default function ChatScreen() {
 
   const { newMatches = [], conversations = [] } = data || {};
 
+  useEffect(() => {
+    if (data) {
+      console.log('📊 [ChatScreen] RENDER PROVERA:', {
+        broj_novih_meceva: newMatches.length,
+        broj_konverzacija: conversations.length,
+        prvi_mec_u_listi: newMatches[0]?.fullName || 'Nema'
+      });
+    }
+  }, [data, newMatches, conversations]);
+
   const handleOpenChat = (chatUser: Match | Conversation['user'], chatId: string) => {
-    console.log('Action: Opening Chat with ID:', chatId); // ✅ Log pre navigacije
+    console.log('🚀 [ChatScreen] Otvaram chat:', { chatId, user: chatUser.fullName });
     
     const match = newMatches.find(m => m.chatId === chatId);
     const conv = conversations.find(c => c.chatId === chatId);
@@ -337,7 +358,7 @@ const styles = StyleSheet.create({
   matchAvatar: { width: '100%', height: '100%' },
   matchName: { marginTop: 6, fontSize: 12, fontWeight: '500', color: '#444', textAlign: 'center' },
   notificationDotMatch: {
-    width: 16, height: 16, backgroundColor: '#FF3B30', borderRadius: 8,
+    width: 16, height: 16, backgroundColor: 'rgba(255, 59, 48, 1)', borderRadius: 8,
     position: 'absolute', top: 5, right: 5, borderWidth: 2.5, borderColor: '#fff', zIndex: 1,
   },
   conversationRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 12 },

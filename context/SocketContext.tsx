@@ -47,7 +47,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Socket povezan');
+      console.log('✅ [Socket] Povezan');
       setIsConnected(true);
     });
 
@@ -55,63 +55,60 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       setIsConnected(false);
     });
 
-    // ❤️ NOVI LAJK
- socket.on('likeReceived', (payload) => {
-  console.log('❤️ Primljen likeReceived:', payload);
-  
-  queryClient.setQueryData(['incoming-likes', user.id], (old: any) => {
-    const currentLikes = Array.isArray(old) ? old : [];
-    
-    // 1. Provera da duplikate
-    if (currentLikes.some((u: any) => u._id === payload.fromUserId)) return currentLikes;
-
-    // 2. Dodajemo birthDate u novi objekat
-    const newEntry = { 
-      _id: payload.fromUserId, 
-      avatar: payload.avatar ?? '', 
-      fullName: payload.fullName ?? 'Novi lajk', 
-      birthDate: payload.birthDate, // <--- OVO JE FALILO
-      createdAt: new Date().toISOString() 
-    };
-
-    return [newEntry, ...currentLikes];
-  });
-});
-
-    // 🔥 NOVI MATCH
+    /**
+     * 🔥 MATCH CREATED
+     * ✅ BEDŽ SAMO ZA USERA KOJI NIJE TRIGEROVAO MATCH
+     */
     socket.on('match', (payload) => {
-      console.log('🔥 Primljen MATCH:', payload);
-      setHasUnread(true); // Aktivira bedž na Chat tabu
+      console.log('🔥 [Socket] Match:', payload);
 
-      queryClient.setQueryData(['incoming-likes', user.id], (old: any) => {
-        if (!old || !Array.isArray(old)) return [];
-        return old.filter((item: any) => item._id !== payload.userId);
+      const { initiatorId } = payload;
+
+      // ako JA nisam kliknuo poslednji → pali bedž
+      if (initiatorId !== user.id) {
+        console.log('🔔 [Socket] Palim bedž (User A)');
+        setHasUnread(true);
+      }
+
+      queryClient.invalidateQueries({
+        queryKey: ['incoming-likes', user.id],
       });
 
-      queryClient.invalidateQueries({ queryKey: ['incoming-likes', user.id] });
-      queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+      queryClient.invalidateQueries({
+        queryKey: ['my-matches', user.id],
+      });
     });
 
-    // 📩 NOVA PORUKA (Ovo ti je falilo)
+    /**
+     * 📩 NOVA PORUKA
+     * (fallback ako bedž nije već upaljen)
+     */
     socket.on('receiveMessage', (message) => {
-      console.log('📩 Primljena poruka:', message);
-      setHasUnread(true); // Aktivira bedž
-      
-      // Osvežava listu konverzacija da bi se nova poruka odmah videla
-      queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+      console.log('📩 [Socket] Nova poruka:', message);
+      setHasUnread(true);
+
+      queryClient.invalidateQueries({
+        queryKey: ['my-matches', user.id],
+      });
     });
 
+    /**
+     * 🗑️ UNMATCH / OBRISANA KONVERZACIJA
+     * ❗ UVEK GASIMO BEDŽ
+     */
     socket.on('conversationRemoved', (payload) => {
-  console.log('🗑️ Unmatch detektovan, sklanjam bedž...');
-  
-  // 1. Osveži liste (da konverzacija nestane iz UI-ja)
-  queryClient.invalidateQueries({ queryKey: ['incoming-likes', user.id] });
-  queryClient.invalidateQueries({ queryKey: ['conversations', user.id] });
+      console.log('🗑️ [Socket] Conversation removed:', payload);
 
-  // 2. ISKLJUČI BEDŽ
-  // Čim je konverzacija uklonjena, pretpostavljamo da taj "unread" više ne važi
-  setHasUnread(false); 
-});
+      setHasUnread(false);
+
+      queryClient.invalidateQueries({
+        queryKey: ['incoming-likes', user.id],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['my-matches', user.id],
+      });
+    });
 
     return () => {
       if (socketRef.current) {
@@ -120,10 +117,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socketRef.current = null;
       }
     };
-  }, [user?.token, user?.id]); 
+  }, [user?.token, user?.id]);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, isConnected, hasUnread, setHasUnread }}>
+    <SocketContext.Provider
+      value={{
+        socket: socketRef.current,
+        isConnected,
+        hasUnread,
+        setHasUnread,
+      }}
+    >
       {children}
     </SocketContext.Provider>
   );

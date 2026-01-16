@@ -7,9 +7,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 interface HeaderProps {
   withShadow?: boolean;
   title?: string;
+  onFilterClick?: () => void;
 }
 
-export default function Header({ withShadow }: HeaderProps) {
+export default function Header({ withShadow, onFilterClick }: HeaderProps) {
   return (
     // Logika je sada obrnuta: primeni senku samo ako je `withShadow` true
     <SafeAreaView edges={['top']} style={[styles.container, withShadow && styles.shadow]}>
@@ -21,7 +22,7 @@ export default function Header({ withShadow }: HeaderProps) {
       />
       <View style={styles.buttons}>
         <TouchableOpacity
-          onPress={() => console.log('Otvoren filter')}
+          onPress={onFilterClick}
           accessibilityLabel="Filter dugme"
           style={styles.iconButton}
         >

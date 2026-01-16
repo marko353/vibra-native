@@ -1,61 +1,38 @@
 import React from 'react';
-import {
-  FlatList,
-  StyleSheet,
-  View,
-  ListRenderItem,
-} from 'react-native';
+import { FlatList, StyleSheet } from 'react-native';
 import LikeCard from './LikeCard';
 
-/* ================= TYPES ================= */
-
-export interface LikeUser {
-  _id: string;
-  fullName: string;
-  avatar: string | null;
-  chatId: string;
-  has_unread: boolean;
-}
-
 interface LikesGridProps {
-  data: LikeUser[];
+  data: {
+    _id: string;
+    fullName: string;
+    birthDate: string;
+    avatar: string;
+  }[];
   isPremium: boolean;
+  onLike: (id: string) => void;
+  onSkip: (id: string) => void;
 }
 
-/* ================= COMPONENT ================= */
-
-const LikesGrid: React.FC<LikesGridProps> = ({ data, isPremium }) => {
-  const renderItem: ListRenderItem<LikeUser> = ({ item }) => (
-    <LikeCard user={item} isPremium={isPremium} />
-  );
-
+export default function LikesGrid({ data, onLike, onSkip }: LikesGridProps) {
   return (
     <FlatList
       data={data}
       keyExtractor={(item) => item._id}
-      renderItem={renderItem}
       numColumns={2}
-      showsVerticalScrollIndicator={false}
-      contentContainerStyle={styles.list}
       columnWrapperStyle={styles.row}
-      ListFooterComponent={<View style={styles.footerSpace} />}
+      renderItem={({ item }) => (
+        <LikeCard
+          user={item}
+          onLike={() => onLike(item._id)}
+          onSkip={() => onSkip(item._id)}
+        />
+      )}
+      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 20 }}
     />
   );
-};
-
-export default LikesGrid;
-
-/* ================= STYLES ================= */
+}
 
 const styles = StyleSheet.create({
-  list: {
-    paddingHorizontal: 10,
-    paddingTop: 10,
-  },
-  row: {
-    justifyContent: 'space-between',
-  },
-  footerSpace: {
-    height: 140,
-  },
+  row: { justifyContent: 'space-between', marginBottom: 16 },
 });
