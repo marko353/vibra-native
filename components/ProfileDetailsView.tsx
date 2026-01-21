@@ -1,6 +1,14 @@
-import React, { useRef, useEffect } from "react";
-import { View, Text, StyleSheet, Image, ScrollView, Animated, Easing } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import React, { useEffect, useRef } from "react";
+import {
+    Animated,
+    Easing,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    View,
+} from "react-native";
 
 const COLORS = {
   primary: "#E91E63",
@@ -22,7 +30,12 @@ interface UserProfileData {
   bio: string | null;
   jobTitle: string | null;
   education: string[] | null;
-  location: { latitude?: number; longitude?: number; locationCity?: string; locationCountry?: string } | null;
+  location: {
+    type?: string;
+    coordinates?: [number, number];
+    locationCity?: string;
+    locationCountry?: string;
+  } | null;
   showLocation?: boolean;
   gender: string | null;
   sexualOrientation: string | null;
@@ -46,17 +59,37 @@ interface ProfileDetailsViewProps {
   locationCity: string | null;
 }
 
-const ProfileDetailsView = ({ profile, locationCity }: ProfileDetailsViewProps) => {
+const ProfileDetailsView = ({
+  profile,
+  locationCity,
+}: ProfileDetailsViewProps) => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 800,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
       ])
     ).start();
   }, []);
+
+  const getGenderLabel = (gender: string | null | undefined) => {
+    if (gender === "male") return "Muški";
+    if (gender === "female") return "Ženski";
+    if (gender === "other") return "Ostali";
+    return "";
+  };
 
   const renderInfoRow = (iconName: IconNames, title: string, value: any) => {
     if (title === "Živi u") {
@@ -69,10 +102,16 @@ const ProfileDetailsView = ({ profile, locationCity }: ProfileDetailsViewProps) 
     let displayValue = value;
     if (Array.isArray(value)) displayValue = value.join(", ");
     else if (title === "Visina") displayValue = `${value} cm`;
+    else if (title === "Pol") displayValue = getGenderLabel(value);
 
     return (
       <View style={styles.infoRow} key={title}>
-        <Ionicons name={iconName} size={20} color={COLORS.textSecondary} style={styles.infoIcon} />
+        <Ionicons
+          name={iconName}
+          size={20}
+          color={COLORS.textSecondary}
+          style={styles.infoIcon}
+        />
         <View style={styles.textContainer}>
           <Text style={styles.infoTitle}>{title}:</Text>
           <Text style={styles.infoValue}>{displayValue}</Text>
@@ -122,12 +161,26 @@ const ProfileDetailsView = ({ profile, locationCity }: ProfileDetailsViewProps) 
   const basicInfoData = [
     { icon: "briefcase-outline", title: "Posao", value: profile.jobTitle },
     { icon: "school-outline", title: "Obrazovanje", value: profile.education },
-    { icon: "location-outline", title: "Živi u", value: profile.location?.locationCity },
+    {
+      icon: "location-outline",
+      title: "Živi u",
+      value: profile.showLocation
+        ? profile.locationCity || profile.location?.locationCity
+        : null,
+    },
     { icon: "resize-outline", title: "Visina", value: profile.height },
     { icon: "person-outline", title: "Pol", value: profile.gender },
-    { icon: "transgender-outline", title: "Seksualna orijentacija", value: profile.sexualOrientation },
+    {
+      icon: "transgender-outline",
+      title: "Seksualna orijentacija",
+      value: profile.sexualOrientation,
+    },
   ];
-  const basicInfoRows = basicInfoData.map(item => renderInfoRow(item.icon as IconNames, item.title, item.value)).filter(Boolean);
+  const basicInfoRows = basicInfoData
+    .map((item) =>
+      renderInfoRow(item.icon as IconNames, item.title, item.value)
+    )
+    .filter(Boolean);
 
   const lifestyleData = [
     { icon: "paw-outline", title: "Ljubimci", value: profile.pets },
@@ -136,19 +189,42 @@ const ProfileDetailsView = ({ profile, locationCity }: ProfileDetailsViewProps) 
     { icon: "barbell-outline", title: "Vežbanje", value: profile.workout },
     { icon: "nutrition-outline", title: "Ishrana", value: profile.diet },
   ];
-  const lifestyleRows = lifestyleData.map(item => renderInfoRow(item.icon as IconNames, item.title, item.value)).filter(Boolean);
+  const lifestyleRows = lifestyleData
+    .map((item) =>
+      renderInfoRow(item.icon as IconNames, item.title, item.value)
+    )
+    .filter(Boolean);
 
   const personalityData = [
-    { icon: "heart-outline", title: "Tip veze", value: profile.relationshipType },
+    {
+      icon: "heart-outline",
+      title: "Tip veze",
+      value: profile.relationshipType,
+    },
     { icon: "star-outline", title: "Horoskop", value: profile.horoscope },
-    { icon: "people-outline", title: "Porodični planovi", value: profile.familyPlans },
-    { icon: "chatbox-outline", title: "Stil komunikacije", value: profile.communicationStyle },
+    {
+      icon: "people-outline",
+      title: "Porodični planovi",
+      value: profile.familyPlans,
+    },
+    {
+      icon: "chatbox-outline",
+      title: "Stil komunikacije",
+      value: profile.communicationStyle,
+    },
     { icon: "heart-outline", title: "Ljubavni stil", value: profile.loveStyle },
   ];
-  const personalityRows = personalityData.map(item => renderInfoRow(item.icon as IconNames, item.title, item.value)).filter(Boolean);
+  const personalityRows = personalityData
+    .map((item) =>
+      renderInfoRow(item.icon as IconNames, item.title, item.value)
+    )
+    .filter(Boolean);
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.scrollContent}
+    >
       <View style={styles.container}>
         {hasAnyData ? (
           <>
@@ -191,15 +267,21 @@ const ProfileDetailsView = ({ profile, locationCity }: ProfileDetailsViewProps) 
             />
             <Text style={styles.placeholderTitle}>Dobrodošao u VibrA!</Text>
             <Text style={styles.placeholderText}>
-              Popuni svoj profil da bi drugi mogli da te vide i povežu se sa tobom.
+              Popuni svoj profil da bi drugi mogli da te vide i povežu se sa
+              tobom.
             </Text>
           </View>
         )}
       </View>
 
       <View style={styles.footer}>
-        <Image source={require("../assets/images/1000006381.png")} style={styles.footerLogo} />
-        <Text style={styles.footerText}>VibrA • Aplikacija za upoznavanje i povezivanje</Text>
+        <Image
+          source={require("../assets/images/1000006381.png")}
+          style={styles.footerLogo}
+        />
+        <Text style={styles.footerText}>
+          VibrA • Aplikacija za upoznavanje i povezivanje
+        </Text>
       </View>
     </ScrollView>
   );
@@ -220,15 +302,32 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 5,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "bold", color: COLORS.textPrimary, marginBottom: 10 },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginBottom: 10,
+  },
   bioText: { fontSize: 16, color: COLORS.textPrimary, lineHeight: 22 },
   infoRow: { flexDirection: "row", alignItems: "flex-start", marginBottom: 10 },
   infoIcon: { marginRight: 10 },
   textContainer: { flex: 1, flexDirection: "row", flexWrap: "wrap" },
-  infoTitle: { fontSize: 16, fontWeight: "600", color: COLORS.textPrimary, marginRight: 5 },
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+    marginRight: 5,
+  },
   infoValue: { fontSize: 16, color: COLORS.textSecondary, flexShrink: 1 },
   tagsContainer: { flexDirection: "row", flexWrap: "wrap", marginTop: 5 },
-  tag: { backgroundColor: COLORS.lightGray, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, marginRight: 10, marginBottom: 10 },
+  tag: {
+    backgroundColor: COLORS.lightGray,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    marginRight: 10,
+    marginBottom: 10,
+  },
   tagText: { fontSize: 14, color: COLORS.textPrimary, fontWeight: "500" },
   placeholderCard: {
     backgroundColor: COLORS.white,
@@ -243,8 +342,19 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   logo: { width: 100, height: 100, marginBottom: 20 },
-  placeholderTitle: { fontSize: 20, fontWeight: "bold", color: COLORS.textPrimary, marginBottom: 10, textAlign: "center" },
-  placeholderText: { fontSize: 16, color: COLORS.textSecondary, textAlign: "center", lineHeight: 22 },
+  placeholderTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: COLORS.textPrimary,
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  placeholderText: {
+    fontSize: 16,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    lineHeight: 22,
+  },
   footer: { alignItems: "center", marginTop: 30 },
   footerLogo: { width: 40, height: 40, marginBottom: 5 },
   footerText: { fontSize: 12, color: COLORS.textSecondary },

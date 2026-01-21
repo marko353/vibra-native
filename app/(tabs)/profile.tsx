@@ -1,24 +1,24 @@
-import React, { useCallback } from 'react';
+import { useQueryClient } from "@tanstack/react-query";
+import { useFocusEffect, useRouter } from "expo-router";
+import React, { useCallback } from "react";
 import {
-  View,
-  Text,
-  Image,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  ActivityIndicator,
- 
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
-import { useAuthContext } from '../../context/AuthContext';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useQueryClient } from '@tanstack/react-query';
-import MonetizationPackages from '../../components/MonetizationPackages';
-import BenefitMarquee from '../../components/BenefitMarquee';
-import Header from '../../components/Header';
+    ActivityIndicator,
+    Image,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Icon from "react-native-vector-icons/MaterialIcons";
+import BenefitMarquee from "../../components/BenefitMarquee";
+import Header from "../../components/Header";
+import MonetizationPackages from "../../components/MonetizationPackages";
+import { useAuthContext } from "../../context/AuthContext";
+import { useFilterModal } from "../../context/FilterModalContext";
 // ✨ 1. DODATO: Uvozimo `useProfileContext`
-import { useProfileContext } from '../../context/ProfileContext';
+import { useProfileContext } from "../../context/ProfileContext";
 
 // ... (calculateAge funkcija ostaje ista)
 const calculateAge = (birthDateString?: string | null): number | null => {
@@ -35,22 +35,27 @@ const calculateAge = (birthDateString?: string | null): number | null => {
 };
 
 const COLORS = {
-  primary: '#E91E63',
-  background: '#fefefe',
-  textPrimary: '#222',
-  textSecondary: '#555',
-  cardBackground: '#fff',
-  shadowColor: '#000',
-  editButton: '#E91E63',
+  primary: "#E91E63",
+  background: "#fefefe",
+  textPrimary: "#222",
+  textSecondary: "#555",
+  cardBackground: "#fff",
+  shadowColor: "#000",
+  editButton: "#E91E63",
 };
 
 export default function ProfileScreen() {
+  const { showModal } = useFilterModal();
   const { user } = useAuthContext();
   const router = useRouter();
   const queryClient = useQueryClient();
 
   // ✨ 2. KLJUČNA IZMENA: Koristimo podatke direktno iz Contexta!
-  const { profile, isLoading: isProfileLoading, isRefetching } = useProfileContext();
+  const {
+    profile,
+    isLoading: isProfileLoading,
+    isRefetching,
+  } = useProfileContext();
 
   // ✨ 3. UKLONJENO: Ceo `useQuery` blok koji je bio ovde je obrisan.
 
@@ -58,7 +63,7 @@ export default function ProfileScreen() {
     useCallback(() => {
       // Ovaj deo je i dalje koristan, on osvežava podatke kada se vratimo na ekran
       if (user?.id) {
-        queryClient.invalidateQueries({ queryKey: ['userProfile', user.id] });
+        queryClient.invalidateQueries({ queryKey: ["userProfile", user.id] });
       }
     }, [user, queryClient])
   );
@@ -67,7 +72,9 @@ export default function ProfileScreen() {
     return (
       <SafeAreaView style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>Učitavanje profila...</Text>
+        <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
+          Učitavanje profila...
+        </Text>
       </SafeAreaView>
     );
   }
@@ -75,8 +82,17 @@ export default function ProfileScreen() {
   if (!profile) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <Text style={{ color: COLORS.textSecondary }}>Došlo je do greške pri učitavanju profila.</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => queryClient.invalidateQueries({ queryKey: ['userProfile', user?.id] })}>
+        <Text style={{ color: COLORS.textSecondary }}>
+          Došlo je do greške pri učitavanju profila.
+        </Text>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={() =>
+            queryClient.invalidateQueries({
+              queryKey: ["userProfile", user?.id],
+            })
+          }
+        >
           <Text style={{ color: COLORS.textPrimary }}>Pokušaj ponovo</Text>
         </TouchableOpacity>
       </SafeAreaView>
@@ -91,7 +107,7 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.mainContainer}>
-      <Header />
+      <Header onFilterClick={showModal} />
       <ScrollView contentContainerStyle={styles.scrollContentContainer}>
         <View style={styles.profileHeaderSection}>
           {avatarSource ? (
@@ -99,20 +115,26 @@ export default function ProfileScreen() {
           ) : (
             <View style={[styles.avatar, styles.avatarPlaceholder]}>
               <Text style={styles.avatarPlaceholderText}>
-                {profile.fullName?.[0] || '?'}
+                {profile.fullName?.[0] || "?"}
               </Text>
             </View>
           )}
           <View style={styles.nameContainer}>
             <Text style={styles.name}>
-              {profile.fullName}{age !== null ? `, ${age}` : ''}
+              {profile.fullName}
+              {age !== null ? `, ${age}` : ""}
             </Text>
             <TouchableOpacity
               activeOpacity={0.8}
               style={styles.editButton}
-              onPress={() => router.push('/profile/editProfile')}
+              onPress={() => router.push("/profile/editProfile")}
             >
-              <Icon name="edit" size={18} color="#fff" style={{ marginRight: 6 }} />
+              <Icon
+                name="edit"
+                size={18}
+                color="#fff"
+                style={{ marginRight: 6 }}
+              />
               <Text style={styles.editButtonText}>Izmeni profil</Text>
             </TouchableOpacity>
           </View>
@@ -125,7 +147,6 @@ export default function ProfileScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
   mainContainer: {
     flex: 1,
@@ -137,20 +158,20 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     backgroundColor: COLORS.background,
   },
   retryButton: {
     marginTop: 20,
     paddingVertical: 10,
     paddingHorizontal: 20,
-    backgroundColor: '#eee',
+    backgroundColor: "#eee",
     borderRadius: 25,
   },
   profileHeaderSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 20,
     marginBottom: 40,
   },
@@ -158,38 +179,38 @@ const styles = StyleSheet.create({
     width: 100,
     height: 100,
     borderRadius: 50,
-    backgroundColor: '#ddd',
+    backgroundColor: "#ddd",
   },
   avatarPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#ccc',
+    borderColor: "#ccc",
   },
   avatarPlaceholderText: {
     fontSize: 40,
-    color: '#999',
-    fontWeight: '700',
+    color: "#999",
+    fontWeight: "700",
   },
   nameContainer: {
     marginLeft: 20,
-    flex: 1, 
+    flex: 1,
   },
   name: {
     fontSize: 28,
-    fontWeight: '700',
+    fontWeight: "700",
     color: COLORS.textPrimary,
     marginBottom: 12,
   },
   editButton: {
-    flexDirection: 'row',
+    flexDirection: "row",
     backgroundColor: COLORS.editButton,
     paddingVertical: 10,
     paddingHorizontal: 20,
     borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'flex-start', 
+    alignItems: "center",
+    justifyContent: "center",
+    alignSelf: "flex-start",
     shadowColor: COLORS.editButton,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
@@ -197,8 +218,8 @@ const styles = StyleSheet.create({
     elevation: 6,
   },
   editButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
