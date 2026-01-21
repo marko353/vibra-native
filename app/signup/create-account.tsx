@@ -1,21 +1,32 @@
-import React, { useState, useRef } from 'react';
+import { AntDesign } from "@expo/vector-icons";
+import { Picker } from "@react-native-picker/picker";
+import axios from "axios";
+import Constants from "expo-constants";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Keyboard,
-  Alert,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { AntDesign } from '@expo/vector-icons';
-import axios from 'axios';
-import Constants from 'expo-constants';
+    Alert,
+    Keyboard,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
 
 const monthNames = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 
 export default function CreateAccountScreen() {
@@ -23,34 +34,38 @@ export default function CreateAccountScreen() {
   const params = useLocalSearchParams();
 
   const safeParam = (param: string | string[] | undefined) =>
-    Array.isArray(param) ? param[0] : param || '';
+    Array.isArray(param) ? param[0] : param || "";
 
   const day = safeParam(params.day);
   const month = safeParam(params.month);
   const year = safeParam(params.year);
 
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [confPass, setConfPass] = useState('');
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [pass, setPass] = useState("");
+  const [confPass, setConfPass] = useState("");
   const [showPass, setShowPass] = useState(false);
   const [showConf, setShowConf] = useState(false);
   const [agree, setAgree] = useState(false);
+  const [gender, setGender] = useState<string | null>(null);
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
 
   const emailRef = useRef<TextInput>(null);
   const passRef = useRef<TextInput>(null);
   const confRef = useRef<TextInput>(null);
 
-  const API_BASE_URL = Constants.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL || 'http://192.168.1.6:5000';
+  const API_BASE_URL =
+    Constants.manifest?.extra?.EXPO_PUBLIC_API_BASE_URL ||
+    "http://192.168.1.6:5000";
 
   const validate = () => {
     const newErrors: typeof errors = {};
-    if (!name.trim()) newErrors.name = 'Name is required';
-    if (!email.includes('@')) newErrors.email = 'Enter valid email';
-    if (pass.length < 6) newErrors.pass = 'Password too short';
-    if (pass !== confPass) newErrors.conf = 'Passwords do not match';
-    if (!agree) newErrors.agree = 'You must agree to continue';
+    if (!name.trim()) newErrors.name = "Name is required";
+    if (!email.includes("@")) newErrors.email = "Enter valid email";
+    if (pass.length < 6) newErrors.pass = "Password too short";
+    if (pass !== confPass) newErrors.conf = "Passwords do not match";
+    if (!gender) newErrors.gender = "Gender is required";
+    if (!agree) newErrors.agree = "You must agree to continue";
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -60,8 +75,8 @@ export default function CreateAccountScreen() {
     if (!validate()) return;
 
     try {
-      const username = email.split('@')[0];
-      const birthDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+      const username = email.split("@")[0];
+      const birthDate = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
 
       await axios.post(`${API_BASE_URL}/api/auth/register`, {
         name,
@@ -70,17 +85,21 @@ export default function CreateAccountScreen() {
         password: pass,
         fullName: name,
         birthDate,
+        gender,
       });
 
-      Alert.alert('Success', 'Account created successfully!');
-      router.push('../login');
+      Alert.alert("Success", "Account created successfully!");
+      router.push("../login");
     } catch (error: any) {
-      console.error('Registration error:', error);
-      Alert.alert('Error', error.response?.data?.message || 'Registration failed');
+      console.error("Registration error:", error);
+      Alert.alert(
+        "Error",
+        error.response?.data?.message || "Registration failed"
+      );
     }
   };
 
-  const isFormValid = name && email && pass && confPass && agree;
+  const isFormValid = name && email && pass && confPass && gender && agree;
 
   return (
     <View style={styles.container}>
@@ -142,7 +161,12 @@ export default function CreateAccountScreen() {
             style={styles.eyeIcon}
             onPress={() => setShowPass(!showPass)}
           >
-         <AntDesign name={showPass ? 'eye' : 'eye-invisible'} size={20} color="#666" />          </TouchableOpacity>
+            <AntDesign
+              name={showPass ? "eye" : "eye-invisible"}
+              size={20}
+              color="#666"
+            />{" "}
+          </TouchableOpacity>
         </View>
         {errors.pass && <Text style={styles.error}>{errors.pass}</Text>}
 
@@ -163,13 +187,42 @@ export default function CreateAccountScreen() {
             style={styles.eyeIcon}
             onPress={() => setShowConf(!showConf)}
           >
-          <AntDesign name={showPass ? 'eye' : 'eye-invisible'} size={20} color="#666" />          </TouchableOpacity>
+            <AntDesign
+              name={showPass ? "eye" : "eye-invisible"}
+              size={20}
+              color="#666"
+            />{" "}
+          </TouchableOpacity>
         </View>
         {errors.conf && <Text style={styles.error}>{errors.conf}</Text>}
 
+        {/* Gender */}
+        <Text style={styles.dobLabel}>Gender:</Text>
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: errors.gender ? "#ff3333" : "#cc9966",
+            borderRadius: 8,
+            marginBottom: 8,
+          }}
+        >
+          <Picker
+            selectedValue={gender}
+            onValueChange={setGender}
+            style={{ color: gender ? "#222" : "#cc9966" }}
+          >
+            <Picker.Item label="Select gender..." value={null} />
+            <Picker.Item label="Muški" value="male" />
+            <Picker.Item label="Ženski" value="female" />
+          </Picker>
+        </View>
+        {errors.gender && <Text style={styles.error}>{errors.gender}</Text>}
+
         {/* Date of Birth */}
         <Text style={styles.dobLabel}>Date of Birth:</Text>
-        <Text style={styles.dobText}>{`${parseInt(day)}.${monthNames[parseInt(month) - 1]}.${year}`}</Text>
+        <Text
+          style={styles.dobText}
+        >{`${parseInt(day)}.${monthNames[parseInt(month) - 1]}.${year}`}</Text>
 
         {/* Checkbox */}
         <View style={styles.checkRow}>
@@ -179,7 +232,9 @@ export default function CreateAccountScreen() {
           >
             {agree && <AntDesign name="check" size={14} color="#fff" />}
           </TouchableOpacity>
-          <Text style={styles.checkLabel}>I agree to the Terms and Privacy Policy</Text>
+          <Text style={styles.checkLabel}>
+            I agree to the Terms and Privacy Policy
+          </Text>
         </View>
         {errors.agree && <Text style={styles.error}>{errors.agree}</Text>}
 
@@ -194,7 +249,12 @@ export default function CreateAccountScreen() {
 
         {/* Google Auth */}
         <TouchableOpacity style={styles.createButton}>
-          <AntDesign name="google" size={20} color="#fff" style={{ marginRight: 12 }} />
+          <AntDesign
+            name="google"
+            size={20}
+            color="#fff"
+            style={{ marginRight: 12 }}
+          />
           <Text style={styles.createButtonText}>Continue with Google</Text>
         </TouchableOpacity>
       </View>
@@ -205,68 +265,67 @@ export default function CreateAccountScreen() {
 const styles = StyleSheet.create({
   container: {
     padding: 28,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     flex: 1,
   },
   headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 39,
     gap: 16,
     marginTop: 30,
   },
   title: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#ff7f00',
+    fontWeight: "bold",
+    color: "#ff7f00",
   },
   formWrapper: {
     marginTop: 12,
   },
   input: {
-    backgroundColor: '#fff7e6',
+    backgroundColor: "#fff7e6",
     borderRadius: 10,
     padding: 14,
     fontSize: 16,
-    color: '#663300',
+    color: "#663300",
     borderWidth: 1,
-    borderColor: '#ff7f00',
+    borderColor: "#ff7f00",
     marginBottom: 15,
   },
   inputWrapper: {
-    position: 'relative',
-   
+    position: "relative",
   },
   eyeIcon: {
-    position: 'absolute',
+    position: "absolute",
     right: 14,
-    top: '50%',
+    top: "50%",
     transform: [{ translateY: -16 }],
     zIndex: 10,
   },
   inputError: {
-    borderColor: '#d00000',
+    borderColor: "#d00000",
   },
   error: {
-    color: '#d00000',
+    color: "#d00000",
     marginBottom: 10,
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   dobLabel: {
     marginTop: 8,
     fontSize: 15,
-    fontWeight: 'bold',
-    color: '#ff7f00',
+    fontWeight: "bold",
+    color: "#ff7f00",
   },
   dobText: {
     fontSize: 16,
     marginBottom: 14,
-    color: '#333',
+    color: "#333",
   },
   checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: 14,
   },
   checkbox: {
@@ -274,34 +333,34 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 5,
     borderWidth: 2,
-    borderColor: '#ff7f00',
+    borderColor: "#ff7f00",
     marginRight: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   checkboxChecked: {
-    backgroundColor: '#ff7f00',
+    backgroundColor: "#ff7f00",
   },
   checkLabel: {
     fontSize: 15,
-    color: '#333',
+    color: "#333",
     flexShrink: 1,
   },
   createButton: {
-    backgroundColor: '#ff7f00',
+    backgroundColor: "#ff7f00",
     padding: 16,
     borderRadius: 10,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'center',
+    flexDirection: "row",
+    justifyContent: "center",
   },
   disabledButton: {
-    backgroundColor: '#ffc180',
+    backgroundColor: "#ffc180",
   },
   createButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 17,
-    fontWeight: 'bold',
+    fontWeight: "bold",
   },
 });

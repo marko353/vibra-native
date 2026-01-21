@@ -1,16 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, StyleSheet, ActivityIndicator, Text, Modal } from 'react-native';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
-import Icon from 'react-native-vector-icons/Ionicons'; // Dodato za Toast ikone
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
+import React, { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Modal, StyleSheet, Text, View } from "react-native";
+import Icon from "react-native-vector-icons/Ionicons"; // Dodato za Toast ikone
+import { useFilterModal } from "../../context/FilterModalContext";
 
-import Header from '../../components/Header';
-import LikesGrid from '../../components/likes/LikesGrid';
-import LikesCTA from '../../components/likes/LikesCTA';
-import MatchAnimation from '../../components/MatchAnimation';
-import LikeFilterModal from '../../components/likes/LikeFilterModal';
-import { useAuthContext } from '../../context/AuthContext';
-import { useSocketContext } from '../../context/SocketContext';
+import Header from "../../components/Header";
+import LikesCTA from "../../components/likes/LikesCTA";
+import LikesGrid from "../../components/likes/LikesGrid";
+import MatchAnimation from "../../components/MatchAnimation";
+import { useAuthContext } from "../../context/AuthContext";
+import { useSocketContext } from "../../context/SocketContext";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -18,28 +18,42 @@ export default function LikesTab() {
   const { user } = useAuthContext();
   const { socket } = useSocketContext();
   const queryClient = useQueryClient();
-  
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [matchData, setMatchData] = useState<any>(null);
-  const [filterVisible, setFilterVisible] = useState(false);
-  const [filters, setFilters] = useState<{ ageRange: [number, number]; distance: number; gender: string }>({ ageRange: [18, 99], distance: 50, gender: 'any' });
+  const { showModal, filterValues } = useFilterModal();
 
   // ✅ DODATO: Stanje za Toast (identično kao na HomeTab)
-  const [toastMessage, setToastMessage] = useState<{ message: string, type: 'success' | 'error' } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{
+    message: string;
+    type: "success" | "error";
+  } | null>(null);
 
   // ✅ DODATO: Funkcija za Toast (identično kao na HomeTab)
-  const showToast = useCallback((message: string, type: 'success' | 'error') => {
-    setToastMessage({ message, type });
-    setTimeout(() => setToastMessage(null), 3000);
-  }, []);
+  const showToast = useCallback(
+    (message: string, type: "success" | "error") => {
+      setToastMessage({ message, type });
+      setTimeout(() => setToastMessage(null), 3000);
+    },
+    []
+  );
 
   // 1. Fetch dolaznih lajkova
-  const { data: likes = [], isLoading, refetch } = useQuery({
-    queryKey: ['incoming-likes', user?.id],
+  const {
+    data: likes = [],
+    isLoading,
+    refetch,
+  } = useQuery({
+    queryKey: ["incoming-likes", user?.id],
     queryFn: async () => {
+      console.log(
+        "[LIKES TAB] Pozivam API /api/user/incoming-likes za userId:",
+        user?.id
+      );
       const res = await axios.get(`${API_BASE_URL}/api/user/incoming-likes`, {
         headers: { Authorization: `Bearer ${user?.token}` },
       });
+      console.log("[LIKES TAB] API response:", res.data);
       return res.data?.likes || res.data || [];
     },
     enabled: !!user?.token && !!user?.id,
@@ -48,37 +62,41 @@ export default function LikesTab() {
   // 2. Socket listeneri
   useEffect(() => {
     if (!socket) return;
-    const handleSocketEvent = () => {
-      queryClient.invalidateQueries({ queryKey: ['incoming-likes', user?.id] });
+    const handleSocketEvent = (data) => {
+      console.log("[LIKES TAB] Stigao socket event: ", data);
+      queryClient.invalidateQueries({ queryKey: ["incoming-likes", user?.id] });
       refetch();
     };
-    socket.on('likeReceived', handleSocketEvent);
-    socket.on('newIncomingLike', handleSocketEvent);
+    socket.on("likeReceived", handleSocketEvent);
+    socket.on("newIncomingLike", handleSocketEvent);
     return () => {
-      socket.off('likeReceived', handleSocketEvent);
-      socket.off('newIncomingLike', handleSocketEvent);
+      socket.off("likeReceived", handleSocketEvent);
+      socket.off("newIncomingLike", handleSocketEvent);
     };
   }, [socket, user?.id, queryClient, refetch]);
 
   // 3. Handle Skip
-  const handleSkip = useCallback(async (targetUserId: string) => {
-    if (!user?.id) return;
-    queryClient.setQueryData(['incoming-likes', user.id], (prev: any) => {
-      const old = Array.isArray(prev) ? prev : [];
-      return old.filter((u: any) => (u._id || u.id) !== targetUserId);
-    });
-    try {
-      await axios.post(
-        `${API_BASE_URL}/api/user/swipe`,
-        { targetUserId, action: 'dislike' },
-        { headers: { Authorization: `Bearer ${user.token}` } }
-      );
-      queryClient.invalidateQueries({ queryKey: ['potential-matches'] });
-    } catch (error) {
-      console.error('❌ Greška pri skipovanju:', error);
-      refetch();
-    }
-  }, [user, queryClient, refetch]);
+  const handleSkip = useCallback(
+    async (targetUserId: string) => {
+      if (!user?.id) return;
+      queryClient.setQueryData(["incoming-likes", user.id], (prev: any) => {
+        const old = Array.isArray(prev) ? prev : [];
+        return old.filter((u: any) => (u._id || u.id) !== targetUserId);
+      });
+      try {
+        await axios.post(
+          `${API_BASE_URL}/api/user/swipe`,
+          { targetUserId, action: "dislike" },
+          { headers: { Authorization: `Bearer ${user.token}` } }
+        );
+        queryClient.invalidateQueries({ queryKey: ["potential-matches"] });
+      } catch (error) {
+        console.error("❌ Greška pri skipovanju:", error);
+        refetch();
+      }
+    },
+    [user, queryClient, refetch]
+  );
 
   // 4. Handle Like
   const handleLike = async (targetUserId: string) => {
@@ -87,96 +105,87 @@ export default function LikesTab() {
     try {
       const response = await axios.post(
         `${API_BASE_URL}/api/user/swipe`,
-        { targetUserId, action: 'like' },
+        { targetUserId, action: "like" },
         { headers: { Authorization: `Bearer ${user.token}` } }
       );
 
       if (response.data.match) {
         setMatchData(response.data.matchedUser);
-        socket?.emit('likeSent', { targetUserId });
-        queryClient.invalidateQueries({ queryKey: ['my-matches', user.id] });
+        socket?.emit("likeSent", { targetUserId });
+        queryClient.invalidateQueries({ queryKey: ["my-matches", user.id] });
       }
 
-      queryClient.setQueryData(['incoming-likes', user.id], (prev: any) => {
+      queryClient.setQueryData(["incoming-likes", user.id], (prev: any) => {
         const old = Array.isArray(prev) ? prev : [];
         return old.filter((u: any) => (u._id || u.id) !== targetUserId);
       });
     } catch (error) {
-      console.error('❌ Greška pri lajkovanju:', error);
+      console.error("❌ Greška pri lajkovanju:", error);
     } finally {
       setIsProcessing(false);
     }
   };
 
   // ✅ 5. AŽURIRANO: Handler za poruke sa API logikom (kopirano sa HomeTab)
-  const handleSendMessage = useCallback(async (message: string) => { 
-    if (!matchData || !user?.token || !user?.id) {
+  const handleSendMessage = useCallback(
+    async (message: string) => {
+      if (!matchData || !user?.token || !user?.id) {
         setMatchData(null);
         return;
-    }
-    
-    const targetUserId = matchData._id;
-    const targetUserName = matchData.fullName || 'novog korisnika';
-    const trimmedMessage = message.trim();
-    
-    if (trimmedMessage) {
+      }
+
+      const targetUserId = matchData._id;
+      const targetUserName = matchData.fullName || "novog korisnika";
+      const trimmedMessage = message.trim();
+
+      if (trimmedMessage) {
         try {
-            const response = await axios.post(`${API_BASE_URL}/api/user/message`, {
-                recipientId: targetUserId,
-                text: trimmedMessage,
-            }, { 
-                headers: { Authorization: `Bearer ${user.token}` } 
-            });
-
-            if (response.status === 200 || response.status === 201) {
-                showToast(`Poruka uspešno poslata korisniku ${targetUserName}!`, 'success');
-            } else {
-                throw new Error('Neočekivan odgovor servera.');
+          const response = await axios.post(
+            `${API_BASE_URL}/api/user/message`,
+            {
+              recipientId: targetUserId,
+              text: trimmedMessage,
+            },
+            {
+              headers: { Authorization: `Bearer ${user.token}` },
             }
-            
+          );
+
+          if (response.status === 200 || response.status === 201) {
+            showToast(
+              `Poruka uspešno poslata korisniku ${targetUserName}!`,
+              "success"
+            );
+          } else {
+            throw new Error("Neočekivan odgovor servera.");
+          }
         } catch (error) {
-            console.error('Greška pri slanju poruke:', error);
-            showToast('Greška pri slanju poruke. Pokušajte ponovo.', 'error');
+          console.error("Greška pri slanju poruke:", error);
+          showToast("Greška pri slanju poruke. Pokušajte ponovo.", "error");
         }
-    } else {
-      showToast(`Match sa ${targetUserName} sačuvan!`, 'success');
-    }
+      } else {
+        showToast(`Match sa ${targetUserName} sačuvan!`, "success");
+      }
 
-    setMatchData(null);
-  }, [matchData, user, showToast]);
+      setMatchData(null);
+    },
+    [matchData, user, showToast]
+  );
 
-  // Funkcija za primenu filtera
-  const handleApplyFilter = async (newFilters: { ageRange: [number, number]; distance: number; gender: string }) => {
-    setFilters(newFilters);
-    setFilterVisible(false);
-    // Poziv serveru za filtrirane lajkove
-    try {
-      const res = await axios.get(`${API_BASE_URL}/api/user/incoming-likes`, {
-        headers: { Authorization: `Bearer ${user?.token}` },
-        params: {
-          minAge: newFilters.ageRange[0],
-          maxAge: newFilters.ageRange[1],
-          maxDistance: newFilters.distance,
-          gender: newFilters.gender,
-        },
-      });
-      queryClient.setQueryData(['incoming-likes', user?.id], res.data?.likes || res.data || []);
-    } catch (error) {
-      showToast('Greška pri filtriranju.', 'error');
-    }
-  };
+  // Nema više lokalnog handleApplyFilter, koristi se context
+
+  useEffect(() => {
+    console.log(
+      "[LIKES TAB] Render: likes.length =",
+      likes.length,
+      "| likes =",
+      likes
+    );
+  }, [likes]);
 
   return (
     <View style={styles.container}>
-      <Header title={`${likes.length} sviđanja`} onFilterClick={() => setFilterVisible(true)} />
-      
-      {/* Modal za filter */}
-      <LikeFilterModal
-        visible={filterVisible}
-        onClose={() => setFilterVisible(false)}
-        onApply={handleApplyFilter}
-        initialFilters={filters}
-      />
+      <Header title={`${likes.length} sviđanja`} onFilterClick={showModal} />
 
       <View style={styles.likesHeader}>
         <View style={styles.likesBadge}>
@@ -186,17 +195,21 @@ export default function LikesTab() {
       </View>
 
       {isLoading ? (
-        <View style={styles.center}><ActivityIndicator size="large" color="#FF6A00" /></View>
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#FF6A00" />
+        </View>
       ) : (
         <>
           {likes.length === 0 ? (
-            <View style={styles.center}><Text style={styles.emptyText}>Još uvek nema novih lajkova.</Text></View>
+            <View style={styles.center}>
+              <Text style={styles.emptyText}>Još uvek nema novih lajkova.</Text>
+            </View>
           ) : (
-            <LikesGrid 
-              data={likes} 
-              isPremium={false} 
-              onLike={handleLike} 
-              onSkip={handleSkip} 
+            <LikesGrid
+              data={likes}
+              isPremium={false}
+              onLike={handleLike}
+              onSkip={handleSkip}
             />
           )}
           <LikesCTA isPremium={false} onPress={() => {}} />
@@ -207,10 +220,10 @@ export default function LikesTab() {
       {!!matchData && (
         <Modal visible={true} animationType="fade" transparent={true}>
           <View style={styles.fullScreenMatch}>
-            <MatchAnimation 
-              matchedUser={matchData} 
-              onSendMessage={handleSendMessage} 
-              onClose={() => setMatchData(null)} 
+            <MatchAnimation
+              matchedUser={matchData}
+              onSendMessage={handleSendMessage}
+              onClose={() => setMatchData(null)}
             />
           </View>
         </Modal>
@@ -218,11 +231,22 @@ export default function LikesTab() {
 
       {/* ✅ DODATO: Toast UI (identično kao na HomeTab) */}
       {!!toastMessage && (
-        <View style={[styles.toastContainer, toastMessage.type === 'success' ? styles.toastSuccess : styles.toastError]}>
-          <Icon 
-            name={toastMessage.type === 'success' ? "checkmark-circle" : "alert-circle"} 
-            size={20} 
-            color="#fff" 
+        <View
+          style={[
+            styles.toastContainer,
+            toastMessage.type === "success"
+              ? styles.toastSuccess
+              : styles.toastError,
+          ]}
+        >
+          <Icon
+            name={
+              toastMessage.type === "success"
+                ? "checkmark-circle"
+                : "alert-circle"
+            }
+            size={20}
+            color="#fff"
             style={{ marginRight: 10 }}
           />
           <Text style={styles.toastText}>{toastMessage.message}</Text>
@@ -233,40 +257,50 @@ export default function LikesTab() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingTop: 100 },
-  likesHeader: { alignItems: 'center', marginVertical: 12 },
-  likesBadge: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    backgroundColor: '#FFE4EA', 
-    paddingHorizontal: 16, 
-    paddingVertical: 6, 
-    borderRadius: 30 
+  container: { flex: 1, backgroundColor: "#fff" },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingTop: 100,
   },
-  likesCount: { fontSize: 20, fontWeight: '700', color: '#ff3b5c', marginRight: 6 },
-  likesLabel: { fontSize: 15, color: '#ff3b5c', fontWeight: '500' },
-  emptyText: { color: '#666', fontSize: 16, textAlign: 'center' },
-  fullScreenMatch: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.92)', 
-    justifyContent: 'center', 
-    alignItems: 'center' 
+  likesHeader: { alignItems: "center", marginVertical: 12 },
+  likesBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFE4EA",
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 30,
+  },
+  likesCount: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#ff3b5c",
+    marginRight: 6,
+  },
+  likesLabel: { fontSize: 15, color: "#ff3b5c", fontWeight: "500" },
+  emptyText: { color: "#666", fontSize: 16, textAlign: "center" },
+  fullScreenMatch: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   // ✅ DODATI STILOVI ZA TOAST
   toastContainer: {
-    position: 'absolute',
-    top: 50, 
-    alignSelf: 'center',
+    position: "absolute",
+    top: 50,
+    alignSelf: "center",
     padding: 15,
     borderRadius: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     zIndex: 99999,
     elevation: 20,
-    maxWidth: '90%',
+    maxWidth: "90%",
   },
-  toastSuccess: { backgroundColor: '#4CAF50' },
-  toastError: { backgroundColor: '#F44336' },
-  toastText: { color: '#fff', fontWeight: '600', fontSize: 14, flexShrink: 1 },
+  toastSuccess: { backgroundColor: "#4CAF50" },
+  toastError: { backgroundColor: "#F44336" },
+  toastText: { color: "#fff", fontWeight: "600", fontSize: 14, flexShrink: 1 },
 });
