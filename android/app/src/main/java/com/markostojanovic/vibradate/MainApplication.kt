@@ -1,4 +1,4 @@
-package com.marko353.vibraclean
+package com.markostojanovic.vibradate
 
 import android.app.Application
 import android.content.res.Configuration

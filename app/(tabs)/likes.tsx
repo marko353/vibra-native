@@ -62,7 +62,7 @@ export default function LikesTab() {
   // 2. Socket listeneri
   useEffect(() => {
     if (!socket) return;
-    const handleSocketEvent = (data) => {
+    const handleSocketEvent = (data: any) => {
       console.log("[LIKES TAB] Stigao socket event: ", data);
       queryClient.invalidateQueries({ queryKey: ["incoming-likes", user?.id] });
       refetch();

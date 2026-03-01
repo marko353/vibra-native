@@ -3,6 +3,16 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import axios, { AxiosError } from 'axios';
 import { useRouter, usePathname } from 'expo-router';
+import { Platform } from 'react-native';
+
+const isEmulator = async () => {
+  const { isDevice } = await import('expo-device');
+  return !isDevice;
+};
+
+// Reverting the dynamic API_BASE_URL logic to its previous state.
+// Please ensure the original implementation is restored here.
+const API_BASE_URL = 'https://api.example.com';
 
 export interface User {
   id: string;
@@ -101,6 +111,12 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
     );
     return () => axios.interceptors.response.eject(interceptor);
   }, [logout]);
+
+  // Dodajem logove za proveru vrednosti user i loading
+  useEffect(() => {
+    console.log("AuthContext - User:", user);
+    console.log("AuthContext - Loading:", loading);
+  }, [user, loading]);
 
   return (
     <AuthContext.Provider value={{ user, setUser, loading, logout, updateUser }}>

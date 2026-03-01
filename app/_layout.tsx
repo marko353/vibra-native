@@ -1,9 +1,8 @@
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
-import { Slot, useRouter, useSegments } from "expo-router";
+import { Slot, useRouter, useSegments, Redirect } from "expo-router";
 import React, { useEffect, useMemo, useState } from "react";
 import * as Notifications from 'expo-notifications';
-import { Platform } from 'react-native';
-import { ActivityIndicator, View } from "react-native";
+import { Platform, ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import LikeFilterModal from "../components/likes/LikeFilterModal";
 import { AuthProvider, useAuthContext } from "../context/AuthContext";
@@ -33,17 +32,22 @@ function AuthNavigator() {
   }, [segments]);
 
   useEffect(() => {
+    console.log("User:", user);
+    console.log("Loading:", loading);
+    console.log("Segments:", segments);
+    console.log("In Auth Flow:", inAuthFlow);
+
     if (loading) return;
 
-    // Ako nije prijavljen i nije u auth toku → login
+    // Ako korisnik nije prijavljen i nije u auth toku → login
     if (!user && !inAuthFlow) {
       router.replace("/(auth)/login");
     }
-    // Ako jeste prijavljen i u auth toku → home
+    // Ako je korisnik prijavljen i u auth toku → home
     else if (user && inAuthFlow) {
       router.replace("/(tabs)/home");
     }
-  }, [user, loading, segments, inAuthFlow]);
+  }, [user, loading, segments, inAuthFlow, router]);
 
   if (loading) {
     return (
@@ -53,14 +57,12 @@ function AuthNavigator() {
     );
   }
 
-  return <Slot />;
+  return segments.length ? <Slot /> : <RootRedirect />;
 }
 
 // --- RootLayout ---
 export default function RootLayout() {
   const [isSplashAnimationFinished, setSplashAnimationFinished] = useState(false);
-  const [expoPushToken, setExpoPushToken] = useState<string | undefined>();
-  const [notification, setNotification] = useState<any>(null);
 
   useEffect(() => {
     // Postavi handler za foreground notifikacije
@@ -69,6 +71,8 @@ export default function RootLayout() {
         shouldShowAlert: true,
         shouldPlaySound: false,
         shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
       }),
     });
 
@@ -91,25 +95,11 @@ export default function RootLayout() {
         alert('Dozvola za notifikacije nije odobrena!');
         return;
       }
-      token = (await Notifications.getExpoPushTokenAsync()).data;
-      setExpoPushToken(token);
+      // token = (await Notifications.getExpoPushTokenAsync()).data;
     };
     registerForPushNotificationsAsync();
 
-    // Listener za primljene notifikacije
-    const notificationListener = Notifications.addNotificationReceivedListener(notification => {
-      setNotification(notification);
-    });
-    // Listener za interakciju sa notifikacijom
-    const responseListener = Notifications.addNotificationResponseReceivedListener(response => {
-      // Možeš ovde dodati navigaciju ili logiku
-      console.log('Notifikacija kliknuta:', response);
-    });
-
-    return () => {
-      notificationListener.remove();
-      responseListener.remove();
-    };
+    return () => {};
   }, []);
 
   return (
@@ -140,8 +130,8 @@ export default function RootLayout() {
 function GlobalFilterModal() {
   const { isVisible, hideModal, setFilterValues, filterValues } =
     useFilterModal();
-  const { user } = useAuthContext();
-  const queryClient = useQueryClient();
+  // const { user } = useAuthContext();
+  // const queryClient = useQueryClient();
   // filtersRef više nije potreban
 
   // Handler za primenu filtera
@@ -163,4 +153,8 @@ function GlobalFilterModal() {
       initialFilters={filterValues}
     />
   );
+}
+
+function RootRedirect() {
+  return <Redirect href="/(auth)/login" />;
 }

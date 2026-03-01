@@ -1,48 +1,57 @@
 {
   "expo": {
-    "name": "vibra-clean",
-    "slug": "vibra-clean",
+    "name": "VibrA Date",
+    "slug": "vibra-date",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "vibraclean",
+    "icon": "./assets/images/ic_launcher.jpg",
+    "scheme": "vibradate",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.markostojanovic.vibradate"
+    },
+    "android": {
+      "package": "com.markostojanovic.vibradate",
+      "versionCode": 2,
+      "usesCleartextTraffic": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/ic_launcher.jpg",
+        "backgroundColor": "#FFFFFF"
+      },
+      "notification": {
+        "icon": "./assets/images/ic_notification_small.png",
+        "color": "#FF5A2F"
+      },
+      "permissions": [
+        "RECEIVE_BOOT_COMPLETED",
+        "NOTIFICATIONS"
+      ]
+    },
     "splash": {
       "image": "./assets/images/1000006401.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
-    "ios": {
-      "supportsTablet": true,
-      "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "Aplikacija koristi Vašu lokaciju za prikaz relevantnog sadržaja i za funkcije navigacije."
-      }
-    },
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
-      },
-      "edgeToEdgeEnabled": true,
-      "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION"
-      ],
-      "softwareKeyboardLayoutMode": "resize",
-      "windowSoftInputMode": "adjustResize"
-    },
-    "web": {
-      "bundler": "metro",
-      "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "backgroundColor": "#FFFFFF"
     },
     "plugins": [
       "expo-router",
-      "expo-web-browser"
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/ic_notification_small.png",
+          "color": "#FF5A2F"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4611dc96-3cfe-4ec0-a735-3fa4c1f0602d"
+      }
     }
   }
 }
