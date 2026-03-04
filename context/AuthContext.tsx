@@ -14,7 +14,10 @@ export interface User {
   profilePictures?: string[];
   birthDate?: string;
   locationCity?: string | null;
-  
+  location?: {
+    latitude: number;
+    longitude: number;
+  };
 }
 
 interface AuthContextType {
