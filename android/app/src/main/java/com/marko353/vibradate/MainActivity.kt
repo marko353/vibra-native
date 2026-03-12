@@ -1,4 +1,4 @@
-package com.marko353.vibraclean
+package com.marko353.vibradate
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

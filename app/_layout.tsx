@@ -1,23 +1,38 @@
+import { getApps, initializeApp } from "@react-native-firebase/app";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useRouter, useSegments } from "expo-router";
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
-import LikeFilterModal from "../components/likes/LikeFilterModal";
-import { AuthProvider } from "../context/AuthContext";
+
+// Contexts
+import { AuthProvider, useAuthContext } from "../context/AuthContext";
 import {
-    FilterModalProvider,
-    useFilterModal,
+  FilterModalProvider,
+  useFilterModal,
 } from "../context/FilterModalContext";
 import { ProfileProvider } from "../context/ProfileContext";
 import { SocketProvider } from "../context/SocketContext";
+
+// Components & Hooks
+import LikeFilterModal from "../components/likes/LikeFilterModal";
+import { usePushNotifications } from "../hooks/usePushNotifications";
 import AnimatedSplash from "./AnimatedSplash";
+
+// Inicijalizacija Firebase-a (samo jednom)
+import { firebaseConfig } from "../firebaseConfig";
+
+// FIX: Inicijalizacija mora biti APSOLUTNO prva stvar koja se desi
+if (!getApps().length) {
+  initializeApp(firebaseConfig);
+}
 
 const queryClient = new QueryClient();
 
-// --- Auth navigator za preusmeravanje ---
-function AuthNavigator() {
+// --- Glavna Logika za Navigaciju i Push Notifikacije ---
+function AppContent() {
   const { user, loading } = useAuthContext();
+  const { fcmToken } = usePushNotifications(); // Pozivamo tvoj hook ovde
   const segments = useSegments();
   const router = useRouter();
 
@@ -30,18 +45,29 @@ function AuthNavigator() {
     );
   }, [segments]);
 
+  // --- SINHRONIZACIJA TOKENA SA BACKENDOM ---
+  useEffect(() => {
+    if (user && fcmToken) {
+      console.log("[PUSH] Token spreman za slanje:", fcmToken);
+
+      // Ovde ide tvoj API poziv
+      // Primer:
+      // axios.post('/users/update-fcm-token', { fcmToken })
+      //   .then(() => console.log("Token uspešno sačuvan"))
+      //   .catch(err => console.error("Greška pri čuvanju tokena", err));
+    }
+  }, [user, fcmToken]);
+
+  // --- AUTH NAVIGACIJA ---
   useEffect(() => {
     if (loading) return;
 
-    // Ako nije prijavljen i nije u auth toku → login
     if (!user && !inAuthFlow) {
       router.replace("/(auth)/login");
-    }
-    // Ako jeste prijavljen i u auth toku → home
-    else if (user && inAuthFlow) {
+    } else if (user && inAuthFlow) {
       router.replace("/(tabs)/home");
     }
-  }, [user, loading, segments, inAuthFlow]);
+  }, [user, loading, segments, inAuthFlow, router]);
 
   if (loading) {
     return (
@@ -68,7 +94,7 @@ export default function RootLayout() {
               <FilterModalProvider>
                 <GlobalFilterModal />
                 {isSplashAnimationFinished ? (
-                  <AuthNavigator />
+                  <AppContent />
                 ) : (
                   <AnimatedSplash
                     onFinish={() => setSplashAnimationFinished(true)}
@@ -83,25 +109,13 @@ export default function RootLayout() {
   );
 }
 
-// Global LikeFilterModal povezan sa kontekstom
-import { useQueryClient } from "@tanstack/react-query";
-import { useAuthContext } from "../context/AuthContext"; // Ostaviti samo jedan import na vrhu
-
+// --- Globalni Filter Modal ---
 function GlobalFilterModal() {
   const { isVisible, hideModal, setFilterValues, filterValues } =
     useFilterModal();
-  const { user } = useAuthContext();
-  const queryClient = useQueryClient();
-  // filtersRef više nije potreban
 
-  // Handler za primenu filtera
-  const handleApplyFilter = (newFilters: {
-    ageRange: [number, number];
-    distance: number;
-    gender: string;
-  }) => {
+  const handleApplyFilter = (newFilters: any) => {
     setFilterValues(newFilters);
-    console.log("[FILTER] Sačuvane filter vrednosti za home:", newFilters);
     hideModal();
   };
 

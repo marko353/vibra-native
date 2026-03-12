@@ -1,11 +1,11 @@
 {
   "expo": {
-    "name": "vibra-clean",
-    "slug": "vibra-clean",
+    "name": "Vibra Date",
+    "slug": "vibra-date",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
-    "scheme": "vibraclean",
+    "icon": "./assets/images/launcher.webp",
+    "scheme": "vibra-date",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "splash": {
@@ -21,16 +21,18 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "foregroundImage": "./assets/images/launcher.webp",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ],
       "softwareKeyboardLayoutMode": "resize",
-      "windowSoftInputMode": "adjustResize"
+      "package": "com.marko353.vibradate"
     },
     "web": {
       "bundler": "metro",
@@ -39,10 +41,22 @@
     },
     "plugins": [
       "expo-router",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0",
+            "kotlinVersion": "2.1.20"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
     }
   }
 }
+

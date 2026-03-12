@@ -2,16 +2,25 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    "jsx": "react-jsx",
+    "esModuleInterop": true,
+    "target": "esnext",
+    "moduleResolution": "bundler",
+    "customConditions": [
+      "react-native"
+    ],
+    "skipLibCheck": true,
     "paths": {
-      "@/*": [
-        "./*"
+      "@/": [
+        "./"
       ]
     }
   },
   "include": [
-    "**/*.ts",
-    "**/*.tsx",
-    ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "/*.ts",
+    "/.tsx",
+    ".expo/types/**/.ts",
+    "expo-env.d.ts",
+    ".expo/types/**/*.ts"
   ]
 }
