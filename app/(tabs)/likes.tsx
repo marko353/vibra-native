@@ -21,7 +21,7 @@ export default function LikesTab() {
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [matchData, setMatchData] = useState<any>(null);
-  const { showModal, filterValues } = useFilterModal();
+  const { showModal } = useFilterModal();
 
   // ✅ DODATO: Stanje za Toast (identično kao na HomeTab)
   const [toastMessage, setToastMessage] = useState<{
@@ -62,7 +62,7 @@ export default function LikesTab() {
   // 2. Socket listeneri
   useEffect(() => {
     if (!socket) return;
-    const handleSocketEvent = (data) => {
+    const handleSocketEvent = (data: any) => {
       console.log("[LIKES TAB] Stigao socket event: ", data);
       queryClient.invalidateQueries({ queryKey: ["incoming-likes", user?.id] });
       refetch();

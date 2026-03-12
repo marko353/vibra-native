@@ -31,9 +31,11 @@ extensions.configure(com.facebook.react.ReactSettingsExtension) { ex ->
 }
 expoAutolinking.useExpoModules()
 
-rootProject.name = 'vibra-clean'
+rootProject.name = 'Vibra Date'
 
 expoAutolinking.useExpoVersionCatalog()
 
 include ':app'
 includeBuild(expoAutolinking.reactNativeGradlePlugin)
+include ':notifee_react-native'
+project(':notifee_react-native').projectDir = new File(rootProject.projectDir, '../node_modules/@notifee/react-native/android')

@@ -117,7 +117,7 @@ export default function LoginScreen() {
       </View>
 
       <Image 
-        source={require('@/assets/images/1000006380.png')} 
+        source={require('../../assets/images/1000006380.png')} 
         style={styles.logo} 
         accessibilityLabel="Vibra logo" 
       />

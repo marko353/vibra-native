@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "215871333980",
+    "project_id": "vibra-native-13a4f",
+    "storage_bucket": "vibra-native-13a4f.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:215871333980:android:1bd3345a65d9ada2726899",
+        "android_client_info": {
+          "package_name": "com.marko353.vibradate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAWyQMTO9n2mrrj2KvUJAhPug5egdV31OU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
