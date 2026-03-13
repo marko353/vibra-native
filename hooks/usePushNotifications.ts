@@ -1,13 +1,17 @@
-import { useState, useEffect } from 'react';
-import { Platform, PermissionsAndroid } from 'react-native';
-import messaging from '@react-native-firebase/messaging';
-import notifee, { AndroidImportance, AndroidVisibility } from '@notifee/react-native';
-import app from '@react-native-firebase/app';
+import notifee, {
+  AndroidImportance,
+  AndroidVisibility,
+  AndroidStyle,
+} from "@notifee/react-native";
+import app from "@react-native-firebase/app";
+import messaging from "@react-native-firebase/messaging";
+import { useEffect, useState } from "react";
+import { PermissionsAndroid, Platform } from "react-native";
 
 async function createNotificationChannel() {
   return await notifee.createChannel({
-    id: 'default',
-    name: 'Vibra Obaveštenja',
+    id: "default",
+    name: "Vibra Obaveštenja",
     importance: AndroidImportance.HIGH,
     visibility: AndroidVisibility.PUBLIC,
   });
@@ -15,26 +19,31 @@ async function createNotificationChannel() {
 
 async function onDisplayNotification(title: string, body: string) {
   try {
-    console.log('🔔 Pokušavam da prikažem notifikaciju');
+    console.log("🔔 Pokušavam da prikažem notifikaciju");
 
     const channelId = await createNotificationChannel();
 
-    await notifee.displayNotification({
-      title,
-      body,
-      android: {
-        channelId,
-        importance: AndroidImportance.HIGH,
-        visibility: AndroidVisibility.PUBLIC,
-        pressAction: {
-          id: 'default',
+  await notifee.displayNotification({
+  title,
+  body,
+  android: {
+    channelId,
+    smallIcon: "ic_notification",
+    largeIcon: require("../assets/images/1000006401.png"),
+        style: {
+          type: AndroidStyle.BIGTEXT,
+          text: body,
         },
-      },
-    });
+    importance: AndroidImportance.HIGH,
+    pressAction: {
+      id: "default",
+    },
+  },
+});
 
-    console.log('✅ Notifikacija prikazana');
+    console.log("✅ Notifikacija prikazana");
   } catch (error) {
-    console.error('❌ Notifee Greška:', error);
+    console.error("❌ Notifee Greška:", error);
   }
 }
 
@@ -47,19 +56,19 @@ export const usePushNotifications = () => {
     const startSetup = async () => {
       try {
         if (!app.apps.length) {
-          console.log('❌ Firebase nije inicijalizovan');
+          console.log("❌ Firebase nije inicijalizovan");
           return;
         }
 
-        console.log('🚀 Pokrećem Push setup');
+        console.log("🚀 Pokrećem Push setup");
 
         // Android 13+ permission
-        if (Platform.OS === 'android' && Platform.Version >= 33) {
+        if (Platform.OS === "android" && Platform.Version >= 33) {
           const permission = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS
+            PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
           );
 
-          console.log('📱 Notification permission:', permission);
+          console.log("📱 Notification permission:", permission);
         }
 
         // Firebase permission
@@ -68,10 +77,10 @@ export const usePushNotifications = () => {
         // Kreiraj kanal odmah
         await createNotificationChannel();
         await notifee.displayNotification({
-          title: 'TEST PUSH',
-          body: 'Ako vidiš ovo, sve radi',
+          title: "TEST PUSH",
+          body: "Ako vidiš ovo, sve radi",
           android: {
-            channelId: 'default',
+            channelId: "default",
           },
         });
 
@@ -79,47 +88,45 @@ export const usePushNotifications = () => {
         const token = await messaging().getToken();
 
         if (token) {
-          console.log('🔥 FCM Token:', token);
+          console.log("🔥 FCM Token:", token);
           setFcmToken(token);
         }
 
         // Foreground listener
-        unsubscribe = messaging().onMessage(async remoteMessage => {
-
+        unsubscribe = messaging().onMessage(async (remoteMessage) => {
           console.log(
-            '📥 FULL MESSAGE:',
-            JSON.stringify(remoteMessage, null, 2)
+            "📥 FULL MESSAGE:",
+            JSON.stringify(remoteMessage, null, 2),
           );
 
           const title = String(
             remoteMessage.notification?.title ??
-            remoteMessage.data?.title ??
-            'Novi Match! 🔥'
+              remoteMessage.data?.title ??
+              "Novi Match! 🔥",
           );
 
           const body = String(
             remoteMessage.notification?.body ??
-            remoteMessage.data?.body ??
-            'Pogledaj ko te je lajkovao.'
+              remoteMessage.data?.body ??
+              "Pogledaj ko te je lajkovao.",
           );
 
-          console.log('📩 Title:', title);
-          console.log('📩 Body:', body);
+          console.log("📩 Title:", title);
+          console.log("📩 Body:", body);
 
           await onDisplayNotification(title, body);
         });
 
         // TEST NOTIFIKACIJA
         await notifee.displayNotification({
-          title: 'Test Notifikacija 🔔',
-          body: 'Ako vidiš ovo, Notifee radi!',
+          title: "Test Notifikacija 🔔",
+          body: "Ako vidiš ovo, Notifee radi!",
           android: {
-            channelId: 'default',
+            channelId: "default",
           },
         });
-
       } catch (error) {
-        console.error('❌ Push Setup Greška:', error);
+        console.error("❌ Push Setup Greška:", error);
       }
     };
 
@@ -127,7 +134,7 @@ export const usePushNotifications = () => {
 
     return () => {
       if (unsubscribe) {
-        console.log('🧹 Čistim listener...');
+        console.log("🧹 Čistim listener...");
         unsubscribe();
       }
     };
