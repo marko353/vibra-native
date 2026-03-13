@@ -29,7 +29,7 @@ async function onDisplayNotification(title: string, body: string) {
   android: {
     channelId,
     smallIcon: "ic_notification",
-    largeIcon: require("../assets/images/1000006401.png"),
+    largeIcon: require("../assets/images/vibraNotification.png"),
         style: {
           type: AndroidStyle.BIGTEXT,
           text: body,
