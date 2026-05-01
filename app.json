@@ -20,6 +20,8 @@
       }
     },
     "android": {
+      "usesCleartextTraffic": true,
+      "package": "com.marko.vibra",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/launcher.webp",
         "backgroundColor": "#ffffff"
@@ -31,8 +33,7 @@
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION"
       ],
-      "softwareKeyboardLayoutMode": "resize",
-      "package": "com.marko353.vibradate"
+      "softwareKeyboardLayoutMode": "resize"
     },
     "web": {
       "bundler": "metro",
@@ -56,6 +57,9 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "EXPO_PUBLIC_API_BASE_URL": "http://192.168.1.6:5000"
     }
   }
 }

@@ -8,6 +8,9 @@ import React, {
 import { io, Socket } from 'socket.io-client';
 import { useAuthContext } from './AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+declare const process: {
+  env: { [key: string]: string | undefined };
+};
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 

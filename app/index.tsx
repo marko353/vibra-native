@@ -1,10 +1,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { usePushNotifications } from '../hooks/usePushNotifications';
+// Removed the usePushNotifications call to avoid duplicate notifications
+// const { fcmToken } = usePushNotifications(); // Initialize push notifications
 
 export default function Index() {
   const router = useRouter();
-  const { fcmToken } = usePushNotifications(); // Initialize push notifications
 
   useEffect(() => {
     router.replace('/login'); // Navigacija na login ekran

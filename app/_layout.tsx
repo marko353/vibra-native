@@ -16,13 +16,12 @@ import { SocketProvider } from "../context/SocketContext";
 
 // Components & Hooks
 import LikeFilterModal from "../components/likes/LikeFilterModal";
-import { usePushNotifications } from "../hooks/usePushNotifications";
+import { usePushNotifications }  from "../hooks/usePushNotifications";
 import AnimatedSplash from "./AnimatedSplash";
 
-// Inicijalizacija Firebase-a (samo jednom)
+// Inicijalizacija Firebase-a
 import { firebaseConfig } from "../firebaseConfig";
 
-// FIX: Inicijalizacija mora biti APSOLUTNO prva stvar koja se desi
 if (!getApps().length) {
   initializeApp(firebaseConfig);
 }
@@ -31,8 +30,11 @@ const queryClient = new QueryClient();
 
 // --- Glavna Logika za Navigaciju i Push Notifikacije ---
 function AppContent() {
-  const { user, loading } = useAuthContext();
-  const { fcmToken } = usePushNotifications(); // Pozivamo tvoj hook ovde
+  const { user, loading, token } = useAuthContext(); // Dodajemo 'token' iz contexta
+  
+  console.log("🔍 [RootLayout] Token iz AuthContext-a:", token);
+  usePushNotifications(token); 
+
   const segments = useSegments();
   const router = useRouter();
 
@@ -45,19 +47,6 @@ function AppContent() {
     );
   }, [segments]);
 
-  // --- SINHRONIZACIJA TOKENA SA BACKENDOM ---
-  useEffect(() => {
-    if (user && fcmToken) {
-      console.log("[PUSH] Token spreman za slanje:", fcmToken);
-
-      // Ovde ide tvoj API poziv
-      // Primer:
-      // axios.post('/users/update-fcm-token', { fcmToken })
-      //   .then(() => console.log("Token uspešno sačuvan"))
-      //   .catch(err => console.error("Greška pri čuvanju tokena", err));
-    }
-  }, [user, fcmToken]);
-
   // --- AUTH NAVIGACIJA ---
   useEffect(() => {
     if (loading) return;
@@ -67,7 +56,7 @@ function AppContent() {
     } else if (user && inAuthFlow) {
       router.replace("/(tabs)/home");
     }
-  }, [user, loading, segments, inAuthFlow, router]);
+  }, [user, loading, inAuthFlow, router]);
 
   if (loading) {
     return (

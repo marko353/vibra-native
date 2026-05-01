@@ -50,14 +50,12 @@ export const FilterModalProvider: React.FC<{ children: React.ReactNode }> = ({
   useEffect(() => {
     const fetchFilters = async () => {
       if (!user || !user.token) return;
+      console.log("🔍 [FILTER PROVIDER] Šaljem GET zahtev na /api/user/filters sa tokenom:", user.token);
       try {
         const res = await api.get("/api/user/filters", {
           headers: { Authorization: `Bearer ${user.token}` },
         });
-        console.log(
-          "[FILTER PROVIDER] Povučeni filteri sa servera:",
-          res.data.filters
-        );
+        console.log("✅ [FILTER PROVIDER] Odgovor sa /api/user/filters:", res.data);
         if (res.data && res.data.filters) {
           // Ako backend ne vrati pol, koristi "any" kao default
           setFilterValuesState({
@@ -84,12 +82,14 @@ export const FilterModalProvider: React.FC<{ children: React.ReactNode }> = ({
     async (values: FilterValues) => {
       setFilterValuesState(values);
       if (user && user.token) {
+        console.log("🔍 [FILTER PROVIDER] Šaljem PATCH zahtev na /api/user/filters sa podacima:", values);
         try {
           await api.patch(
             "/api/user/filters",
             { filters: values },
             { headers: { Authorization: `Bearer ${user.token}` } }
           );
+          console.log("✅ [FILTER PROVIDER] Uspešno ažurirani filteri na backendu.");
         } catch (err) {
           // fallback: ignore error
         }

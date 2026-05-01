@@ -8,7 +8,7 @@ export interface User {
   id: string;
   fullName: string;
   email: string;
-  token: string;
+  token: string | null;
   birthYear?: number;
   avatar?: string;
   profilePictures?: string[];
@@ -26,6 +26,7 @@ interface AuthContextType {
   loading: boolean;
   logout: () => Promise<void>;
   updateUser: (newUserData: Partial<User>) => void;
+  token?: string | null; // Ažuriranje tipa da dozvoljava null
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -106,7 +107,7 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   }, [logout]);
 
   return (
-    <AuthContext.Provider value={{ user, setUser, loading, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, setUser, loading, logout, updateUser, token: user?.token }}>
       {children}
     </AuthContext.Provider>
   );
