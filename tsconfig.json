@@ -6,21 +6,19 @@
     "esModuleInterop": true,
     "target": "esnext",
     "moduleResolution": "bundler",
-    "customConditions": [
-      "react-native"
-    ],
+    "customConditions": ["react-native"],
     "skipLibCheck": true,
     "paths": {
-      "@/": [
-        "./"
-      ]
-    }
+      "@/": ["./"]
+    },
+    "types": ["node"]
   },
   "include": [
     "/*.ts",
     "/.tsx",
     ".expo/types/**/.ts",
     "expo-env.d.ts",
-    ".expo/types/**/*.ts"
+    ".expo/types/**/*.ts",
+    "node_modules/@types" // Ensure Node.js types are included
   ]
 }

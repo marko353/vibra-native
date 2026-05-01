@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import React, { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from "react-native";
-import Icon from "react-native-vector-icons/Ionicons"; // Dodato za Toast ikone
+import Icon from "react-native-vector-icons/Ionicons";
 import { useFilterModal } from "../../context/FilterModalContext";
 
 import Header from "../../components/Header";
@@ -11,6 +11,9 @@ import LikesGrid from "../../components/likes/LikesGrid";
 import MatchAnimation from "../../components/MatchAnimation";
 import { useAuthContext } from "../../context/AuthContext";
 import { useSocketContext } from "../../context/SocketContext";
+
+// ✅ FIX ZA TYPESCRIPT GREŠKU (Dodaj ove dve linije)
+declare const process: any;
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -23,13 +26,12 @@ export default function LikesTab() {
   const [matchData, setMatchData] = useState<any>(null);
   const { showModal } = useFilterModal();
 
-  // ✅ DODATO: Stanje za Toast (identično kao na HomeTab)
+  // Toast stanje
   const [toastMessage, setToastMessage] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
-  // ✅ DODATO: Funkcija za Toast (identično kao na HomeTab)
   const showToast = useCallback(
     (message: string, type: "success" | "error") => {
       setToastMessage({ message, type });
@@ -46,14 +48,9 @@ export default function LikesTab() {
   } = useQuery({
     queryKey: ["incoming-likes", user?.id],
     queryFn: async () => {
-      console.log(
-        "[LIKES TAB] Pozivam API /api/user/incoming-likes za userId:",
-        user?.id
-      );
       const res = await axios.get(`${API_BASE_URL}/api/user/incoming-likes`, {
         headers: { Authorization: `Bearer ${user?.token}` },
       });
-      console.log("[LIKES TAB] API response:", res.data);
       return res.data?.likes || res.data || [];
     },
     enabled: !!user?.token && !!user?.id,
@@ -63,7 +60,6 @@ export default function LikesTab() {
   useEffect(() => {
     if (!socket) return;
     const handleSocketEvent = (data: any) => {
-      console.log("[LIKES TAB] Stigao socket event: ", data);
       queryClient.invalidateQueries({ queryKey: ["incoming-likes", user?.id] });
       refetch();
     };
@@ -126,7 +122,7 @@ export default function LikesTab() {
     }
   };
 
-  // ✅ 5. AŽURIRANO: Handler za poruke sa API logikom (kopirano sa HomeTab)
+  // 5. Handler za poruke
   const handleSendMessage = useCallback(
     async (message: string) => {
       if (!matchData || !user?.token || !user?.id) {
@@ -172,17 +168,6 @@ export default function LikesTab() {
     [matchData, user, showToast]
   );
 
-  // Nema više lokalnog handleApplyFilter, koristi se context
-
-  useEffect(() => {
-    console.log(
-      "[LIKES TAB] Render: likes.length =",
-      likes.length,
-      "| likes =",
-      likes
-    );
-  }, [likes]);
-
   return (
     <View style={styles.container}>
       <Header title={`${likes.length} sviđanja`} onFilterClick={showModal} />
@@ -216,7 +201,6 @@ export default function LikesTab() {
         </>
       )}
 
-      {/* ✅ MATCH MODAL */}
       {!!matchData && (
         <Modal visible={true} animationType="fade" transparent={true}>
           <View style={styles.fullScreenMatch}>
@@ -229,7 +213,6 @@ export default function LikesTab() {
         </Modal>
       )}
 
-      {/* ✅ DODATO: Toast UI (identično kao na HomeTab) */}
       {!!toastMessage && (
         <View
           style={[
@@ -287,7 +270,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  // ✅ DODATI STILOVI ZA TOAST
   toastContainer: {
     position: "absolute",
     top: 50,

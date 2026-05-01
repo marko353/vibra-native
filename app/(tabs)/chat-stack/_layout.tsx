@@ -1,6 +1,14 @@
 // app/(tabs)/chat-stack/_layout.tsx
 
 import { Stack } from 'expo-router';
+import { StackScreenProps } from '@react-navigation/stack';
+
+type ChatStackParamList = {
+  index: undefined;
+  chatId: { chatId: string };
+};
+
+type ChatScreenProps = StackScreenProps<ChatStackParamList, 'chatId'>;
 
 export default function ChatStackLayout() {
   return (
@@ -13,3 +21,5 @@ export default function ChatStackLayout() {
     </Stack>
   );
 }
+
+export type { ChatStackParamList, ChatScreenProps };
