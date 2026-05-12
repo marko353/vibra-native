@@ -15,6 +15,7 @@ interface LikesGridProps {
 }
 
 export default function LikesGrid({ data, onLike, onSkip }: LikesGridProps) {
+  console.log("LikesGrid data:", data);
   return (
     <FlatList
       data={data}
