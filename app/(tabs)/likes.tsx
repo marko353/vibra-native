@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
-import React, { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from "react-native";
 import Icon from "react-native-vector-icons/Ionicons";
 import { useFilterModal } from "../../context/FilterModalContext";
@@ -12,8 +12,7 @@ import MatchAnimation from "../../components/MatchAnimation";
 import { useAuthContext } from "../../context/AuthContext";
 import { useSocketContext } from "../../context/SocketContext";
 
-// ✅ FIX ZA TYPESCRIPT GREŠKU (Dodaj ove dve linije)
-declare const process: any;
+// Reverting changes by removing added logs and restoring original logic.
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -37,7 +36,7 @@ export default function LikesTab() {
       setToastMessage({ message, type });
       setTimeout(() => setToastMessage(null), 3000);
     },
-    []
+    [],
   );
 
   // 1. Fetch dolaznih lajkova
@@ -83,7 +82,7 @@ export default function LikesTab() {
         await axios.post(
           `${API_BASE_URL}/api/user/swipe`,
           { targetUserId, action: "dislike" },
-          { headers: { Authorization: `Bearer ${user.token}` } }
+          { headers: { Authorization: `Bearer ${user.token}` } },
         );
         queryClient.invalidateQueries({ queryKey: ["potential-matches"] });
       } catch (error) {
@@ -91,7 +90,7 @@ export default function LikesTab() {
         refetch();
       }
     },
-    [user, queryClient, refetch]
+    [user, queryClient, refetch],
   );
 
   // 4. Handle Like
@@ -102,7 +101,7 @@ export default function LikesTab() {
       const response = await axios.post(
         `${API_BASE_URL}/api/user/swipe`,
         { targetUserId, action: "like" },
-        { headers: { Authorization: `Bearer ${user.token}` } }
+        { headers: { Authorization: `Bearer ${user.token}` } },
       );
 
       if (response.data.match) {
@@ -144,13 +143,13 @@ export default function LikesTab() {
             },
             {
               headers: { Authorization: `Bearer ${user.token}` },
-            }
+            },
           );
 
           if (response.status === 200 || response.status === 201) {
             showToast(
               `Poruka uspešno poslata korisniku ${targetUserName}!`,
-              "success"
+              "success",
             );
           } else {
             throw new Error("Neočekivan odgovor servera.");
@@ -165,7 +164,7 @@ export default function LikesTab() {
 
       setMatchData(null);
     },
-    [matchData, user, showToast]
+    [matchData, user, showToast],
   );
 
   return (

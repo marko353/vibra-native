@@ -1,37 +1,46 @@
-import React, { useState, useEffect, useCallback, useMemo, useLayoutEffect } from 'react';
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import axios from "axios";
 import {
-  View,
-  ActivityIndicator,
-  StyleSheet,
-  Platform,
-  Image,
-  TouchableOpacity,
-  Text,
-  Modal,
-  Keyboard,
-  KeyboardAvoidingView,
-} from 'react-native';
-import { Stack, useLocalSearchParams, router, useFocusEffect, useNavigation } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuthContext } from '../../../context/AuthContext';
-import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
-import axios from 'axios';
+    router,
+    Stack,
+    useFocusEffect,
+    useLocalSearchParams,
+    useNavigation,
+} from "expo-router";
 import {
-  GiftedChat,
-  IMessage,
-  InputToolbar,
-  Send,
-  Bubble,
-  type InputToolbarProps,
-  type SendProps,
-  type BubbleProps,
-} from 'react-native-gifted-chat';
-import { useSocketContext } from '../../../context/SocketContext';
-
-import Constants from 'expo-constants';
+    useCallback,
+    useEffect,
+    useMemo,
+    useState
+} from "react";
+import {
+    ActivityIndicator,
+    Image,
+    Keyboard,
+    KeyboardAvoidingView,
+    Modal,
+    Platform,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from "react-native";
+import {
+    Bubble,
+    GiftedChat,
+    IMessage,
+    InputToolbar,
+    Send,
+    type BubbleProps,
+    type InputToolbarProps,
+    type SendProps,
+} from "react-native-gifted-chat";
+import { useAuthContext } from "../../../context/AuthContext";
+import { useSocketContext } from "../../../context/SocketContext";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
-const DEFAULT_AVATAR = 'https://placekitten.com/120/120';
+const DEFAULT_AVATAR = "https://placekitten.com/120/120";
 
 type BackendMessage = {
   _id: string;
@@ -41,7 +50,7 @@ type BackendMessage = {
   conversationId: string;
 };
 
-type CachedMessage = BackendMessage & { status?: 'sending' | 'error' | 'sent' };
+type CachedMessage = BackendMessage & { status?: "sending" | "error" | "sent" };
 
 const debug = false;
 const d = (...args: any[]) => debug && console.log(...args);
@@ -71,10 +80,20 @@ export default function ChatScreen() {
   const [isMenuVisible, setIsMenuVisible] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
 
+  // FIX: Čekamo da params budu popunjeni pre renderovanja.
+  // Problem je bio što Expo Router prosleđuje params asinhrono —
+  // komponenta se mountuje sa praznim stringovima, pa otherUser memo
+  // dobije prazne vrednosti i ne ažurira se jer memo ne detektuje promenu.
+  // Rešenje: prikazujemo loader dok chatId i receiverId nisu dostupni.
+  const paramsReady = !!(chatId && receiverId);
 
   useEffect(() => {
-    const show = Keyboard.addListener('keyboardDidShow', () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboardVisible(false));
+    const show = Keyboard.addListener("keyboardDidShow", () =>
+      setKeyboardVisible(true),
+    );
+    const hide = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardVisible(false),
+    );
     return () => {
       show.remove();
       hide.remove();
@@ -83,31 +102,39 @@ export default function ChatScreen() {
 
   const userId = user?.id;
   const meUser = useMemo(() => ({ _id: userId! }), [userId]);
+
+  // FIX: otherUser zavisi od params — dok params nisu ready, koristimo
+  // placeholder da ne bi ostalo prazno u gifted chat user objektu
   const otherUser = useMemo(
-    () => ({ _id: receiverId, name: userName, avatar: userAvatar }),
-    [receiverId, userName, userAvatar]
+    () => ({
+      _id: receiverId || "",
+      name: userName || "Korisnik",
+      avatar: userAvatar || DEFAULT_AVATAR,
+    }),
+    [receiverId, userName, userAvatar],
   );
 
   const fetchMessages = async (): Promise<CachedMessage[]> => {
     if (!chatId || !user?.token) return [];
-    d('📥 Fetch messages...');
-    const res = await axios.get(`${API_BASE_URL}/api/user/chat/${chatId}/messages`, {
-      headers: { Authorization: `Bearer ${user.token}` },
-    });
+    const res = await axios.get(
+      `${API_BASE_URL}/api/user/chat/${chatId}/messages`,
+      { headers: { Authorization: `Bearer ${user.token}` } },
+    );
     const raw: BackendMessage[] = res.data || [];
-    const mapped = raw.map((m) => ({ ...m, status: 'sent' as const }));
-    return dedupe(mapped);
+    return dedupe(raw.map((m) => ({ ...m, status: "sent" as const })));
   };
 
-  const queryKey = ['chat', chatId];
+  const queryKey = ["chat", chatId];
 
-  const {
-    data: uiMessages = [],
-    isLoading: isChatLoading,
-  } = useQuery<CachedMessage[], Error, IMessage[]>({
+  const { data: uiMessages = [], isLoading: isChatLoading } = useQuery<
+    CachedMessage[],
+    Error,
+    IMessage[]
+  >({
     queryKey,
     queryFn: fetchMessages,
-    enabled: !!chatId && !!user?.token,
+    // FIX: query se ne pokreće dok params nisu ready
+    enabled: paramsReady && !!user?.token,
     select: (data) => {
       const mapped = data
         .map((msg) => ({
@@ -115,7 +142,7 @@ export default function ChatScreen() {
           text: msg.text,
           createdAt: new Date(msg.createdAt),
           user: msg.sender === userId ? meUser : otherUser,
-          pending: msg.status === 'sending',
+          pending: msg.status === "sending",
         }))
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
       return dedupe(mapped);
@@ -128,23 +155,27 @@ export default function ChatScreen() {
       await axios.post(
         `${API_BASE_URL}/api/user/chat/${chatId}/mark-as-read`,
         {},
-        { headers: { Authorization: `Bearer ${user.token}` } }
+        { headers: { Authorization: `Bearer ${user.token}` } },
       );
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['my-matches', userId], exact: true });
+      queryClient.invalidateQueries({
+        queryKey: ["my-matches", userId],
+        exact: true,
+      });
     },
   });
 
   useFocusEffect(
     useCallback(() => {
+      if (!paramsReady) return;
       setHasUnread(false);
       queryClient.refetchQueries({ queryKey });
       if (!markAsReadMutation.isPending && !markAsReadMutation.isSuccess) {
         markAsReadMutation.mutate();
       }
       return () => {};
-    }, [queryKey])
+    }, [queryKey, paramsReady]),
   );
 
   useEffect(() => {
@@ -157,18 +188,29 @@ export default function ChatScreen() {
       }
       markAsReadMutation.mutate();
       const incoming: CachedMessage = { ...msg, status: "sent" };
-      queryClient.setQueryData<CachedMessage[]>(["chat", chatId], (old = []) => {
-        const filtered = old.filter((m) => m._id !== incoming._id);
-        return [incoming, ...filtered];
-      });
+      queryClient.setQueryData<CachedMessage[]>(
+        ["chat", chatId],
+        (old = []) => {
+          const filtered = old.filter((m) => m._id !== incoming._id);
+          return [incoming, ...filtered];
+        },
+      );
       queryClient.invalidateQueries({ queryKey: ["chat", chatId] });
     };
 
     socket.on("receiveMessage", handleReceive);
-    return () => {
-      socket.off("receiveMessage", handleReceive);
-    };
+    return () => { socket.off("receiveMessage", handleReceive); };
   }, [socket, chatId, queryClient, userId]);
+
+  useEffect(() => {
+    if (!paramsReady) return;
+    if (!socket?.connected) socket?.connect();
+    socket?.emit("join_chat", { chatId, userId });
+
+    return () => {
+      socket?.emit("leave_chat", { chatId, userId });
+    };
+  }, [chatId, receiverId, socket, userId, paramsReady]);
 
   const handleSend = useCallback(
     (newMessages: IMessage[] = []) => {
@@ -182,20 +224,20 @@ export default function ChatScreen() {
         sender: userId,
         createdAt: new Date().toISOString(),
         conversationId: chatId!,
-        status: 'sending',
+        status: "sending",
       };
 
-      queryClient.setQueryData<CachedMessage[]>(queryKey, (old = []) => {
-        return dedupe([optimistic, ...old]);
-      });
+      queryClient.setQueryData<CachedMessage[]>(queryKey, (old = []) =>
+        dedupe([optimistic, ...old])
+      );
 
       socket.emit(
-        'sendMessage',
+        "sendMessage",
         { receiverId, text: m.text },
         (response: { status: string; message: BackendMessage }) => {
           const final: CachedMessage = {
             ...response.message,
-            status: response.status === 'ok' ? 'sent' : 'error',
+            status: response.status === "ok" ? "sent" : "error",
           };
           queryClient.setQueryData<CachedMessage[]>(queryKey, (old = []) => {
             let replaced = false;
@@ -208,11 +250,14 @@ export default function ChatScreen() {
             });
             return !replaced ? dedupe([final, ...old]) : dedupe(updated);
           });
-          queryClient.invalidateQueries({ queryKey: ['my-matches', userId], exact: true });
-        }
+          queryClient.invalidateQueries({
+            queryKey: ["my-matches", userId],
+            exact: true,
+          });
+        },
       );
     },
-    [socket, receiverId, userId, chatId]
+    [socket, receiverId, userId, chatId],
   );
 
   const handleBreakMatch = async () => {
@@ -224,33 +269,44 @@ export default function ChatScreen() {
         });
       }
     } catch (err) {}
-    await queryClient.invalidateQueries({ queryKey: ['my-matches', user?.id], exact: true });
+    await queryClient.invalidateQueries({
+      queryKey: ["my-matches", user?.id],
+      exact: true,
+    });
     queryClient.removeQueries({ queryKey });
-    router.replace('/(tabs)/chat-stack');
+    router.replace("/(tabs)/chat-stack");
   };
 
   const renderHeaderLeft = () => (
-    <TouchableOpacity onPress={() => router.replace('/(tabs)/chat-stack')} style={styles.headerButton}>
+    <TouchableOpacity
+      onPress={() => router.replace("/(tabs)/chat-stack")}
+      style={styles.headerButton}
+    >
       <Ionicons name="arrow-back" size={24} color="#000" />
     </TouchableOpacity>
   );
 
- const renderHeaderTitle = () => (
-  <View style={styles.headerTitleContainer}>
-    <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={styles.avatar} />
-    <Text numberOfLines={1} style={styles.headerName}>
-      {userName || 'User'}
-    </Text>
-  </View>
-);
-
+  const renderHeaderTitle = () => (
+    <View style={styles.headerTitleContainer}>
+      <Image
+        source={{ uri: userAvatar || DEFAULT_AVATAR }}
+        style={styles.avatar}
+      />
+      <Text numberOfLines={1} style={styles.headerName}>
+        {userName || "Korisnik"}
+      </Text>
+    </View>
+  );
 
   const renderHeaderRight = () => (
     <View style={styles.headerRightContainer}>
       <TouchableOpacity style={styles.headerButton}>
         <Ionicons name="videocam-outline" size={24} color="#000" />
       </TouchableOpacity>
-      <TouchableOpacity onPress={() => setIsMenuVisible(true)} style={styles.headerButton}>
+      <TouchableOpacity
+        onPress={() => setIsMenuVisible(true)}
+        style={styles.headerButton}
+      >
         <Ionicons name="ellipsis-horizontal" size={24} color="#000" />
       </TouchableOpacity>
     </View>
@@ -274,12 +330,12 @@ export default function ChatScreen() {
     <Bubble
       {...props}
       wrapperStyle={{
-        right: { backgroundColor: '#FF6A00', borderRadius: 20, padding: 4 },
-        left: { backgroundColor: '#EFEFEF', borderRadius: 20, padding: 4 },
+        right: { backgroundColor: "#FF6A00", borderRadius: 20, padding: 4 },
+        left: { backgroundColor: "#EFEFEF", borderRadius: 20, padding: 4 },
       }}
       textStyle={{
-        right: { color: 'white', fontSize: 15 },
-        left: { color: 'black', fontSize: 15 },
+        right: { color: "white", fontSize: 15 },
+        left: { color: "black", fontSize: 15 },
       }}
     />
   );
@@ -293,20 +349,32 @@ export default function ChatScreen() {
   const renderEmptyChat = () => (
     <View style={styles.emptyContainer}>
       <Text style={styles.emptyTextMatch}>Spojio/la si se sa korisnikom</Text>
-      <Text style={styles.emptyUserName}>{userName || 'Korisnik'}</Text>
-      <Image source={{ uri: userAvatar || DEFAULT_AVATAR }} style={styles.emptyAvatar} />
+      <Text style={styles.emptyUserName}>{userName || "Korisnik"}</Text>
+      <Image
+        source={{ uri: userAvatar || DEFAULT_AVATAR }}
+        style={styles.emptyAvatar}
+      />
       <Text style={styles.emptyPrompt}>Započni razgovor!</Text>
     </View>
   );
+
+  // FIX: Dok params nisu stigli, prikazujemo loader umesto praznog chat ekrana
+  if (!paramsReady) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="#FF6A00" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.fullScreen}>
       <Stack.Screen
         options={{
-          title: '',
+          title: "",
           headerShadowVisible: false,
           headerLeft: renderHeaderLeft,
-          headerTitleAlign: 'left',
+          headerTitleAlign: "left",
           headerTitle: renderHeaderTitle,
           headerRight: renderHeaderRight,
         }}
@@ -314,10 +382,15 @@ export default function ChatScreen() {
 
       <KeyboardAvoidingView
         style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 80 : 0}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 80 : 0}
       >
-        <View style={[styles.chatWrapper, !keyboardVisible && styles.chatWrapperRaised]}>
+        <View
+          style={[
+            styles.chatWrapper,
+            !keyboardVisible && styles.chatWrapperRaised,
+          ]}
+        >
           {isChatLoading ? (
             renderLoading()
           ) : uiMessages.length === 0 ? (
@@ -362,8 +435,13 @@ export default function ChatScreen() {
         >
           <View style={styles.actionSheetWrapper}>
             <View style={styles.actionSheetGroup}>
-              <TouchableOpacity style={styles.menuItem} onPress={handleBreakMatch}>
-                <Text style={styles.menuTextDestructive}>Prekini spoj sa {userName}</Text>
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={handleBreakMatch}
+              >
+                <Text style={styles.menuTextDestructive}>
+                  Prekini spoj sa {userName}
+                </Text>
               </TouchableOpacity>
               <View style={styles.separator} />
               <TouchableOpacity
@@ -373,7 +451,9 @@ export default function ChatScreen() {
                   alert(`Prijavljujem korisnika: ${userName}`);
                 }}
               >
-                <Text style={styles.menuText}>Prijavi korisnika {userName}</Text>
+                <Text style={styles.menuText}>
+                  Prijavi korisnika {userName}
+                </Text>
               </TouchableOpacity>
               <View style={styles.separator} />
               <TouchableOpacity
@@ -383,10 +463,15 @@ export default function ChatScreen() {
                   alert(`Blokiram korisnika: ${userName}`);
                 }}
               >
-                <Text style={styles.menuTextDestructive}>Blokiraj korisnika</Text>
+                <Text style={styles.menuTextDestructive}>
+                  Blokiraj korisnika
+                </Text>
               </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.cancelButton} onPress={() => setIsMenuVisible(false)}>
+            <TouchableOpacity
+              style={styles.cancelButton}
+              onPress={() => setIsMenuVisible(false)}
+            >
               <Text style={styles.cancelText}>Otkaži</Text>
             </TouchableOpacity>
           </View>
@@ -397,25 +482,24 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  fullScreen: { flex: 1, backgroundColor: '#fff' },
+  fullScreen: { flex: 1, backgroundColor: "#fff" },
   chatWrapper: { flex: 1 },
   chatWrapperRaised: { marginBottom: 28 },
   loaderContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    zIndex: 1,
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
   },
   headerButton: { paddingHorizontal: 10 },
-  headerTitleContainer: { flexDirection: 'row', alignItems: 'center' },
+  headerTitleContainer: { flexDirection: "row", alignItems: "center" },
   avatar: { width: 40, height: 40, borderRadius: 17, marginHorizontal: 15 },
-  headerName: { fontSize: 18, fontWeight: '600',},
-  headerRightContainer: { flexDirection: 'row' },
+  headerName: { fontSize: 18, fontWeight: "600" },
+  headerRightContainer: { flexDirection: "row" },
   messagesContainer: { paddingBottom: 10 },
   inputToolbarContainer: {
     borderTopWidth: 0,
-    backgroundColor: '#f6f6f6',
+    backgroundColor: "#f6f6f6",
     marginHorizontal: 8,
     borderRadius: 25,
     marginBottom: 12,
@@ -423,48 +507,48 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     elevation: 3,
   },
-  inputPrimaryStyle: { alignItems: 'center' },
+  inputPrimaryStyle: { alignItems: "center" },
   sendContainer: {
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     height: 44,
     marginRight: 6,
   },
   emptyContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     padding: 20,
     marginBottom: -70,
   },
-  emptyTextMatch: { fontSize: 16, color: '#666', marginBottom: 5 },
-  emptyUserName: { fontSize: 20, fontWeight: 'bold', marginBottom: 25 },
+  emptyTextMatch: { fontSize: 16, color: "#666", marginBottom: 5 },
+  emptyUserName: { fontSize: 20, fontWeight: "bold", marginBottom: 25 },
   emptyAvatar: { width: 120, height: 120, borderRadius: 60, marginBottom: 15 },
-  emptyPrompt: { fontSize: 16, color: '#555' },
+  emptyPrompt: { fontSize: 16, color: "#555" },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
     paddingHorizontal: 10,
-    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
+    paddingBottom: Platform.OS === "ios" ? 40 : 20,
   },
-  actionSheetWrapper: { width: '100%' },
+  actionSheetWrapper: { width: "100%" },
   actionSheetGroup: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
-    overflow: 'hidden',
+    overflow: "hidden",
     marginBottom: 10,
   },
-  menuItem: { paddingVertical: 16, alignItems: 'center' },
-  menuText: { fontSize: 16, color: '#333' },
-  menuTextDestructive: { fontSize: 16, color: '#FF3B30', fontWeight: '600' },
-  separator: { height: StyleSheet.hairlineWidth, backgroundColor: '#E0E0E0' },
+  menuItem: { paddingVertical: 16, alignItems: "center" },
+  menuText: { fontSize: 16, color: "#333" },
+  menuTextDestructive: { fontSize: 16, color: "#FF3B30", fontWeight: "600" },
+  separator: { height: StyleSheet.hairlineWidth, backgroundColor: "#E0E0E0" },
   cancelButton: {
     paddingVertical: 16,
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
     marginTop: 10,
   },
-  cancelText: { fontSize: 16, color: '#007AFF', fontWeight: '600' },
+  cancelText: { fontSize: 16, color: "#007AFF", fontWeight: "600" },
 });

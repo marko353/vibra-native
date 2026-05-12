@@ -179,11 +179,11 @@ export default function HomeScreen() {
         }
       );
       setUsers(response.data.users || []);
-      console.log(
-        "[HOME] Fetch sa filterima:",
-        filterValues,
-        response.data.users
-      );
+      // console.log(
+      //   "[HOME] Fetch sa filterima:",
+      //   filterValues,
+      //   response.data.users
+      // );
     } catch (error) {
       console.error("Greška pri dohvatanju korisnika:", error);
     } finally {

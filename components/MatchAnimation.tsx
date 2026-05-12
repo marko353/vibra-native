@@ -1,24 +1,24 @@
-import React, { useEffect, useState } from 'react';
+import LottieView from "lottie-react-native";
+import { useEffect, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  Image,
-  TextInput,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableOpacity,
-} from 'react-native';
-import LottieView from 'lottie-react-native';
+    Image,
+    KeyboardAvoidingView,
+    Platform,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View,
+} from "react-native";
 import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-} from 'react-native-reanimated';
-import Icon from 'react-native-vector-icons/Ionicons';
+    useAnimatedStyle,
+    useSharedValue,
+    withTiming,
+} from "react-native-reanimated";
+import Icon from "react-native-vector-icons/Ionicons";
 
-import { UserProfile } from '../context/ProfileContext';
-import { useProfileContext } from '../context/ProfileContext';
+import { UserProfile, useProfileContext } from "../context/ProfileContext";
+
 
 interface MatchAnimationProps {
   matchedUser: UserProfile;
@@ -33,7 +33,7 @@ export default function MatchAnimation({
 }: MatchAnimationProps) {
   const { profile } = useProfileContext();
 
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
   const [isSending, setIsSending] = useState(false);
 
   const scale = useSharedValue(0);
@@ -56,18 +56,17 @@ export default function MatchAnimation({
     try {
       setIsSending(true);
       await onSendMessage(trimmed); // ⬅️ parent obezbeđuje conversation
-      setMessage('');
+      setMessage("");
     } catch (err) {
-      console.log('❌ Greška pri slanju poruke:', err);
+      console.log("❌ Greška pri slanju poruke:", err);
     } finally {
       setIsSending(false);
     }
   };
 
-  const userAvatarSource =
-    profile?.profilePictures?.length
-      ? { uri: profile.profilePictures[0] }
-      : undefined;
+  const userAvatarSource = profile?.profilePictures?.length
+    ? { uri: profile.profilePictures[0] }
+    : undefined;
 
   const matchedAvatarSource = matchedUser?.avatar
     ? { uri: matchedUser.avatar }
@@ -76,12 +75,12 @@ export default function MatchAnimation({
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       {/* 🎉 Confetti */}
       <View style={styles.lottieWrapper} pointerEvents="none">
         <LottieView
-          source={require('../assets/animations/confetti.json')}
+          source={require("../assets/animations/confetti.json")}
           autoPlay
           loop={false}
           style={styles.lottieInner}
@@ -93,9 +92,8 @@ export default function MatchAnimation({
         <Text style={styles.title}>IT&#39;S A VIBRATION!</Text>
 
         <Text style={styles.subtitle}>
-          Ti i{' '}
-          <Text style={styles.highlight}>{matchedUser.fullName}</Text>{' '}
-          ste se svideli jedno drugom 💫
+          Ti i <Text style={styles.highlight}>{matchedUser.fullName}</Text> ste
+          se svideli jedno drugom 💫
         </Text>
 
         {/* Avatari */}
@@ -125,8 +123,7 @@ export default function MatchAnimation({
             disabled={isSending || !message.trim()}
             style={[
               styles.sendButton,
-              (isSending || !message.trim()) &&
-                styles.sendButtonDisabled,
+              (isSending || !message.trim()) && styles.sendButtonDisabled,
             ]}
           >
             <Icon name="send" size={20} color="#fff" />
@@ -151,52 +148,52 @@ export default function MatchAnimation({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.08)',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.08)",
   },
 
   lottieWrapper: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
+    position: "absolute",
+    width: "100%",
+    height: "100%",
     top: 0,
     zIndex: 2,
   },
   lottieInner: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
 
   content: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingHorizontal: 25,
-    width: '100%',
+    width: "100%",
     zIndex: 3,
   },
 
   title: {
     fontSize: 44,
-    fontWeight: '900',
-    color: '#fff',
-    textAlign: 'center',
+    fontWeight: "900",
+    color: "#fff",
+    textAlign: "center",
     marginBottom: 12,
-    textShadowColor: 'rgba(255,105,180,0.7)',
+    textShadowColor: "rgba(255,105,180,0.7)",
     textShadowRadius: 15,
   },
   subtitle: {
     fontSize: 18,
-    color: '#eee',
-    textAlign: 'center',
+    color: "#eee",
+    textAlign: "center",
     marginBottom: 40,
   },
   highlight: {
-    fontWeight: 'bold',
-    color: '#fff',
+    fontWeight: "bold",
+    color: "#fff",
   },
 
   avatarsContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginBottom: 30,
   },
   avatar: {
@@ -204,43 +201,43 @@ const styles = StyleSheet.create({
     height: 160,
     borderRadius: 80,
     borderWidth: 4,
-    borderColor: '#fff',
-    backgroundColor: 'rgba(50,50,50,0.5)',
+    borderColor: "#fff",
+    backgroundColor: "rgba(50,50,50,0.5)",
   },
 
   inputContainer: {
-    flexDirection: 'row',
-    width: '90%',
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    flexDirection: "row",
+    width: "90%",
+    backgroundColor: "rgba(255,255,255,0.1)",
     borderRadius: 30,
     paddingHorizontal: 15,
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 20,
   },
   messageInput: {
     flex: 1,
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
     paddingVertical: 10,
   },
   sendButton: {
-    backgroundColor: '#FF4500',
+    backgroundColor: "#FF4500",
     width: 44,
     height: 44,
     borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   sendButtonDisabled: {
-    backgroundColor: 'rgba(255,69,0,0.4)',
+    backgroundColor: "rgba(255,69,0,0.4)",
   },
 
   buttonSecondary: {
     paddingVertical: 10,
   },
   buttonSecondaryText: {
-    color: '#ccc',
+    color: "#ccc",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "600",
   },
 });
