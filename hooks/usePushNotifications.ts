@@ -10,17 +10,14 @@ import {
   getToken,
   onTokenRefresh,
   onMessage,
-  getInitialNotification,
   onNotificationOpenedApp,
   requestPermission,
   AuthorizationStatus,
-  setBackgroundMessageHandler,
 } from "@react-native-firebase/messaging";
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 
-// --- TIPOVI ---
 interface MatchToastData {
   matchedUserName: string;
   matchedUserAvatar?: string;
@@ -28,36 +25,17 @@ interface MatchToastData {
   userId: string;
 }
 
-// Globalni flag za sesiju
 let isTokenSentGlobal = false;
 
-// RN Firebase koristi google-services.json automatski
 const messagingInstance = getMessaging();
 
-// ─────────────────────────────────────────────────────────────────────────────
-// BACKGROUND / QUIT handler — mora biti van komponente, na vrhu fajla
-// Ovo se poziva kada Firebase primi data-only poruku dok je app u backgroundu/quit
-// ─────────────────────────────────────────────────────────────────────────────
-setBackgroundMessageHandler(messagingInstance, async (remoteMessage) => {
-  console.log("[FCM Background] Poruka primljena:", remoteMessage.data);
+const validAvatar = (avatar: any): string | undefined => {
+  if (!avatar) return undefined;
+  const str = String(avatar).trim();
+  if (str.length === 0 || !str.startsWith("http")) return undefined;
+  return str;
+};
 
-  const data = remoteMessage.data;
-  if (!data) return;
-
-  const type = data.type;
-  const title = String(data.title || "Vibra");
-  const body = String(data.body || "");
-
-  if (type === "MATCH") {
-    await displayMatchNotification(title, body, data);
-  } else if (type === "MESSAGE") {
-    await displayMessageNotification(title, body, data);
-  } else {
-    await displayDefaultNotification(title, body, data);
-  }
-});
-
-// --- NOTIFEE CHANNEL ---
 async function getOrCreateChannel(id: string, name: string) {
   return await notifee.createChannel({
     id,
@@ -68,12 +46,8 @@ async function getOrCreateChannel(id: string, name: string) {
   });
 }
 
-// --- CUSTOM NOTIFIKACIJE ---
-
-// 💘 Match notifikacija — narandžasto-roza gradijent stil
 async function displayMatchNotification(title: string, body: string, data: any) {
   const channelId = await getOrCreateChannel("match", "Vibra Match");
-
   await notifee.displayNotification({
     title: `<b>${title}</b>`,
     body,
@@ -85,7 +59,7 @@ async function displayMatchNotification(title: string, body: string, data: any) 
       importance: AndroidImportance.HIGH,
       pressAction: { id: "default" },
       showTimestamp: true,
-      largeIcon: data.userAvatar || undefined,
+      largeIcon: validAvatar(data.userAvatar),
       circularLargeIcon: true,
       style: {
         type: AndroidStyle.BIGTEXT,
@@ -97,37 +71,49 @@ async function displayMatchNotification(title: string, body: string, data: any) 
   });
 }
 
-// 💬 Message notifikacija — plavi stil sa avatar-om
 async function displayMessageNotification(title: string, body: string, data: any) {
+  const currentChatId = await AsyncStorage.getItem("currentChatId");
+
+  if (currentChatId && currentChatId === data.chatId) {
+    return;
+  }
+
+  const settings = await notifee.getNotificationSettings();
+  if (settings.authorizationStatus === 0) {
+    await notifee.requestPermission();
+  }
+
   const channelId = await getOrCreateChannel("messages", "Vibra Poruke");
 
-  await notifee.displayNotification({
-    title: `<b>${data.userName || title}</b>`,
-    body,
-    data,
-    android: {
-      channelId,
-      smallIcon: "ic_notification",
-      color: "#FF6A00",
-      importance: AndroidImportance.HIGH,
-      pressAction: { id: "default" },
-      showTimestamp: true,
-      largeIcon: data.userAvatar || undefined,
-      circularLargeIcon: true,
-      style: {
-        type: AndroidStyle.BIGTEXT,
-        text: body,
-        title: `<b>${data.userName || title}</b>`,
-        summary: "Vibra",
+  try {
+    await notifee.displayNotification({
+      title: `<b>${data.userName || title}</b>`,
+      body,
+      data,
+      android: {
+        channelId,
+        smallIcon: "ic_notification",
+        color: "#FF6A00",
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: "default" },
+        showTimestamp: true,
+        largeIcon: validAvatar(data.userAvatar),
+        circularLargeIcon: true,
+        style: {
+          type: AndroidStyle.BIGTEXT,
+          text: body,
+          title: `<b>${data.userName || title}</b>`,
+          summary: "Vibra",
+        },
       },
-    },
-  });
+    });
+  } catch (e) {
+    console.error("❌ [displayMessage] Error:", e);
+  }
 }
 
-// 🔔 Default notifikacija
 async function displayDefaultNotification(title: string, body: string, data: any) {
-  const channelId = await getOrCreateChannel("default", "Vibra Obaveštenja");
-
+  const channelId = await getOrCreateChannel("default", "Vibra Notifications");
   await notifee.displayNotification({
     title,
     body,
@@ -143,40 +129,35 @@ async function displayDefaultNotification(title: string, body: string, data: any
   });
 }
 
-// --- DOZVOLE ---
 const requestNotificationPermission = async (): Promise<boolean> => {
   try {
     const authStatus = await requestPermission(messagingInstance);
     const granted =
       authStatus === AuthorizationStatus.AUTHORIZED ||
       authStatus === AuthorizationStatus.PROVISIONAL;
-    console.log(`[Permissions] Dozvola ${granted ? "odobrena ✅" : "odbijena ❌"} (status: ${authStatus})`);
+    console.log(`[Permissions] Firebase permission ${granted ? "granted ✅" : "denied ❌"} (status: ${authStatus})`);
     return granted;
   } catch (error) {
-    console.error("❌ [Permissions] Greška:", error);
+    console.error("❌ [Permissions] Error:", error);
     return false;
   }
 };
 
-// --- NAVIGACIJA ---
 const navigateToChat = (router: any, data: any) => {
   if (!data?.chatId) {
-    console.warn("[Navigation] Nema chatId, preskačem.");
+    console.warn("[Navigation] No chatId, skipping.");
     return;
   }
-  console.log("[Navigation] Navigiram na chat:", data);
   router.push({
     pathname: "/chat-stack/[chatId]",
     params: {
       chatId: String(data.chatId),
-      userName: String(data.userName || "Korisnik"),
+      userName: String(data.userName || "User"),
       userAvatar: String(data.userAvatar || ""),
       receiverId: String(data.receiverId || data.userId || ""),
     },
   });
 };
-
-// --- GLAVNI HOOK ---
 
 export const usePushNotifications = (
   userJwtToken?: string | null,
@@ -186,6 +167,9 @@ export const usePushNotifications = (
   const router = useRouter();
 
   const saveFcmTokenToBackend = async (token: string, jwt: string) => {
+    if (isTokenSentGlobal) return;
+    isTokenSentGlobal = true;
+
     try {
       const apiUrl = (
         Constants.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL || "http://192.168.1.6:5000"
@@ -201,40 +185,36 @@ export const usePushNotifications = (
       });
 
       if (response.ok) {
-        console.log("✅ [FCM→Backend] Token sačuvan.");
-        isTokenSentGlobal = true;
+        console.log("✅ [FCM] Token saved.");
       } else {
         const errData = await response.json();
-        console.error("❌ [FCM→Backend] Server odbio:", errData);
+        console.error("❌ [FCM] Server rejected token:", errData);
+        isTokenSentGlobal = false;
       }
     } catch (error) {
-      console.error("‼️ [FCM→Backend] Network Error:", error);
+      console.error("❌ [FCM] Network error:", error);
+      isTokenSentGlobal = false;
     }
   };
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 1. Generisanje FCM tokena
-  // ─────────────────────────────────────────────────────────────────────────────
+  // 1. Generate FCM token + request permissions
   useEffect(() => {
     const fetchFcmToken = async (retryCount = 0) => {
       try {
         const hasPermission = await requestNotificationPermission();
         if (!hasPermission) return;
 
+        const notifeeSettings = await notifee.requestPermission();
+        console.log("[Notifee] Permission status:", notifeeSettings.authorizationStatus);
+
         const token = await getToken(messagingInstance);
         if (token) {
-          console.log("✅ [FCM] Token:", token.substring(0, 20) + "...");
           setFcmToken(token);
-          if (userJwtToken && !isTokenSentGlobal) {
-            await saveFcmTokenToBackend(token, userJwtToken);
-          }
+          if (userJwtToken) await saveFcmTokenToBackend(token, userJwtToken);
         }
       } catch (error) {
         const msg = (error as any)?.message || "";
-        if (msg.includes("SERVICE_NOT_AVAILABLE")) {
-          console.warn("⚠️ [FCM] SERVICE_NOT_AVAILABLE — ignorišem.");
-          return;
-        }
+        if (msg.includes("SERVICE_NOT_AVAILABLE")) return;
         if (retryCount < 3) {
           setTimeout(() => fetchFcmToken(retryCount + 1), 3000 * (retryCount + 1));
         }
@@ -242,20 +222,18 @@ export const usePushNotifications = (
     };
 
     fetchFcmToken();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 2. Watchdog
-  // ─────────────────────────────────────────────────────────────────────────────
+  // 2. Watchdog — send token if not sent yet
   useEffect(() => {
     if (fcmToken && userJwtToken && !isTokenSentGlobal) {
       saveFcmTokenToBackend(fcmToken, userJwtToken);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fcmToken, userJwtToken]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 3. Token refresh + Foreground poruke
-  // ─────────────────────────────────────────────────────────────────────────────
+  // 3. Token refresh + foreground messages
   useEffect(() => {
     const unsubRefresh = onTokenRefresh(messagingInstance, (newToken) => {
       setFcmToken(newToken);
@@ -264,26 +242,21 @@ export const usePushNotifications = (
     });
 
     const unsubMessage = onMessage(messagingInstance, async (remoteMessage) => {
-      console.log("📥 [FCM] Foreground poruka:", remoteMessage.data);
       const data = remoteMessage.data;
       if (!data) return;
 
-      // MATCH — custom toast (ne diramo, radi odlično)
+      const title = String(data.title || "Vibra");
+      const body = String(data.body || "New message");
+
       if (data.type === "MATCH" && onMatchReceived) {
         onMatchReceived({
-          matchedUserName: String(data.userName || "Korisnik"),
+          matchedUserName: String(data.userName || "User"),
           matchedUserAvatar: data.userAvatar as string | undefined,
           chatId: String(data.chatId || ""),
           userId: String(data.userId || ""),
         });
         return;
-      }
-
-      // MESSAGE i ostalo — Notifee custom notifikacija
-      const title = String(data.title || "Vibra");
-      const body = String(data.body || "Nova poruka");
-
-      if (data.type === "MESSAGE") {
+      } else if (data.type === "MESSAGE") {
         await displayMessageNotification(title, body, data);
       } else {
         await displayDefaultNotification(title, body, data);
@@ -296,49 +269,27 @@ export const usePushNotifications = (
     };
   }, [userJwtToken, onMatchReceived]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 4. Klik — Background stanje
-  // ─────────────────────────────────────────────────────────────────────────────
+  // 4. Background FCM click
   useEffect(() => {
     const unsub = onNotificationOpenedApp(messagingInstance, (msg) => {
-      console.log("📂 [FCM] Background klik. Data:", msg.data);
       navigateToChat(router, msg.data);
     });
-
     return () => unsub();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 5. Klik — Quit stanje
-  // ─────────────────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    getInitialNotification(messagingInstance)
-      .then((msg) => {
-        if (msg?.data) {
-          console.log("📬 [FCM] Quit klik. Data:", msg.data);
-          setTimeout(() => navigateToChat(router, msg.data), 1000);
-        }
-      })
-      .catch(console.error);
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 6. Notifee foreground klik
-  // ─────────────────────────────────────────────────────────────────────────────
+  // 5. Foreground Notifee click
   useEffect(() => {
     const unsub = notifee.onForegroundEvent(({ type, detail }) => {
       if (type === EventType.PRESS) {
-        console.log("🔔 [Notifee] Klik. Data:", detail.notification?.data);
         navigateToChat(router, detail.notification?.data);
       }
     });
-
     return () => unsub();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // 7. Pending iz AsyncStorage
-  // ─────────────────────────────────────────────────────────────────────────────
+  // 6. Pending AsyncStorage navigation (background → foreground)
   useEffect(() => {
     const checkPending = async () => {
       try {
@@ -351,12 +302,35 @@ export const usePushNotifications = (
           }
         }
       } catch (e) {
-        console.error("❌ [AsyncStorage] Greška:", e);
+        console.error("❌ [AsyncStorage] Error:", e);
+      }
+    };
+    checkPending();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userJwtToken, router]);
+
+  // 7. New user login — refresh FCM token
+  useEffect(() => {
+    if (!userJwtToken) return;
+
+    isTokenSentGlobal = false;
+    setFcmToken(null);
+
+    const fetchNewToken = async () => {
+      try {
+        const token = await getToken(messagingInstance);
+        if (token) {
+          setFcmToken(token);
+          await saveFcmTokenToBackend(token, userJwtToken);
+        }
+      } catch (error) {
+        console.error("❌ [FCM] Error generating new token:", error);
       }
     };
 
-    checkPending();
-  }, [userJwtToken, router]);
+    fetchNewToken();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userJwtToken]);
 
   return { fcmToken };
 };

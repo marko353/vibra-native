@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { AntDesign } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuthContext } from '../../context/AuthContext';
+import messaging from '@react-native-firebase/messaging';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -93,6 +94,9 @@ export default function LoginScreen() {
       setUser(userData);
       await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
       await AsyncStorage.setItem('token', userData.token);
+
+  
+
       Toast.show({ type: 'success', text1: 'Login successful' });
       router.replace('/(tabs)/home');
     } catch (error: any) {
