@@ -148,13 +148,17 @@ const navigateToChat = (router: any, data: any) => {
     console.warn("[Navigation] No chatId, skipping.");
     return;
   }
+  
+  // userId je uvek pošiljalac poruke — to je osoba sa kojom pričaš
+  const receiverId = String(data.userId || "");
+  
   router.push({
     pathname: "/chat-stack/[chatId]",
     params: {
       chatId: String(data.chatId),
       userName: String(data.userName || "User"),
       userAvatar: String(data.userAvatar || ""),
-      receiverId: String(data.receiverId || data.userId || ""),
+      receiverId,  // ← uvek userId (pošiljalac), ne receiverId
     },
   });
 };

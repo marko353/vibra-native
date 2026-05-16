@@ -12,8 +12,6 @@ import MatchAnimation from "../../components/MatchAnimation";
 import { useAuthContext } from "../../context/AuthContext";
 import { useSocketContext } from "../../context/SocketContext";
 
-// Reverting changes by removing added logs and restoring original logic.
-
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 export default function LikesTab() {
@@ -25,7 +23,6 @@ export default function LikesTab() {
   const [matchData, setMatchData] = useState<any>(null);
   const { showModal } = useFilterModal();
 
-  // Toast stanje
   const [toastMessage, setToastMessage] = useState<{
     message: string;
     type: "success" | "error";
@@ -59,6 +56,7 @@ export default function LikesTab() {
   useEffect(() => {
     if (!socket) return;
     const handleSocketEvent = (data: any) => {
+      console.log("❤️ [LikesTab] likeReceived/newIncomingLike event:", data);
       queryClient.invalidateQueries({ queryKey: ["incoming-likes", user?.id] });
       refetch();
     };
@@ -74,6 +72,7 @@ export default function LikesTab() {
   const handleSkip = useCallback(
     async (targetUserId: string) => {
       if (!user?.id) return;
+      console.log("👎 [LikesTab] Skip:", targetUserId);
       queryClient.setQueryData(["incoming-likes", user.id], (prev: any) => {
         const old = Array.isArray(prev) ? prev : [];
         return old.filter((u: any) => (u._id || u.id) !== targetUserId);
@@ -86,7 +85,7 @@ export default function LikesTab() {
         );
         queryClient.invalidateQueries({ queryKey: ["potential-matches"] });
       } catch (error) {
-        console.error("❌ Greška pri skipovanju:", error);
+        console.error("❌ [LikesTab] Greška pri skipovanju:", error);
         refetch();
       }
     },
@@ -96,6 +95,7 @@ export default function LikesTab() {
   // 4. Handle Like
   const handleLike = async (targetUserId: string) => {
     if (!user?.id || isProcessing) return;
+    console.log("❤️ [LikesTab] Like:", targetUserId);
     setIsProcessing(true);
     try {
       const response = await axios.post(
@@ -104,8 +104,16 @@ export default function LikesTab() {
         { headers: { Authorization: `Bearer ${user.token}` } },
       );
 
+      console.log("✅ [LikesTab] Swipe response:", {
+        match: response.data.match,
+        conversationId: response.data.conversationId,
+      });
+
       if (response.data.match) {
-        setMatchData(response.data.matchedUser);
+        setMatchData({
+          ...response.data.matchedUser,
+          conversationId: response.data.conversationId,
+        });
         socket?.emit("likeSent", { targetUserId });
         queryClient.invalidateQueries({ queryKey: ["my-matches", user.id] });
       }
@@ -115,56 +123,84 @@ export default function LikesTab() {
         return old.filter((u: any) => (u._id || u.id) !== targetUserId);
       });
     } catch (error) {
-      console.error("❌ Greška pri lajkovanju:", error);
+      console.error("❌ [LikesTab] Greška pri lajkovanju:", error);
     } finally {
       setIsProcessing(false);
     }
   };
 
-  // 5. Handler za poruke
+  // 5. Handler za poruke — koristi SOCKET umesto HTTP
+  // HTTP POST ne emituje receiveMessage socket event ka primaocu
   const handleSendMessage = useCallback(
     async (message: string) => {
-      if (!matchData || !user?.token || !user?.id) {
+      console.log("🔥 [LikesTab] handleSendMessage pozvan", {
+        hasMatchData: !!matchData,
+        matchDataId: matchData?._id,
+        conversationId: matchData?.conversationId,
+        hasSocket: !!socket,
+        socketConnected: socket?.connected,
+        message,
+      });
+
+      if (!matchData || !user?.id) {
+        console.log("❌ [LikesTab] Nema matchData ili user");
         setMatchData(null);
         return;
       }
 
       const targetUserId = matchData._id;
-      const targetUserName = matchData.fullName || "novog korisnika";
       const trimmedMessage = message.trim();
 
-      if (trimmedMessage) {
-        try {
-          const response = await axios.post(
-            `${API_BASE_URL}/api/user/message`,
-            {
-              recipientId: targetUserId,
-              text: trimmedMessage,
-            },
-            {
-              headers: { Authorization: `Bearer ${user.token}` },
-            },
-          );
-
-          if (response.status === 200 || response.status === 201) {
-            showToast(
-              `Poruka uspešno poslata korisniku ${targetUserName}!`,
-              "success",
-            );
-          } else {
-            throw new Error("Neočekivan odgovor servera.");
-          }
-        } catch (error) {
-          console.error("Greška pri slanju poruke:", error);
-          showToast("Greška pri slanju poruke. Pokušajte ponovo.", "error");
-        }
-      } else {
-        showToast(`Match sa ${targetUserName} sačuvan!`, "success");
+      if (!trimmedMessage) {
+        console.log("ℹ️ [LikesTab] Prazna poruka, zatvaramo match screen");
+        showToast("Match sačuvan!", "success");
+        setMatchData(null);
+        return;
       }
 
-      setMatchData(null);
+      // Čekamo da socket bude spreman ako nije
+      if (!socket?.connected) {
+        console.warn("⚠️ [LikesTab] Socket nije povezan, čekam reconnect...");
+        socket?.connect();
+        await new Promise<void>((resolve) => {
+          socket?.once("connect", () => {
+            console.log("✅ [LikesTab] Socket reconnected");
+            resolve();
+          });
+          setTimeout(() => {
+            console.warn("⏰ [LikesTab] Socket reconnect timeout");
+            resolve();
+          }, 3000);
+        });
+      }
+
+      console.log("📤 [LikesTab] Emitujem sendMessage via socket", {
+        receiverId: targetUserId,
+        text: trimmedMessage,
+        socketConnected: socket?.connected,
+        socketId: socket?.id,
+      });
+
+      socket?.emit(
+        "sendMessage",
+        { receiverId: targetUserId, text: trimmedMessage },
+        (response: any) => {
+          console.log("📨 [LikesTab] sendMessage callback response:", response);
+          if (response?.status === "ok") {
+            console.log("✅ [LikesTab] Poruka uspešno poslata:", response.message?._id);
+            showToast("Poruka uspešno poslata!", "success");
+            queryClient.invalidateQueries({
+              queryKey: ["my-matches", user.id],
+            });
+          } else {
+            console.error("❌ [LikesTab] sendMessage greška:", response);
+            showToast("Greška pri slanju poruke.", "error");
+          }
+          setMatchData(null);
+        },
+      );
     },
-    [matchData, user, showToast],
+    [matchData, socket, user?.id, queryClient, showToast],
   );
 
   return (
