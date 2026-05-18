@@ -1,90 +1,211 @@
-import React, { useEffect, useState } from 'react';
-import { 
-  View, Text, TextInput, TouchableOpacity, StyleSheet, Image, ActivityIndicator
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import axios from 'axios';
-import Toast from 'react-native-toast-message';
-import { useForm, Controller } from 'react-hook-form';
-import * as Google from 'expo-auth-session/providers/google';
-import * as WebBrowser from 'expo-web-browser';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { AntDesign } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuthContext } from '../../context/AuthContext';
-import messaging from '@react-native-firebase/messaging';
+import { AntDesign, Ionicons } from "@expo/vector-icons";
+import { zodResolver } from "@hookform/resolvers/zod";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import * as Google from "expo-auth-session/providers/google";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import * as WebBrowser from "expo-web-browser";
+import { useEffect, useRef, useState } from "react";
+import { Controller, useForm } from "react-hook-form";
+import {
+  ActivityIndicator,
+  Animated,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import Reanimated, { FadeIn, FadeOut } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Toast from "react-native-toast-message";
+import { z } from "zod";
+import { useAuthContext } from "../../context/AuthContext";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const ORANGE = "#FF6A00";
 
-const schema = z.object({
-  email: z.string().email('Invalid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+// ─────────────────────────────────────────────────────────────
+// Schemas
+// ─────────────────────────────────────────────────────────────
+
+const emailSchema = z.object({
+  email: z.string().min(1, "Email is required").email("Invalid email address"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
 });
 
-type FormData = z.infer<typeof schema>;
+const phoneSchema = z.object({
+  phone: z.string().min(9, "Invalid phone number").max(15, "Invalid phone number"),
+  code: z.string().length(6, "Code must be 6 digits").optional(),
+});
+
+type EmailFormData = z.infer<typeof emailSchema>;
+type PhoneFormData = z.infer<typeof phoneSchema>;
+type LoginMode = "email" | "phone";
+
+// ─────────────────────────────────────────────────────────────
+// Animated Button
+// ─────────────────────────────────────────────────────────────
+
+function AnimatedButton({
+  onPress,
+  disabled,
+  loading,
+  label,
+}: {
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  label: string;
+}) {
+  const scale = useRef(new Animated.Value(1)).current;
+
+  const handlePressIn = () => {
+    if (disabled) return;
+    Animated.spring(scale, { toValue: 0.97, useNativeDriver: true, speed: 50 }).start();
+  };
+
+  const handlePressOut = () => {
+    Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 50 }).start();
+  };
+
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+    >
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <LinearGradient
+          colors={
+            disabled
+              ? (["#FFB37A", "#FFB37A"] as const)
+              : (["#FF6A00", "#FF8A3D"] as const)
+          }
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={[styles.primaryBtn, disabled && styles.primaryBtnDisabled]}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.primaryBtnText}>{label}</Text>
+          )}
+        </LinearGradient>
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Error Banner
+// ─────────────────────────────────────────────────────────────
+
+function ErrorBanner({ message }: { message: string }) {
+  return (
+    <View style={styles.errorBanner}>
+      <Ionicons name="alert-circle" size={16} color="#FF5A5F" />
+      <Text style={styles.errorBannerText}>{message}</Text>
+    </View>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────
+// Main Screen
+// ─────────────────────────────────────────────────────────────
 
 export default function LoginScreen() {
   const router = useRouter();
   const { setUser } = useAuthContext();
+  const { height } = useWindowDimensions();
+
   const [apiError, setApiError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [loginMode, setLoginMode] = useState<LoginMode>("email");
+  const [codeSent, setCodeSent] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [resendCountdown, setResendCountdown] = useState(0);
+  const [isReady, setIsReady] = useState(false);
 
-  const [emailValue, setEmailValue] = useState('');
-  const [passwordValue, setPasswordValue] = useState('');
-  const [submitAttempted, setSubmitAttempted] = useState(false);
+  const emailInputRef = useRef<TextInput>(null);
+  const passwordInputRef = useRef<TextInput>(null);
+  const phoneInputRef = useRef<TextInput>(null);
+  const codeInputRef = useRef<TextInput>(null);
 
-  const {
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<FormData>({
-    resolver: zodResolver(schema),
-    mode: 'onSubmit',
+  const emailForm = useForm<EmailFormData>({
+    resolver: zodResolver(emailSchema),
+    mode: "onChange",
+  });
+
+  const phoneForm = useForm<PhoneFormData>({
+    resolver: zodResolver(phoneSchema),
+    mode: "onChange",
   });
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: '919552449039-9omu51tjlp421po9hjrncsebpe9dulp1.apps.googleusercontent.com',
+    androidClientId: "919552449039-9omu51tjlp421po9hjrncsebpe9dulp1.apps.googleusercontent.com",
   });
 
   useEffect(() => {
-    if (response?.type === 'success') {
-      const idToken = response.authentication?.idToken;
-      if (!idToken) {
-        Toast.show({ type: 'error', text1: 'No ID token from Google' });
-        return;
-      }
-      setLoading(true);
-      axios.post(`${API_BASE_URL}/api/auth/google`, { token: idToken })
-        .then(async (res) => {
-          const userData = {
-            id: res.data.id,
-            fullName: res.data.fullName,
-            email: res.data.email,
-            token: res.data.token,
-          };
-          setUser(userData);
-          await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
-          await AsyncStorage.setItem('token', userData.token);
-          Toast.show({ type: 'success', text1: 'Logged in with Google' });
-          router.replace('/(tabs)/profile');
-        })
-        .catch((err) => {
-          console.error('Google login failed:', err);
-          Toast.show({ type: 'error', text1: 'Google login failed' });
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [response]);
+    const timer = setTimeout(() => setIsReady(true), 50);
+    return () => clearTimeout(timer);
+  }, []);
 
-  const onSubmit = async (data: FormData) => {
-    setSubmitAttempted(true);
+  // Resend countdown timer
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCountdown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCountdown]);
+
+  // ─── Google Auth ─────────────────────────────────────────────
+
+  useEffect(() => {
+    if (response?.type !== "success") return;
+    const idToken = response.authentication?.idToken;
+    if (!idToken) return;
+    setLoading(true);
+    axios
+      .post(`${API_BASE_URL}/api/auth/google`, { token: idToken })
+      .then(async (res) => {
+        const userData = {
+          id: res.data.id,
+          fullName: res.data.fullName,
+          email: res.data.email,
+          token: res.data.token,
+        };
+        setUser(userData);
+        await AsyncStorage.setItem("currentUser", JSON.stringify(userData));
+        await AsyncStorage.setItem("token", userData.token);
+        router.replace("/(tabs)/home");
+      })
+      .catch(() => Toast.show({ type: "error", text1: "Google login failed" }))
+      .finally(() => setLoading(false));
+  }, [response, router, setUser]);
+
+  // ─── Email Login ──────────────────────────────────────────────
+
+  const onEmailSubmit = async (data: EmailFormData) => {
     setApiError(null);
     setLoading(true);
     try {
-      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, data);
+      const res = await axios.post(`${API_BASE_URL}/api/auth/login`, {
+        email: data.email.trim(),
+        password: data.password,
+      });
       const userData = {
         id: res.data.id,
         fullName: res.data.fullName,
@@ -92,223 +213,719 @@ export default function LoginScreen() {
         token: res.data.token,
       };
       setUser(userData);
-      await AsyncStorage.setItem('currentUser', JSON.stringify(userData));
-      await AsyncStorage.setItem('token', userData.token);
-
-  
-
-      Toast.show({ type: 'success', text1: 'Login successful' });
-      router.replace('/(tabs)/home');
+      await AsyncStorage.setItem("currentUser", JSON.stringify(userData));
+      await AsyncStorage.setItem("token", userData.token);
+      router.replace("/(tabs)/home");
     } catch (error: any) {
-      console.error('Login error:', error);
-      setApiError(error?.response?.data?.message || 'Invalid email or password');
+      setApiError(error?.response?.data?.message || "Invalid email or password");
     } finally {
       setLoading(false);
     }
   };
 
+  // ─── Send Code ────────────────────────────────────────────────
+
+  const onSendCode = async (data: PhoneFormData) => {
+    setApiError(null);
+    setLoading(true);
+    try {
+      await axios.post(`${API_BASE_URL}/api/auth/send-code`, { phone: data.phone });
+      setCodeSent(true);
+      phoneForm.setValue("code", "");
+      setResendCountdown(60);
+      Toast.show({ type: "success", text1: "Code sent!", text2: "Check your SMS" });
+    } catch (error: any) {
+      setApiError(error?.response?.data?.message || "Failed to send code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Verify Code ──────────────────────────────────────────────
+
+  const onVerifyCode = async (data: PhoneFormData) => {
+    setApiError(null);
+    setLoading(true);
+    try {
+      const res = await axios.post(`${API_BASE_URL}/api/auth/verify-code`, {
+        phone: data.phone,
+        code: data.code,
+      });
+      const userData = {
+        id: res.data.id,
+        fullName: res.data.fullName,
+        email: res.data.email,
+        token: res.data.token,
+      };
+      setUser(userData);
+      await AsyncStorage.setItem("currentUser", JSON.stringify(userData));
+      await AsyncStorage.setItem("token", userData.token);
+      router.replace("/(tabs)/home");
+    } catch (error: any) {
+      setApiError(error?.response?.data?.message || "Invalid code");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ─── Derived State & Error Handling ───────────────────────────
+
+  const emailValue = emailForm.watch("email", "");
+  const passwordValue = emailForm.watch("password", "");
+  const phoneValue = phoneForm.watch("phone", "");
+
+  const isEmailFormValid =
+    emailValue.length > 0 &&
+    passwordValue.length >= 6 &&
+    !emailForm.formState.errors.email &&
+    !emailForm.formState.errors.password;
+
+  const isPhoneValid = phoneValue.length >= 9;
+
+  const getActiveErrorMessage = (): string | null => {
+    if (apiError) return apiError;
+    if (loginMode === "email") {
+      return (
+        emailForm.formState.errors.email?.message ||
+        emailForm.formState.errors.password?.message ||
+        null
+      );
+    }
+    return (
+      phoneForm.formState.errors.phone?.message ||
+      phoneForm.formState.errors.code?.message ||
+      null
+    );
+  };
+
+  const activeError = getActiveErrorMessage();
+
+  // ─── Render ───────────────────────────────────────────────────
+
   return (
-    <View style={styles.container} accessible accessibilityLabel="Login screen">
-      <View style={styles.topRight}>
-        <TouchableOpacity 
-          onPress={() => router.push('../signup/birthday')} 
-          accessible 
-          accessibilityRole="button" 
-          accessibilityLabel="Go to Sign Up"
+    <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={20}
+      >
+        <ScrollView
+          contentContainerStyle={[
+            styles.container,
+            { paddingTop: Math.max(height * 0.05, 32) },
+          ]}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+          bounces={false}
         >
-          <Text style={styles.signUpText}>Sign Up</Text>
-        </TouchableOpacity>
+          {/* Logo */}
+          <View style={[styles.logoContainer, { marginBottom: Math.max(height * 0.04, 24) }]}>
+            <Image
+              source={require("../../assets/images/1000006380.png")}
+              style={styles.logo}
+              accessibilityLabel="Vibra logo"
+            />
+            <Text style={styles.tagline}>Find your spark</Text>
+          </View>
+
+          {/* Underline Tabs */}
+          <View style={styles.tabWrapper}>
+            <TouchableOpacity
+              style={styles.tabBtn}
+              onPress={() => {
+                setLoginMode("email");
+                setApiError(null);
+                setCodeSent(false);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={loginMode === "email" ? "mail" : "mail-outline"}
+                size={17}
+                color={loginMode === "email" ? ORANGE : "#C0C0C8"}
+              />
+              <Text style={[styles.tabText, loginMode === "email" && styles.tabTextActive]}>
+                Email
+              </Text>
+              <View style={[styles.tabUnderline, loginMode === "email" && styles.tabUnderlineActive]} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.tabBtn}
+              onPress={() => {
+                setLoginMode("phone");
+                setApiError(null);
+                setCodeSent(false);
+              }}
+              activeOpacity={0.7}
+            >
+              <Ionicons
+                name={loginMode === "phone" ? "call" : "call-outline"}
+                size={17}
+                color={loginMode === "phone" ? ORANGE : "#C0C0C8"}
+              />
+              <Text style={[styles.tabText, loginMode === "phone" && styles.tabTextActive]}>
+                Phone
+              </Text>
+              <View style={[styles.tabUnderline, loginMode === "phone" && styles.tabUnderlineActive]} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Email Form - POPRAVKA: Ternarni operator */}
+          {isReady && loginMode === "email" ? (
+            <Reanimated.View
+              entering={FadeIn.duration(150)}
+              exiting={FadeOut.duration(120)}
+              style={styles.form}
+            >
+              {/* Email */}
+              <Controller
+                control={emailForm.control}
+                name="email"
+                render={({ field: { onChange, value } }) => (
+                  <View style={styles.fieldGroup}>
+                    <Pressable
+                      style={[
+                        styles.inputRow,
+                        styles.inputWithShadow,
+                        focusedInput === "email" && styles.inputFocused,
+                        !!emailForm.formState.errors.email && styles.inputErrorBorder,
+                      ]}
+                      onPress={() => emailInputRef.current?.focus()}
+                    >
+                      <Ionicons
+                        name="mail-outline"
+                        size={19}
+                        color={focusedInput === "email" ? ORANGE : "#C7C7CC"}
+                      />
+                      <TextInput
+                        ref={emailInputRef}
+                        placeholder="Email address"
+                        value={value}
+                        onChangeText={(t) => onChange(t.trim())}
+                        style={styles.input}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        textContentType="emailAddress"
+                        autoComplete="email"
+                        autoCorrect={false}
+                        placeholderTextColor="#C7C7CC"
+                        selectionColor={ORANGE}
+                        returnKeyType="next"
+                        onSubmitEditing={() => passwordInputRef.current?.focus()}
+                        onFocus={() => setFocusedInput("email")}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                    </Pressable>
+                  </View>
+                )}
+              />
+
+              {/* Password */}
+              <Controller
+                control={emailForm.control}
+                name="password"
+                render={({ field: { onChange, value } }) => (
+                  <View style={styles.fieldGroup}>
+                    <Pressable
+                      style={[
+                        styles.inputRow,
+                        styles.inputWithShadow,
+                        focusedInput === "password" && styles.inputFocused,
+                        !!emailForm.formState.errors.password && styles.inputErrorBorder,
+                      ]}
+                      onPress={() => passwordInputRef.current?.focus()}
+                    >
+                      <Ionicons
+                        name="lock-closed-outline"
+                        size={19}
+                        color={focusedInput === "password" ? ORANGE : "#C7C7CC"}
+                      />
+                      <TextInput
+                        ref={passwordInputRef}
+                        placeholder="Password"
+                        value={value}
+                        onChangeText={onChange}
+                        style={styles.input}
+                        secureTextEntry={!showPassword}
+                        autoCorrect={false}
+                        textContentType="password"
+                        autoComplete="password"
+                        placeholderTextColor="#C7C7CC"
+                        selectionColor={ORANGE}
+                        returnKeyType="done"
+                        onSubmitEditing={emailForm.handleSubmit(onEmailSubmit)}
+                        onFocus={() => setFocusedInput("password")}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                      <TouchableOpacity
+                        onPress={() => setShowPassword(!showPassword)}
+                        hitSlop={14}
+                      >
+                        <Ionicons
+                          name={showPassword ? "eye-off-outline" : "eye-outline"}
+                          size={20}
+                          color="#C7C7CC"
+                        />
+                      </TouchableOpacity>
+                    </Pressable>
+                  </View>
+                )}
+              />
+
+              <TouchableOpacity
+                style={styles.forgotRow}
+                onPress={() => router.push("/forgot-password")}
+                hitSlop={10}
+              >
+                <Text style={styles.forgotText}>Forgot password?</Text>
+              </TouchableOpacity>
+
+              {activeError ? <ErrorBanner message={activeError} /> : null}
+
+              <AnimatedButton
+                onPress={emailForm.handleSubmit(onEmailSubmit)}
+                disabled={!isEmailFormValid || loading}
+                loading={loading}
+                label="Log In"
+              />
+            </Reanimated.View>
+          ) : null}
+
+          {/* Phone Form - POPRAVKA: Ternarni operator */}
+          {isReady && loginMode === "phone" ? (
+            <Reanimated.View
+              entering={FadeIn.duration(150)}
+              exiting={FadeOut.duration(120)}
+              style={styles.form}
+            >
+              {/* Phone */}
+              <Controller
+                control={phoneForm.control}
+                name="phone"
+                render={({ field: { onChange, value } }) => (
+                  <View style={styles.fieldGroup}>
+                    <Pressable
+                      style={[
+                        styles.inputRow,
+                        styles.inputWithShadow,
+                        focusedInput === "phone" && styles.inputFocused,
+                        codeSent && styles.inputDisabled,
+                        !!phoneForm.formState.errors.phone && styles.inputErrorBorder,
+                      ]}
+                      onPress={() => !codeSent && phoneInputRef.current?.focus()}
+                    >
+                      <Ionicons
+                        name="call-outline"
+                        size={19}
+                        color={focusedInput === "phone" ? ORANGE : "#C7C7CC"}
+                      />
+                      <TextInput
+                        ref={phoneInputRef}
+                        placeholder="+381 6X XXX XXXX"
+                        value={value}
+                        onChangeText={onChange}
+                        style={[styles.input, codeSent && styles.inputTextDisabled]}
+                        keyboardType="phone-pad"
+                        textContentType="telephoneNumber"
+                        autoComplete="tel"
+                        placeholderTextColor="#C7C7CC"
+                        selectionColor={ORANGE}
+                        editable={!codeSent}
+                        onFocus={() => setFocusedInput("phone")}
+                        onBlur={() => setFocusedInput(null)}
+                      />
+                      {codeSent ? (
+                        <TouchableOpacity
+                          onPress={() => {
+                            setCodeSent(false);
+                            phoneForm.setValue("code", "");
+                          }}
+                          hitSlop={10}
+                        >
+                          <Ionicons name="pencil-outline" size={18} color={ORANGE} />
+                        </TouchableOpacity>
+                      ) : null}
+                    </Pressable>
+                  </View>
+                )}
+              />
+
+              {/* Code - POPRAVKA: Ternarni operator */}
+              {codeSent ? (
+                <Controller
+                  control={phoneForm.control}
+                  name="code"
+                  render={({ field: { onChange, value } }) => (
+                    <View style={styles.fieldGroup}>
+                      <Pressable
+                        style={[
+                          styles.inputRow,
+                          styles.inputWithShadow,
+                          focusedInput === "code" && styles.inputFocused,
+                          !!phoneForm.formState.errors.code && styles.inputErrorBorder,
+                        ]}
+                        onPress={() => codeInputRef.current?.focus()}
+                      >
+                        <Ionicons
+                          name="keypad-outline"
+                          size={19}
+                          color={focusedInput === "code" ? ORANGE : "#C7C7CC"}
+                        />
+                        <TextInput
+                          ref={codeInputRef}
+                          placeholder="6-digit code"
+                          value={value}
+                          onChangeText={onChange}
+                          style={styles.input}
+                          keyboardType="number-pad"
+                          maxLength={6}
+                          textContentType="oneTimeCode"
+                          placeholderTextColor="#C7C7CC"
+                          selectionColor={ORANGE}
+                          autoFocus
+                          onFocus={() => setFocusedInput("code")}
+                          onBlur={() => setFocusedInput(null)}
+                        />
+                      </Pressable>
+
+                      {/* Resend Code */}
+                      <View style={styles.resendContainer}>
+                        {/* POPRAVKA: String zatvoren u template literal */}
+                        {resendCountdown > 0 ? (
+                          <Text style={styles.resendCountdownText}>
+                            {`Resend code in ${resendCountdown}s`}
+                          </Text>
+                        ) : (
+                          <TouchableOpacity
+                            onPress={phoneForm.handleSubmit(onSendCode)}
+                            hitSlop={10}
+                          >
+                            <Text style={styles.resendLinkText}>Resend Code</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                  )}
+                />
+              ) : null}
+
+              {activeError ? <ErrorBanner message={activeError} /> : null}
+
+              <AnimatedButton
+                onPress={
+                  codeSent
+                    ? phoneForm.handleSubmit(onVerifyCode)
+                    : phoneForm.handleSubmit(onSendCode)
+                }
+                disabled={!isPhoneValid || loading}
+                loading={loading}
+                label={codeSent ? "Verify Code" : "Send Code"}
+              />
+            </Reanimated.View>
+          ) : null}
+
+          {/* Divider */}
+          <View style={styles.divider}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or continue with</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          {/* Google */}
+          <TouchableOpacity
+            style={[styles.googleBtn, (!request || loading) && styles.googleBtnDisabled]}
+            onPress={() => request && promptAsync()}
+            disabled={!request || loading}
+            activeOpacity={0.75}
+          >
+            <AntDesign name="google" size={19} color="#1C1C1E" />
+            <Text style={styles.googleBtnText}>Google</Text>
+          </TouchableOpacity>
+
+          {/* Sign Up */}
+          <TouchableOpacity
+            style={styles.signupRow}
+            onPress={() => router.push("../signup/birthday")}
+            hitSlop={12}
+          >
+            <Text style={styles.signupText}>
+              Don&apos;t have an account?{" "}
+              <Text style={styles.signupLink}>Sign Up</Text>
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Fullscreen loading overlay */}
+      {loading ? (
+        <View style={styles.loadingOverlay}>
+          <ActivityIndicator size="large" color={ORANGE} />
+        </View>
+      ) : null}
+
+      {/* Toast uvek iznad svega */}
+      <View style={styles.toastContainer} pointerEvents="box-none">
+        <Toast />
       </View>
-
-      <Image 
-        source={require('../../assets/images/1000006380.png')} 
-        style={styles.logo} 
-        accessibilityLabel="Vibra logo" 
-      />
-
-      {/* EMAIL INPUT */}
-      <Controller
-        control={control}
-        name="email"
-        render={({ field: { onChange, value } }) => (
-          <>
-            <TextInput
-              placeholder="Email"
-              onChangeText={text => {
-                onChange(text);
-                setEmailValue(text);
-              }}
-              value={value}
-              style={[styles.input, submitAttempted && errors.email && styles.inputError]}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              placeholderTextColor="#888"
-             selectionColor="#FF6A00" 
-              cursorColor="#FF6A00" // ✅ jasno vidljiv crni kursor
-              textAlignVertical="center"
-              autoCorrect={false}
-              autoFocus={false}
-            />
-            {submitAttempted && errors.email && (
-              <Text style={styles.error}>{errors.email.message}</Text>
-            )}
-          </>
-        )}
-      />
-
-      {/* PASSWORD INPUT */}
-      <Controller
-        control={control}
-        name="password"
-        render={({ field: { onChange, value } }) => (
-          <>
-            <TextInput
-              placeholder="Password"
-              onChangeText={text => {
-                onChange(text);
-                setPasswordValue(text);
-              }}
-              value={value}
-              style={[styles.input, submitAttempted && errors.password && styles.inputError]}
-              secureTextEntry
-              accessible
-              accessibilityLabel="Password input"
-              placeholderTextColor="#888"
-              selectionColor="#FF6A00"
-              cursorColor="#FF6A00" // ✅ isto ovde
-              textAlignVertical="center"
-            />
-            {submitAttempted && errors.password && (
-              <Text style={styles.error}>{errors.password.message}</Text>
-            )}
-          </>
-        )}
-      />
-
-      {submitAttempted && apiError && <Text style={styles.error}>{apiError}</Text>}
-
-      {/* LOGIN BUTTON */}
-      <TouchableOpacity
-        onPress={handleSubmit(onSubmit)}
-        style={[styles.button, (emailValue === '' || passwordValue === '' || loading) && styles.buttonDisabled]}
-        disabled={emailValue === '' || passwordValue === '' || loading}
-      >
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Login</Text>}
-      </TouchableOpacity>
-
-      {/* GOOGLE BUTTON */}
-      <TouchableOpacity
-        onPress={() => {
-          if (request) {
-            promptAsync();
-          } else {
-            Toast.show({ type: 'error', text1: 'Google Auth not ready' });
-          }
-        }}
-        disabled={!request || loading}
-        style={[styles.googleButton, (loading || !request) && styles.buttonDisabled]}
-      >
-        <AntDesign name="google" size={20} color="#fff" style={{ marginRight: 12 }} />
-        <Text style={styles.googleButtonText}>Continue with Google</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity 
-        onPress={() => router.push('/forgot-password')} 
-      >
-        <Text style={styles.forgotPassword}>Forgot Password?</Text>
-      </TouchableOpacity>
-
-      <Toast />
-    </View>
+    </SafeAreaView>
   );
 }
 
+// ─────────────────────────────────────────────────────────────
+// Styles
+// ─────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 60,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
+  safeArea: {
     flex: 1,
-    alignItems: 'center',
+    backgroundColor: "#FCFCFD",
   },
-  topRight: {
-    position: 'absolute',
-    top: 40,
-    right: 20,
+  flex: {
+    flex: 1,
+    backgroundColor: "#FCFCFD",
   },
-  signUpText: {
-    color: '#ff7f00', 
-    fontSize: 16,
-    fontWeight: 'bold',
+  container: {
+    flexGrow: 1,
+    backgroundColor: "#FCFCFD",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 44,
+  },
+  logoContainer: {
+    alignItems: "center",
   },
   logo: {
-    width: 200,
-    height: 200,
-    marginBottom: 30,
-    marginTop: 20,
-    resizeMode: 'contain',
+    width: 150,
+    height: 150,
+    resizeMode: "contain",
+    marginBottom: 8,
+  },
+  tagline: {
+    fontSize: 11,
+    color: "#AEAEB2",
+    marginTop: 2,
+    letterSpacing: 1.8,
+    textTransform: "uppercase",
+    fontWeight: "600",
+  },
+  tabWrapper: {
+    flexDirection: "row",
+    width: "100%",
+    marginBottom: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F0F0F5",
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingBottom: 14,
+    paddingTop: 4,
+    position: "relative",
+  },
+  tabText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#C0C0C8",
+    letterSpacing: 0.1,
+  },
+  tabTextActive: {
+    color: "#1C1C1E",
+  },
+  tabUnderline: {
+    position: "absolute",
+    bottom: -1,
+    alignSelf: "center",
+    width: 40,
+    height: 2,
+    borderRadius: 2,
+    backgroundColor: "transparent",
+  },
+  tabUnderlineActive: {
+    backgroundColor: ORANGE,
+  },
+  form: {
+    width: "100%",
+  },
+  fieldGroup: {
+    width: "100%",
+    marginBottom: 14,
+  },
+  inputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    height: 56,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#E5E5EA",
+    backgroundColor: "#FAFAFA",
+    paddingHorizontal: 16,
+  },
+  inputWithShadow: {
+    shadowColor: "#000",
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  inputFocused: {
+    borderColor: ORANGE,
+    backgroundColor: "#fff",
+    shadowColor: ORANGE,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+  inputErrorBorder: {
+    borderColor: "#FF5A5F",
+    backgroundColor: "#FFF9F9",
+  },
+  inputDisabled: {
+    opacity: 0.6,
+    backgroundColor: "#F5F5F5",
   },
   input: {
-    width: '100%',
-    height: 50,
-    borderColor: '#ccc',
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    marginBottom: 12,
-    backgroundColor: '#fff', // ✅ čista bela pozadina
-    fontSize: 16,
-    color: '#222',
-    textAlignVertical: 'center',
-  },
-  inputError: {
-    borderColor: '#d00', 
-  },
-  button: {
-    backgroundColor: '#ff7f00', 
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    marginTop: 10,
-    width: '100%',
-    justifyContent: 'center',
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 18,
-  },
-  googleButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#d00', 
-    paddingVertical: 14,
-    paddingHorizontal: 30,
-    borderRadius: 10,
-    marginTop: 24,
-    width: '100%',
-    justifyContent: 'center',
-  },
-  googleButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 18,
-  },
-  error: {
-    color: '#d00', 
-    marginBottom: 8,
-    alignSelf: 'flex-start',
-    fontWeight: '600',
-  },
-  forgotPassword: {
-    marginTop: 22,
-    color: '#ffcc00', 
-    fontWeight: '700',
+    flex: 1,
     fontSize: 15,
-    textDecorationLine: 'underline',
+    color: "#1C1C1E",
+    fontWeight: "400",
+  },
+  inputTextDisabled: {
+    opacity: 0.5,
+  },
+  forgotRow: {
+    alignSelf: "flex-end",
+    marginBottom: 22,
+    marginTop: -2,
+  },
+  forgotText: {
+    fontSize: 13,
+    color: ORANGE,
+    fontWeight: "600",
+  },
+  resendContainer: {
+    marginTop: 8,
+    alignSelf: "flex-end",
+    paddingHorizontal: 4,
+  },
+  resendCountdownText: {
+    fontSize: 13,
+    color: "#8E8E93",
+    fontWeight: "500",
+  },
+  resendLinkText: {
+    fontSize: 13,
+    color: ORANGE,
+    fontWeight: "600",
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 9,
+    backgroundColor: "#FFF1F0",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 14,
+    width: "100%",
+  },
+  errorBannerText: {
+    color: "#FF5A5F",
+    fontSize: 13,
+    fontWeight: "500",
+    flex: 1,
+  },
+  primaryBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: ORANGE,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  primaryBtnDisabled: {
+    opacity: 0.7,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  primaryBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+    letterSpacing: 0.2,
+  },
+  divider: {
+    flexDirection: "row",
+    alignItems: "center",
+    width: "100%",
+    marginVertical: 28,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: "#D1D1D6",
+  },
+  dividerText: {
+    fontSize: 12,
+    color: "#AEAEB2",
+    fontWeight: "500",
+    letterSpacing: 0.3,
+  },
+  googleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 11,
+    width: "100%",
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#EFEFF4",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  googleBtnDisabled: {
+    opacity: 0.5,
+  },
+  googleBtnText: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#1C1C1E",
+  },
+  signupRow: {
+    marginTop: 28,
+  },
+  signupText: {
+    fontSize: 14,
+    color: "#8E8E93",
+    fontWeight: "500",
+  },
+  signupLink: {
+    color: ORANGE,
+    fontWeight: "700",
+  },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.75)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 900,
+  },
+  toastContainer: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 9999,
   },
 });
