@@ -1,22 +1,24 @@
-import notifee from "@notifee/react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApps, initializeApp } from "@react-native-firebase/app";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useRouter, useSegments } from "expo-router";
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, AppState, Linking, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
-import { AuthProvider, useAuthContext } from "../context/AuthContext";
-import { FilterModalProvider, useFilterModal } from "../context/FilterModalContext";
-import { ProfileProvider } from "../context/ProfileContext";
-import { SocketProvider } from "../context/SocketContext";
 import LikeFilterModal from "../components/likes/LikeFilterModal";
 import { MatchToast } from "../components/MatchToast";
+import { AuthProvider, useAuthContext } from "../context/AuthContext";
+import {
+  FilterModalProvider,
+  useFilterModal,
+} from "../context/FilterModalContext";
+import { ProfileProvider } from "../context/ProfileContext";
+import { SocketProvider } from "../context/SocketContext";
+import { firebaseConfig } from "../firebaseConfig";
 import { useMatchToast } from "../hooks/useMatchToast";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import AnimatedSplash from "./AnimatedSplash";
-import { firebaseConfig } from "../firebaseConfig";
 
 declare const global: typeof globalThis;
 
@@ -30,9 +32,11 @@ function AppContent() {
   const { user, loading, token } = useAuthContext();
   const router = useRouter();
   const segments = useSegments();
-  const { toastData, visible, showMatchToast, hideMatchToast } = useMatchToast();
+  const { toastData, visible, showMatchToast, hideMatchToast } =
+    useMatchToast();
   const appState = useRef(AppState.currentState);
   const isNavigatingToReset = useRef(false);
+  const [isResolvingInitialUrl, setIsResolvingInitialUrl] = useState(true);
 
   usePushNotifications(token, showMatchToast);
 
@@ -49,7 +53,10 @@ function AppContent() {
           const parsed = new URL(url);
           const userId = parsed.searchParams.get("userId");
           const resetToken = parsed.searchParams.get("token");
-          console.log("🔑 [Linking] Navigiram na reset-password, userId:", userId);
+          console.log(
+            "🔑 [Linking] Navigiram na reset-password, userId:",
+            userId,
+          );
           isNavigatingToReset.current = true;
           router.push({
             pathname: "/(auth)/reset-password",
@@ -65,16 +72,25 @@ function AppContent() {
     Linking.getInitialURL().then((url) => {
       console.log("🔗 [Linking] Initial URL:", url);
       handleUrl(url);
+      setIsResolvingInitialUrl(false);
+    }).catch((error) => {
+      console.error("❌ [Linking] Greška pri čitanju initial URL:", error);
+      setIsResolvingInitialUrl(false);
     });
 
     // Slušaj URL events (app u backgroundu)
-    const subscription = Linking.addEventListener("url", ({ url }) => handleUrl(url));
+    const subscription = Linking.addEventListener("url", ({ url }) =>
+      handleUrl(url),
+    );
 
     return () => subscription.remove();
   }, []);
 
   const inAuthFlow = useMemo(() => segments[0] === "(auth)", [segments]);
-  const isOnResetPassword = useMemo(() => segments.includes("reset-password" as never), [segments]);
+  const isOnResetPassword = useMemo(
+    () => segments.includes("reset-password" as never),
+    [segments],
+  );
 
   const goToChat = (data: any) => {
     if (!data?.chatId) return false;
@@ -94,10 +110,18 @@ function AppContent() {
   useEffect(() => {
     if (loading) return;
     if (segments.length < 1) return;
+    if (isResolvingInitialUrl) return;
     if (isOnResetPassword || isNavigatingToReset.current) return;
 
     const handleNavigation = async () => {
-      console.log("🔍 [handleNavigation] user:", !!user, "| inAuthFlow:", inAuthFlow, "| segments:", segments);
+      console.log(
+        "🔍 [handleNavigation] user:",
+        !!user,
+        "| inAuthFlow:",
+        inAuthFlow,
+        "| segments:",
+        segments,
+      );
 
       if (!user) {
         if (!inAuthFlow) router.replace("/(auth)/login");
@@ -105,7 +129,9 @@ function AppContent() {
       }
 
       try {
-        const pendingRaw = await AsyncStorage.getItem("pendingNotificationData");
+        const pendingRaw = await AsyncStorage.getItem(
+          "pendingNotificationData",
+        );
         if (pendingRaw) {
           const data = JSON.parse(pendingRaw);
           await AsyncStorage.removeItem("pendingNotificationData");
@@ -135,25 +161,28 @@ function AppContent() {
     };
 
     handleNavigation();
-  }, [user, loading, inAuthFlow, isOnResetPassword]);
+  }, [user, loading, inAuthFlow, isOnResetPassword, isResolvingInitialUrl]);
 
   // ─── AppState handler ─────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
-    const subscription = AppState.addEventListener("change", async (nextState) => {
-      const wasBackground = appState.current === "background";
-      appState.current = nextState;
-      if (wasBackground && nextState === "active") {
-        try {
-          const raw = await AsyncStorage.getItem("pendingNotificationData");
-          if (raw) {
-            const data = JSON.parse(raw);
-            await AsyncStorage.removeItem("pendingNotificationData");
-            goToChat(data);
-          }
-        } catch (e) {}
-      }
-    });
+    const subscription = AppState.addEventListener(
+      "change",
+      async (nextState) => {
+        const wasBackground = appState.current === "background";
+        appState.current = nextState;
+        if (wasBackground && nextState === "active") {
+          try {
+            const raw = await AsyncStorage.getItem("pendingNotificationData");
+            if (raw) {
+              const data = JSON.parse(raw);
+              await AsyncStorage.removeItem("pendingNotificationData");
+              goToChat(data);
+            }
+          } catch (e) {}
+        }
+      },
+    );
     return () => subscription.remove();
   }, [user]);
 
@@ -193,7 +222,8 @@ function AppContent() {
 }
 
 export default function RootLayout() {
-  const [isSplashAnimationFinished, setSplashAnimationFinished] = useState(false);
+  const [isSplashAnimationFinished, setSplashAnimationFinished] =
+    useState(false);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -206,7 +236,9 @@ export default function RootLayout() {
                 {isSplashAnimationFinished ? (
                   <AppContent />
                 ) : (
-                  <AnimatedSplash onFinish={() => setSplashAnimationFinished(true)} />
+                  <AnimatedSplash
+                    onFinish={() => setSplashAnimationFinished(true)}
+                  />
                 )}
               </FilterModalProvider>
             </ProfileProvider>
@@ -218,7 +250,8 @@ export default function RootLayout() {
 }
 
 function GlobalFilterModal() {
-  const { isVisible, hideModal, setFilterValues, filterValues } = useFilterModal();
+  const { isVisible, hideModal, setFilterValues, filterValues } =
+    useFilterModal();
   return (
     <LikeFilterModal
       visible={isVisible}

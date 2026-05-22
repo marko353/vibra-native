@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useQueryClient } from '@tanstack/react-query';
 import axios, { AxiosError } from 'axios';
 import { useRouter, usePathname } from 'expo-router';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 export interface User {
   id: string;
@@ -76,6 +77,13 @@ const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const logout = useCallback(async () => {
     setUser(null);
     try {
+      try {
+        const currentGoogleUser = GoogleSignin.getCurrentUser();
+        if (currentGoogleUser) {
+          await GoogleSignin.signOut();
+        }
+      } catch {}
+
       await Promise.all([
         AsyncStorage.removeItem('currentUser'),
         AsyncStorage.removeItem('location_prompt_completed')
