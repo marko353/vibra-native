@@ -2,10 +2,9 @@ import { AntDesign, Ionicons } from "@expo/vector-icons";
 import { zodResolver } from "@hookform/resolvers/zod";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
-import * as Google from "expo-auth-session/providers/google";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import * as WebBrowser from "expo-web-browser";
+import Constants from "expo-constants";
 import { useEffect, useRef, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -27,11 +26,11 @@ import Reanimated, { FadeIn, FadeOut } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Toast from "react-native-toast-message";
 import { z } from "zod";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { useAuthContext } from "../../context/AuthContext";
 
-WebBrowser.maybeCompleteAuthSession();
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const API_BASE_URL =
+  Constants.expoConfig?.extra?.EXPO_PUBLIC_API_BASE_URL || "http://localhost:5000";
 const ORANGE = "#FF6A00";
 
 // ─────────────────────────────────────────────────────────────
@@ -153,9 +152,12 @@ export default function LoginScreen() {
     mode: "onChange",
   });
 
-  const [request, response, promptAsync] = Google.useAuthRequest({
-    androidClientId: "919552449039-9omu51tjlp421po9hjrncsebpe9dulp1.apps.googleusercontent.com",
-  });
+  useEffect(() => {
+    GoogleSignin.configure({
+      webClientId: "215871333980-r9qnsfg9fl82d1912dspet39d4tea0vg.apps.googleusercontent.com",
+      offlineAccess: false,
+    });
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setIsReady(true), 50);
@@ -173,28 +175,56 @@ export default function LoginScreen() {
 
   // ─── Google Auth ─────────────────────────────────────────────
 
-  useEffect(() => {
-    if (response?.type !== "success") return;
-    const idToken = response.authentication?.idToken;
-    if (!idToken) return;
+  const handleGoogleLogin = async () => {
+    if (loading) return;
+    setApiError(null);
     setLoading(true);
-    axios
-      .post(`${API_BASE_URL}/api/auth/google`, { token: idToken })
-      .then(async (res) => {
-        const userData = {
-          id: res.data.id,
-          fullName: res.data.fullName,
-          email: res.data.email,
-          token: res.data.token,
-        };
-        setUser(userData);
-        await AsyncStorage.setItem("currentUser", JSON.stringify(userData));
-        await AsyncStorage.setItem("token", userData.token);
-        router.replace("/(tabs)/home");
-      })
-      .catch(() => Toast.show({ type: "error", text1: "Google login failed" }))
-      .finally(() => setLoading(false));
-  }, [response, router, setUser]);
+    try {
+      await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+
+      // Force account picker by clearing cached Google session before sign in.
+      try {
+        const currentGoogleUser = GoogleSignin.getCurrentUser();
+        if (currentGoogleUser) {
+          await GoogleSignin.signOut();
+        }
+      } catch {}
+
+      const result = await GoogleSignin.signIn();
+      const idToken = result.data?.idToken;
+
+      if (!idToken) {
+        Toast.show({ type: "error", text1: "Google login failed", text2: "Missing token" });
+        return;
+      }
+
+      const res = await axios.post(`${API_BASE_URL}/api/auth/google`, { token: idToken });
+      const userData = {
+        id: res.data.id,
+        fullName: res.data.fullName,
+        email: res.data.email,
+        token: res.data.token,
+      };
+      setUser(userData);
+      await AsyncStorage.setItem("currentUser", JSON.stringify(userData));
+      await AsyncStorage.setItem("token", userData.token);
+      router.replace("/(tabs)/home");
+    } catch (error: any) {
+      if (error?.code === statusCodes.SIGN_IN_CANCELLED) {
+        return;
+      }
+      if (error?.code === statusCodes.IN_PROGRESS) {
+        return;
+      }
+      if (error?.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        Toast.show({ type: "error", text1: "Google Play Services unavailable" });
+        return;
+      }
+      Toast.show({ type: "error", text1: "Google login failed" });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // ─── Email Login ──────────────────────────────────────────────
 
@@ -634,9 +664,9 @@ export default function LoginScreen() {
 
           {/* Google */}
           <TouchableOpacity
-            style={[styles.googleBtn, (!request || loading) && styles.googleBtnDisabled]}
-            onPress={() => request && promptAsync()}
-            disabled={!request || loading}
+            style={[styles.googleBtn, loading && styles.googleBtnDisabled]}
+            onPress={handleGoogleLogin}
+            disabled={loading}
             activeOpacity={0.75}
           >
             <AntDesign name="google" size={19} color="#1C1C1E" />

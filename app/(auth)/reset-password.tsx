@@ -126,7 +126,7 @@ export default function ResetPasswordScreen() {
       });
 
       Toast.show({ type: 'success', text1: 'Password changed!', text2: 'You can now log in.' });
-      setTimeout(() => router.replace('../login'), 1500);
+      setTimeout(() => router.replace('/(auth)/login'), 1500);
     } catch (error: any) {
       const msg = error?.response?.data?.message || 'Something went wrong.';
       Toast.show({ type: 'error', text1: msg });
@@ -154,7 +154,7 @@ export default function ResetPasswordScreen() {
           {/* Back button */}
           <TouchableOpacity
             style={styles.backBtn}
-            onPress={() => router.back()}
+              onPress={() => router.replace('/(auth)/login')}
             hitSlop={12}
           >
             <Ionicons name="chevron-back" size={22} color={ORANGE} />
