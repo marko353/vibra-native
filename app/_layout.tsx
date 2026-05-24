@@ -87,6 +87,7 @@ function AppContent() {
   }, []);
 
   const inAuthFlow = useMemo(() => segments[0] === "(auth)", [segments]);
+  const inSignupFlow = useMemo(() => segments[0] === "signup", [segments]);
   const isOnResetPassword = useMemo(
     () => segments.includes("reset-password" as never),
     [segments],
@@ -124,7 +125,7 @@ function AppContent() {
       );
 
       if (!user) {
-        if (!inAuthFlow) router.replace("/(auth)/login");
+        if (!inAuthFlow && !inSignupFlow) router.replace("/(auth)/login");
         return;
       }
 
@@ -161,7 +162,7 @@ function AppContent() {
     };
 
     handleNavigation();
-  }, [user, loading, inAuthFlow, isOnResetPassword, isResolvingInitialUrl]);
+  }, [user, loading, inAuthFlow, inSignupFlow, isOnResetPassword, isResolvingInitialUrl]);
 
   // ─── AppState handler ─────────────────────────────────────────
   useEffect(() => {

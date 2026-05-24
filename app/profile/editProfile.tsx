@@ -38,20 +38,20 @@ const COLORS = {
 
 const screens = { languages: '/(modals)/languages', interests: '/(modals)/interests', height: '/(modals)/height', location: '/(modals)/location', bio: '/(modals)/bio', communicationStyle: '/(modals)/communicationStyle', diet: '/(modals)/diet', drinks: '/(modals)/drinks', education: '/(modals)/education', familyPlans: '/(modals)/familyPlans', gender: '/(modals)/gender', horoscope: '/(modals)/horoscope', job: '/(modals)/job', relationshipType: '/(modals)/relationshipType', loveStyle: '/(modals)/loveStyle', pets: '/(modals)/pets', smokes: '/(modals)/smokes', workout: '/(modals)/workout', sexualOrientation: '/(modals)/sexualOrientation', religion: '/(modals)/religion' } as const;
 
-const calculateAge = (birthDateString?: string | null): number | null => { 
-  if (!birthDateString) return null; 
-  const birthDate = new Date(birthDateString); 
-  if (isNaN(birthDate.getTime())) return null; 
-  const today = new Date(); 
-  let age = today.getFullYear() - birthDate.getFullYear(); 
-  const m = today.getMonth() - birthDate.getMonth(); 
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--; 
-  return age; 
+const calculateAge = (birthDateString?: string | null): number | null => {
+  if (!birthDateString) return null;
+  const birthDate = new Date(birthDateString);
+  if (isNaN(birthDate.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
+  return age;
 };
 
-const compressImagesArray = (images: (string | null)[]): (string | null)[] => { 
-  const filtered = images.filter(img => img !== null); 
-  return [...filtered, ...Array(9 - filtered.length).fill(null)]; 
+const compressImagesArray = (images: (string | null)[]): (string | null)[] => {
+  const filtered = images.filter(img => img !== null);
+  return [...filtered, ...Array(9 - filtered.length).fill(null)];
 };
 
 const globalScrollYRef = React.createRef<number>();
@@ -67,31 +67,32 @@ export default function EditProfileScreen() {
   const [uploadingIndex, setUploadingIndex] = useState<number | null>(null);
   const [pendingUpdates, setPendingUpdates] = useState<{ field: string; value: any }[]>([]);
   const [locationCity, setLocationCity] = useState<string | null>(null);
-  
+
   const scrollViewRef = useRef<ScrollView>(null);
   const contentRef = useRef<View>(null);
-  const [initialScrollY, setInitialScrollY] = useState<number | null>(null);
+  // FIX: default 0 umesto null — sprečava blokiranje rendera
+  const [initialScrollY, setInitialScrollY] = useState<number>(0);
 
-  const { data: userData } = useQuery({ 
-    queryKey: ['userProfile', user?.id], 
-    queryFn: async () => { 
-      if (!user?.token) return null; 
-      const res = await axios.get(`${API_BASE_URL}/api/user/profile`, { headers: { Authorization: `Bearer ${user.token}` } }); 
-      return res.data; 
-    }, 
-    enabled: !!user?.id 
+  const { data: userData } = useQuery({
+    queryKey: ['userProfile', user?.id],
+    queryFn: async () => {
+      if (!user?.token) return null;
+      const res = await axios.get(`${API_BASE_URL}/api/user/profile`, { headers: { Authorization: `Bearer ${user.token}` } });
+      return res.data;
+    },
+    enabled: !!user?.id
   });
 
-  const { data: images = Array(9).fill(null) } = useQuery({ 
-    queryKey: ['userProfilePhotos', user?.id], 
-    queryFn: async (): Promise<(string | null)[]> => { 
-      if (!user?.token) return Array(9).fill(null); 
-      const res = await axios.get(`${API_BASE_URL}/api/user/profile-pictures`, { headers: { Authorization: `Bearer ${user.token}` } }); 
-      return compressImagesArray((res.data.profilePictures as any[]) || []); 
-    }, 
-    enabled: !!user?.id 
+  const { data: images = Array(9).fill(null) } = useQuery({
+    queryKey: ['userProfilePhotos', user?.id],
+    queryFn: async (): Promise<(string | null)[]> => {
+      if (!user?.token) return Array(9).fill(null);
+      const res = await axios.get(`${API_BASE_URL}/api/user/profile-pictures`, { headers: { Authorization: `Bearer ${user.token}` } });
+      return compressImagesArray((res.data.profilePictures as any[]) || []);
+    },
+    enabled: !!user?.id
   });
-  
+
   useEffect(() => { if (userData) { loadProfile(userData); } }, [userData, loadProfile]);
 
   useEffect(() => {
@@ -117,28 +118,28 @@ export default function EditProfileScreen() {
     fetchCityName();
   }, [profile?.location, profile?.showLocation]);
 
-  const uploadImageMutation = useMutation({ 
-    mutationFn: async ({ uri, index }: { uri: string; index: number }) => { 
-      if (!user?.token) throw new Error("Token not available"); 
-      const formData = new FormData(); 
-      const filename = uri.split('/').pop() || 'profile.jpg'; 
-      const fileUri = Platform.OS === 'android' ? uri : uri.replace('file://', '');  
-      formData.append('profilePicture', { uri: fileUri, type: 'image/jpeg', name: filename } as any); 
-      formData.append('position', index.toString()); 
-      return await axios.post(`${API_BASE_URL}/api/user/upload-profile-picture`, formData, { headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'multipart/form-data' } }); 
-    }, 
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userProfilePhotos', user?.id] }), 
-    onError: () => Alert.alert("Greška", "Upload slike nije uspeo."), 
-    onSettled: () => setUploadingIndex(null) 
+  const uploadImageMutation = useMutation({
+    mutationFn: async ({ uri, index }: { uri: string; index: number }) => {
+      if (!user?.token) throw new Error("Token not available");
+      const formData = new FormData();
+      const filename = uri.split('/').pop() || 'profile.jpg';
+      const fileUri = Platform.OS === 'android' ? uri : uri.replace('file://', '');
+      formData.append('profilePicture', { uri: fileUri, type: 'image/jpeg', name: filename } as any);
+      formData.append('position', index.toString());
+      return await axios.post(`${API_BASE_URL}/api/user/upload-profile-picture`, formData, { headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'multipart/form-data' } });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userProfilePhotos', user?.id] }),
+    onError: () => Alert.alert("Greška", "Upload slike nije uspeo."),
+    onSettled: () => setUploadingIndex(null)
   });
 
-  const deleteImageMutation = useMutation({ 
-    mutationFn: async ({ index, imageUrl }: { index: number; imageUrl: string }) => { 
-      if (!user?.token) throw new Error("Token not available"); 
-      return await axios.delete(`${API_BASE_URL}/api/user/delete-profile-picture`, { headers: { Authorization: `Bearer ${user.token}` }, data: { imageUrl, position: index } }); 
-    }, 
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userProfilePhotos', user?.id] }), 
-    onError: () => Alert.alert("Greška", "Brisanje slike nije uspelo.") 
+  const deleteImageMutation = useMutation({
+    mutationFn: async ({ index, imageUrl }: { index: number; imageUrl: string }) => {
+      if (!user?.token) throw new Error("Token not available");
+      return await axios.delete(`${API_BASE_URL}/api/user/delete-profile-picture`, { headers: { Authorization: `Bearer ${user.token}` }, data: { imageUrl, position: index } });
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['userProfilePhotos', user?.id] }),
+    onError: () => Alert.alert("Greška", "Brisanje slike nije uspelo.")
   });
 
   const reorderImagesMutation = useMutation({
@@ -149,7 +150,6 @@ export default function EditProfileScreen() {
       return pictures;
     },
     onSuccess: (pictures) => {
-      // Finalna sinhronizacija keša nakon uspešnog API poziva
       queryClient.setQueryData(['userProfile', user?.id], (old: any) => old ? { ...old, profilePictures: pictures } : old);
       queryClient.setQueryData(['userProfilePhotos', user?.id], compressImagesArray(pictures));
     },
@@ -158,16 +158,16 @@ export default function EditProfileScreen() {
       queryClient.invalidateQueries({ queryKey: ['userProfilePhotos', user?.id] });
     }
   });
-  
+
   useFocusEffect(
     useCallback(() => {
-        const scrollYValue = globalScrollYRef.current;
-        if (scrollYValue !== null && scrollYValue !== undefined) {
-            setInitialScrollY(scrollYValue);
-            globalScrollYRef.current = 0; 
-        } else {
-            setInitialScrollY(0);
-        }
+      const scrollYValue = globalScrollYRef.current;
+      if (scrollYValue !== null && scrollYValue !== undefined) {
+        setInitialScrollY(scrollYValue);
+        globalScrollYRef.current = 0;
+      } else {
+        setInitialScrollY(0);
+      }
     }, [])
   );
 
@@ -178,36 +178,36 @@ export default function EditProfileScreen() {
   };
 
   const handleBack = () => {
-    // Slike su već sačuvane putem mutacije u onReorderImages
     router.replace('/(tabs)/profile');
   };
 
   const handleOpenModal = (screenName: keyof typeof screens, extraParams?: any) => router.push({ pathname: screens[screenName] as any, params: extraParams });
   const handleSettingsPress = () => router.push('./settings' as any);
-  
-  const handleImageUploadPress = async (index: number) => { 
+
+  const handleImageUploadPress = async (index: number) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Dozvola je neophodna', 'Molimo vas da omogućite pristup galeriji.');
-      return; 
+      return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [3, 4], quality: 0.8 }); 
-    if (!result.canceled && result.assets[0].uri) { 
-      setUploadingIndex(index); 
-      uploadImageMutation.mutate({ uri: result.assets[0].uri, index }); 
-    } 
+    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [3, 4], quality: 0.8 });
+    if (!result.canceled && result.assets[0].uri) {
+      setUploadingIndex(index);
+      uploadImageMutation.mutate({ uri: result.assets[0].uri, index });
+    }
   };
 
-  const handleShowProfileDetails = () => { 
-    if (scrollViewRef.current && contentRef.current) { 
-      contentRef.current.measure((_fx, _fy, _w, _h, _px, py) => { 
-        const scrollPosition = py - 150; 
-        scrollViewRef.current?.scrollTo({ y: scrollPosition > 0 ? scrollPosition : 0, animated: true }); 
-      }); 
-    } 
+  const handleShowProfileDetails = () => {
+    if (scrollViewRef.current && contentRef.current) {
+      contentRef.current.measure((_fx, _fy, _w, _h, _px, py) => {
+        const scrollPosition = py - 150;
+        scrollViewRef.current?.scrollTo({ y: scrollPosition > 0 ? scrollPosition : 0, animated: true });
+      });
+    }
   };
 
-  if (!profile || initialScrollY === null) {
+  // FIX: uklonjen initialScrollY === null uslov
+  if (!profile) {
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={COLORS.primary} />
@@ -221,73 +221,69 @@ export default function EditProfileScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-        
-        <ScrollView
-            ref={scrollViewRef}
-            onScroll={handleScroll}
-            scrollEventThrottle={16}
-            style={styles.scrollView}
-            contentInsetAdjustmentBehavior="never"
-            contentOffset={{ y: mode === 'edit' ? initialScrollY : 0, x: 0 }}
-        >
-            <View style={{ paddingTop: mode === 'edit' ? totalHeaderHeight : 0 }}>
-                {mode === 'edit' ? (
-                <View style={styles.editContainer}>
-                    <ProfilePhotoGrid
-                      images={images}
-                      mode={mode}
-                      uploadingIndex={uploadingIndex}
-                      onAddImagePress={handleImageUploadPress}
-                      onRemoveImage={(index, url) => deleteImageMutation.mutate({ index, imageUrl: url })}
-                      onReorderImages={(newImages) => {
-                        // 1. OPTIMISTIČKI UPDATE (UI reaguje odmah)
-                        const picturesOnly = newImages.filter((p): p is string => typeof p === 'string');
-                        
-                        queryClient.setQueryData(['userProfilePhotos', user?.id], newImages);
-                        queryClient.setQueryData(['userProfile', user?.id], (old: any) => 
-                          old ? { ...old, profilePictures: picturesOnly } : old
-                        );
 
-                        // 2. ODMAH ČUVAJ NA SERVER
-                        reorderImagesMutation.mutate(newImages);
-                      }}
-                    />
-                    <ProfileEditCardsAndModals
-                      profile={profile}
-                      locationCity={locationCity}
-                      onOpenModal={handleOpenModal}
-                      setProfileField={setProfileField}
-                      setPendingUpdates={setPendingUpdates}
-                    />
+        <ScrollView
+          ref={scrollViewRef}
+          onScroll={handleScroll}
+          scrollEventThrottle={16}
+          style={styles.scrollView}
+          contentInsetAdjustmentBehavior="never"
+          contentOffset={{ y: mode === 'edit' ? initialScrollY : 0, x: 0 }}
+        >
+          <View style={{ paddingTop: mode === 'edit' ? totalHeaderHeight : 0 }}>
+            {mode === 'edit' ? (
+              <View style={styles.editContainer}>
+                <ProfilePhotoGrid
+                  images={images}
+                  mode={mode}
+                  uploadingIndex={uploadingIndex}
+                  onAddImagePress={handleImageUploadPress}
+                  onRemoveImage={(index, url) => deleteImageMutation.mutate({ index, imageUrl: url })}
+                  onReorderImages={(newImages) => {
+                    const picturesOnly = newImages.filter((p): p is string => typeof p === 'string');
+                    queryClient.setQueryData(['userProfilePhotos', user?.id], newImages);
+                    queryClient.setQueryData(['userProfile', user?.id], (old: any) =>
+                      old ? { ...old, profilePictures: picturesOnly } : old
+                    );
+                    reorderImagesMutation.mutate(newImages);
+                  }}
+                />
+                <ProfileEditCardsAndModals
+                  profile={profile}
+                  locationCity={locationCity}
+                  onOpenModal={handleOpenModal}
+                  setProfileField={setProfileField}
+                  setPendingUpdates={setPendingUpdates}
+                />
+              </View>
+            ) : (
+              <>
+                <View style={styles.carouselWrapper}>
+                  <ProfileCarousel
+                    images={images.filter((img): img is string => !!img)}
+                    fullName={profile.fullName || ''}
+                    age={calculateAge(profile.birthDate)}
+                    locationCity={locationCity ?? undefined}
+                    showLocation={profile.showLocation || false}
+                    onShowSlider={handleShowProfileDetails}
+                  />
                 </View>
-                ) : (
-                <>
-                    <View style={styles.carouselWrapper}>
-                        <ProfileCarousel
-                          images={images.filter((img): img is string => !!img)}
-                          fullName={profile.fullName || ''}
-                          age={calculateAge(profile.birthDate)}
-                          locationCity={locationCity ?? undefined}
-                          showLocation={profile.showLocation || false}
-                          onShowSlider={handleShowProfileDetails}
-                        />
-                    </View>
-                    <View ref={contentRef} style={styles.profileDetailsContainer}>
-                      <ProfileDetailsView 
-                          profile={profile} 
-                          locationCity={locationCity} 
-                      />
-                    </View>
-                </>
-                )}
-            </View>
+                <View ref={contentRef} style={styles.profileDetailsContainer}>
+                  <ProfileDetailsView
+                    profile={profile}
+                    locationCity={locationCity}
+                  />
+                </View>
+              </>
+            )}
+          </View>
         </ScrollView>
 
         <LinearGradient
           colors={['rgba(0,0,0,0.9)', 'transparent']}
           style={[styles.gradient, { height: totalHeaderHeight + 20 }]}
         />
-        
+
         <View style={[styles.headerContainer, { height: totalHeaderHeight }]}>
           <ProfileHeader
             onBackPress={handleBack}
