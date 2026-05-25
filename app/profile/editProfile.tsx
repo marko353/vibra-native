@@ -27,13 +27,15 @@ import ProfileEditCardsAndModals from '../../components/ProfileEditCardsAndModal
 import ProfileCarousel from '../../components/ProfileCarousel';
 import ProfileDetailsView from '../../components/ProfileDetailsView';
 
+// Uvozimo naš novi custom crop modal koji smo kreirali
+import ImageCropModal from '../../components/ImageCropModal'; 
+
 const HEADER_HEIGHT = 60;
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
 const COLORS = {
-  primary: '#E91E63',
-  background: '#F0F2F5',
-  cardBackground: '#FFFFFF',
+  primary: '#ff7f00',
+  background: '#fff',
 };
 
 const screens = { languages: '/(modals)/languages', interests: '/(modals)/interests', height: '/(modals)/height', location: '/(modals)/location', bio: '/(modals)/bio', communicationStyle: '/(modals)/communicationStyle', diet: '/(modals)/diet', drinks: '/(modals)/drinks', education: '/(modals)/education', familyPlans: '/(modals)/familyPlans', gender: '/(modals)/gender', horoscope: '/(modals)/horoscope', job: '/(modals)/job', relationshipType: '/(modals)/relationshipType', loveStyle: '/(modals)/loveStyle', pets: '/(modals)/pets', smokes: '/(modals)/smokes', workout: '/(modals)/workout', sexualOrientation: '/(modals)/sexualOrientation', religion: '/(modals)/religion' } as const;
@@ -68,9 +70,12 @@ export default function EditProfileScreen() {
   const [pendingUpdates, setPendingUpdates] = useState<{ field: string; value: any }[]>([]);
   const [locationCity, setLocationCity] = useState<string | null>(null);
 
+  // Novi state za upravljanje slobodnim kropovanjem slika
+  const [cropModalVisible, setCropModalVisible] = useState(false);
+  const [selectedRawImage, setSelectedRawImage] = useState<string | null>(null);
+  const [targetUploadIndex, setTargetUploadIndex] = useState<number>(0);
+
   const scrollViewRef = useRef<ScrollView>(null);
-  const contentRef = useRef<View>(null);
-  // FIX: default 0 umesto null — sprečava blokiranje rendera
   const [initialScrollY, setInitialScrollY] = useState<number>(0);
 
   const { data: userData } = useQuery({
@@ -104,11 +109,9 @@ export default function EditProfileScreen() {
             longitude: profile.location.longitude,
           });
           if (geocode.length > 0) {
-            const city = geocode[0].subregion || geocode[0].city;
-            setLocationCity(city);
+            setLocationCity(geocode[0].subregion || geocode[0].city);
           }
-        } catch (error) {
-          console.error("Reverse geocoding failed:", error);
+        } catch {
           setLocationCity(null);
         }
       } else {
@@ -163,8 +166,8 @@ export default function EditProfileScreen() {
     useCallback(() => {
       const scrollYValue = globalScrollYRef.current;
       if (scrollYValue !== null && scrollYValue !== undefined) {
-        setInitialScrollY(scrollYValue);
-        globalScrollYRef.current = 0;
+        setInitialScrollY(scrollYValue as unknown as number);
+        (globalScrollYRef as any).current = 0;
       } else {
         setInitialScrollY(0);
       }
@@ -173,40 +176,43 @@ export default function EditProfileScreen() {
 
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (mode === 'edit') {
-      globalScrollYRef.current = event.nativeEvent.contentOffset.y;
+      (globalScrollYRef as any).current = event.nativeEvent.contentOffset.y;
     }
   };
 
-  const handleBack = () => {
-    router.replace('/(tabs)/profile');
-  };
-
-  const handleOpenModal = (screenName: keyof typeof screens, extraParams?: any) => router.push({ pathname: screens[screenName] as any, params: extraParams });
+  const handleBack = () => router.navigate('/(tabs)/profile' as any);
+  const handleOpenModal = (screenName: keyof typeof screens, extraParams?: any) =>
+    router.push({ pathname: screens[screenName] as any, params: extraParams });
   const handleSettingsPress = () => router.push('./settings' as any);
 
+  // PRILAGOĐENI TOK: Prvo otvaramo galeriju bez internog kropa, pa palimo naš modal
   const handleImageUploadPress = async (index: number) => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
       Alert.alert('Dozvola je neophodna', 'Molimo vas da omogućite pristup galeriji.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [3, 4], quality: 0.8 });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: false, // Isključujemo loš fabrički krop
+      quality: 1, // Uzimamo pun kvalitet da bi zoom bio kristalno jasan
+    });
+    
     if (!result.canceled && result.assets[0].uri) {
-      setUploadingIndex(index);
-      uploadImageMutation.mutate({ uri: result.assets[0].uri, index });
+      setTargetUploadIndex(index);
+      setSelectedRawImage(result.assets[0].uri);
+      setCropModalVisible(true); // Otvaramo custom krop prozor sa pinch-to-zoom
     }
   };
 
-  const handleShowProfileDetails = () => {
-    if (scrollViewRef.current && contentRef.current) {
-      contentRef.current.measure((_fx, _fy, _w, _h, _px, py) => {
-        const scrollPosition = py - 150;
-        scrollViewRef.current?.scrollTo({ y: scrollPosition > 0 ? scrollPosition : 0, animated: true });
-      });
-    }
+  // Funkcija koja se okida kada pritisneš kvačicu na novom modalu
+  const handleSaveCroppedImage = (croppedUri: string) => {
+    setCropModalVisible(false);
+    setUploadingIndex(targetUploadIndex);
+    // Šaljemo tvojoj već postojećoj mutaciji ispeglanu i kropovanu sliku
+    uploadImageMutation.mutate({ uri: croppedUri, index: targetUploadIndex });
   };
 
-  // FIX: uklonjen initialScrollY === null uslov
   if (!profile) {
     return (
       <View style={styles.center}>
@@ -222,68 +228,77 @@ export default function EditProfileScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
 
-        <ScrollView
-          ref={scrollViewRef}
-          onScroll={handleScroll}
-          scrollEventThrottle={16}
-          style={styles.scrollView}
-          contentInsetAdjustmentBehavior="never"
-          contentOffset={{ y: mode === 'edit' ? initialScrollY : 0, x: 0 }}
-        >
-          <View style={{ paddingTop: mode === 'edit' ? totalHeaderHeight : 0 }}>
-            {mode === 'edit' ? (
-              <View style={styles.editContainer}>
-                <ProfilePhotoGrid
-                  images={images}
-                  mode={mode}
-                  uploadingIndex={uploadingIndex}
-                  onAddImagePress={handleImageUploadPress}
-                  onRemoveImage={(index, url) => deleteImageMutation.mutate({ index, imageUrl: url })}
-                  onReorderImages={(newImages) => {
-                    const picturesOnly = newImages.filter((p): p is string => typeof p === 'string');
-                    queryClient.setQueryData(['userProfilePhotos', user?.id], newImages);
-                    queryClient.setQueryData(['userProfile', user?.id], (old: any) =>
-                      old ? { ...old, profilePictures: picturesOnly } : old
-                    );
-                    reorderImagesMutation.mutate(newImages);
-                  }}
-                />
-                <ProfileEditCardsAndModals
-                  profile={profile}
-                  locationCity={locationCity}
-                  onOpenModal={handleOpenModal}
-                  setProfileField={setProfileField}
-                  setPendingUpdates={setPendingUpdates}
-                />
-              </View>
-            ) : (
-              <>
-                <View style={styles.carouselWrapper}>
-                  <ProfileCarousel
-                    images={images.filter((img): img is string => !!img)}
-                    fullName={profile.fullName || ''}
-                    age={calculateAge(profile.birthDate)}
-                    locationCity={locationCity ?? undefined}
-                    showLocation={profile.showLocation || false}
-                    onShowSlider={handleShowProfileDetails}
-                  />
-                </View>
-                <View ref={contentRef} style={styles.profileDetailsContainer}>
-                  <ProfileDetailsView
-                    profile={profile}
-                    locationCity={locationCity}
-                  />
-                </View>
-              </>
-            )}
-          </View>
-        </ScrollView>
+        {mode === 'edit' ? (
+          // ─── EDIT MODE — scroll sa photo grid i karticama ───────
+          <ScrollView
+            ref={scrollViewRef}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            style={styles.scrollView}
+            contentInsetAdjustmentBehavior="never"
+            showsVerticalScrollIndicator={false}
+            contentOffset={{ y: initialScrollY, x: 0 }}
+          >
+            <View style={{ paddingTop: totalHeaderHeight, backgroundColor: '#fff' }}>
+              <ProfilePhotoGrid
+                images={images}
+                mode={mode}
+                uploadingIndex={uploadingIndex}
+                onAddImagePress={handleImageUploadPress}
+                onRemoveImage={(index, url) => deleteImageMutation.mutate({ index, imageUrl: url })}
+                onReorderImages={(newImages) => {
+                  const picturesOnly = newImages.filter((p): p is string => typeof p === 'string');
+                  queryClient.setQueryData(['userProfilePhotos', user?.id], newImages);
+                  queryClient.setQueryData(['userProfile', user?.id], (old: any) =>
+                    old ? { ...old, profilePictures: picturesOnly } : old
+                  );
+                  reorderImagesMutation.mutate(newImages);
+                }}
+              />
+              <ProfileEditCardsAndModals
+                profile={profile}
+                locationCity={locationCity}
+                onOpenModal={handleOpenModal}
+                setProfileField={setProfileField}
+                setPendingUpdates={setPendingUpdates}
+              />
+            </View>
+          </ScrollView>
+        ) : (
+          // ─── VIEW MODE — jedan ScrollView, carousel + details ───
+          <ScrollView
+            style={styles.scrollView}
+            contentInsetAdjustmentBehavior="never"
+            showsVerticalScrollIndicator={false}
+            contentOffset={{ x: 0, y: 0 }}
+          >
+            <ProfileCarousel
+              images={images.filter((img): img is string => !!img)}
+              fullName={profile.fullName || ''}
+              age={calculateAge(profile.birthDate)}
+              locationCity={locationCity ?? undefined}
+              showLocation={profile.showLocation || false}
+              onShowSlider={() => {}}
+            />
+            <ProfileDetailsView
+              profile={profile}
+              locationCity={locationCity}
+            />
+          </ScrollView>
+        )}
 
+        {/* Gradient pozadina za header */}
         <LinearGradient
-          colors={['rgba(0,0,0,0.9)', 'transparent']}
-          style={[styles.gradient, { height: totalHeaderHeight + 20 }]}
+          colors={
+            mode === 'view'
+              ? ['rgba(0,0,0,0.45)', 'transparent']
+              : ['rgba(255,255,255,0.97)', 'transparent']
+          }
+          style={[styles.gradient, { height: totalHeaderHeight + 24 }]}
+          pointerEvents="none"
         />
 
+        {/* Header — uvek floating iznad */}
         <View style={[styles.headerContainer, { height: totalHeaderHeight }]}>
           <ProfileHeader
             onBackPress={handleBack}
@@ -292,18 +307,34 @@ export default function EditProfileScreen() {
             onSettingsPress={handleSettingsPress}
           />
         </View>
+
+        {/* INTEGRACIJA: Naš novi slobodni crop modal se nalazi ovde */}
+        <ImageCropModal 
+          visible={cropModalVisible}
+          imageUri={selectedRawImage}
+          onClose={() => setCropModalVisible(false)}
+          onCropSave={handleSaveCroppedImage}
+        />
+
       </View>
     </GestureHandlerRootView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
+  container: { flex: 1, backgroundColor: '#fff' },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  headerContainer: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10, backgroundColor: 'transparent' },
-  gradient: { position: 'absolute', left: 0, right: 0, top: 0, zIndex: 9 },
   scrollView: { flex: 1 },
-  editContainer: { backgroundColor: COLORS.background },
-  carouselWrapper: { borderBottomLeftRadius: 30, borderBottomRightRadius: 30, overflow: 'hidden' },
-  profileDetailsContainer: { backgroundColor: COLORS.cardBackground, marginTop: -30, borderTopLeftRadius: 30, borderTopRightRadius: 30, zIndex: -1 },
+  headerContainer: {
+    position: 'absolute',
+    top: 0, left: 0, right: 0,
+    zIndex: 10,
+    backgroundColor: 'transparent',
+  },
+  gradient: {
+    position: 'absolute',
+    left: 0, right: 0, top: 0,
+    zIndex: 9,
+    pointerEvents: 'none',
+  },
 });

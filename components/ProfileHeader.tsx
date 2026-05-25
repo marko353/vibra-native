@@ -1,13 +1,14 @@
 import React from 'react';
 import { View, StyleSheet, TouchableOpacity, Text } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { AntDesign, Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 const COLORS = {
-  primary: '#E91E63',
+  primary: '#ff7f00',
   white: '#FFFFFF',
-  textPrimary: '#1E1E1E',
-  textSecondary: '#666666',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#999',
+  border: '#ECECEC',
 };
 
 interface ProfileHeaderProps {
@@ -23,27 +24,27 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   setMode,
   onSettingsPress,
 }) => {
-  const iconColor = mode === 'view' ? COLORS.white : COLORS.textPrimary;
-  const toggleTextColor = mode === 'view' ? COLORS.white : COLORS.textSecondary;
-  const activeToggleTextColor = COLORS.primary;
+  const isView = mode === 'view';
+  const iconColor = isView ? COLORS.white : COLORS.textPrimary;
 
-  // Izdvojena komponenta za dugmad da se ne ponavlja kod
   const ToggleButtons = () => (
-    <View style={[styles.toggleButtonsContainer, mode === 'view' && styles.toggleButtonsTransparent]}>
+    <View style={[styles.toggleContainer, isView && styles.toggleContainerView]}>
       <TouchableOpacity
         onPress={() => setMode('edit')}
-        style={[styles.toggleBtn, mode === 'edit' && styles.activeToggleBtn]}
+        style={[styles.toggleBtn, mode === 'edit' && styles.toggleBtnActive]}
+        activeOpacity={0.8}
       >
-        <Text style={[styles.toggleText, { color: toggleTextColor }, mode === 'edit' && { color: activeToggleTextColor }]}>
-          Uredi
+        <Text style={[styles.toggleText, mode === 'edit' && styles.toggleTextActive]}>
+          Edit
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => setMode('view')}
-        style={[styles.toggleBtn, mode === 'view' && styles.activeToggleBtn]}
+        style={[styles.toggleBtn, mode === 'view' && styles.toggleBtnActive]}
+        activeOpacity={0.8}
       >
-        <Text style={[styles.toggleText, { color: toggleTextColor }, mode === 'view' && { color: activeToggleTextColor }]}>
-          Pregled
+        <Text style={[styles.toggleText, mode === 'view' && styles.toggleTextActive]}>
+          Preview
         </Text>
       </TouchableOpacity>
     </View>
@@ -52,28 +53,38 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <View style={styles.header}>
-        {/* Levi deo hedera */}
+
+        {/* Back button */}
         <View style={styles.sideContainer}>
-          <TouchableOpacity style={styles.iconBtn} onPress={onBackPress}>
-            <Ionicons name="arrow-back" size={28} color={iconColor} />
+          <TouchableOpacity
+            style={[styles.backBtn, isView && styles.backBtnView]}
+            onPress={onBackPress}
+            activeOpacity={0.8}
+          >
+            <AntDesign name="arrow-left" size={20} color={iconColor} />
           </TouchableOpacity>
         </View>
 
-        {/* Srednji, centralni deo hedera */}
+        {/* Center toggle */}
         <View style={styles.centerContainer}>
           {mode === 'edit' && <ToggleButtons />}
         </View>
 
-        {/* Desni deo hedera */}
+        {/* Right side */}
         <View style={[styles.sideContainer, styles.alignRight]}>
           {mode === 'edit' ? (
-            <TouchableOpacity style={styles.iconBtn} onPress={onSettingsPress}>
-              <Ionicons name="settings-outline" size={24} color={iconColor} />
+            <TouchableOpacity
+              style={styles.settingsBtn}
+              onPress={onSettingsPress}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="settings-outline" size={20} color={COLORS.textPrimary} />
             </TouchableOpacity>
           ) : (
             <ToggleButtons />
           )}
         </View>
+
       </View>
     </SafeAreaView>
   );
@@ -88,7 +99,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    height: 56, // AŽURIRANO: Malo smanjena visina da se sve podigne
+    height: 56,
   },
   sideContainer: {
     width: 60,
@@ -104,36 +115,73 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconBtn: {
-    padding: 8,
+  backBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  toggleButtonsContainer: {
+  backBtnView: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.2)',
+  },
+  settingsBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  toggleContainer: {
     flexDirection: 'row',
-    backgroundColor: '#EAEAEA',
-    borderRadius: 20,
-    padding: 3, // AŽURIRANO: Malo smanjen padding
+    backgroundColor: '#F5F5F5',
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: COLORS.border,
   },
-  toggleButtonsTransparent: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  toggleContainerView: {
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderColor: 'rgba(255,255,255,0.2)',
   },
   toggleBtn: {
-    paddingVertical: 4, // AŽURIRANO: Smanjen vertikalni padding
-    paddingHorizontal: 10, // AŽURIRANO: Smanjen horizontalni padding
-    borderRadius: 16,
+    paddingVertical: 5,
+    paddingHorizontal: 14,
+    borderRadius: 9,
   },
-  activeToggleBtn: {
+  toggleBtnActive: {
     backgroundColor: COLORS.white,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 3,
-    elevation: 3,
+    shadowOpacity: 0.08,
+    shadowRadius: 4,
+    elevation: 2,
   },
   toggleText: {
-    fontSize: 13, // AŽURIRANO: Malo smanjen font
+    fontSize: 13,
     fontWeight: '600',
+    color: COLORS.textSecondary,
+  },
+  toggleTextActive: {
+    color: COLORS.primary,
   },
 });
 
 export default ProfileHeader;
-

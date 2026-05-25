@@ -1,337 +1,247 @@
-import React, { useState, useEffect, useCallback, memo } from "react";
+import React, { useState, useCallback, useEffect, memo } from "react";
 import {
   View,
   StyleSheet,
-  Image,
   Text,
   useWindowDimensions,
-  TouchableOpacity,
 } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
 import Animated, {
   useAnimatedStyle,
-  interpolate,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { Image } from "expo-image";
 
 const COLORS = {
   white: "#FFFFFF",
   black: "#000000",
-  primary: "#E91E63",
+  primary: "#FF7F00", // Vibra narandžasta
+  darkBg: "#0B0B0F",
+  cardBg: "#16161A",
 };
 
-// --------------------
-// TYPES
-// --------------------
-type CarouselItemProps = {
-  item: string;
-  animationValue: any;
-};
+type CarouselItemProps = { item: string; height: number };
+type IndicatorProps = { index: number; currentIndex: number };
 
-type IndicatorProps = {
-  index: number;
-  currentIndex: number;
-};
+// Premium kartica sa unutrašnjim ivicama
+const CarouselItem = memo(({ item, height }: CarouselItemProps) => (
+  <View style={[styles.carouselCard, { height: height }]}>
+    <Image 
+      source={{ uri: item }} 
+      style={styles.carouselImage} 
+      contentFit="cover"
+      contentPosition="center" // Sada radi savršeno jer je kontejner u 3:4 proporciji
+      transition={300}
+    />
+  </View>
+));
+CarouselItem.displayName = "CarouselItem";
 
-type ProfileCarouselProps = {
+// Premium tačkasti indikatori
+const DotIndicator = memo(({ index, currentIndex }: IndicatorProps) => {
+  const active = useSharedValue(index === currentIndex ? 1 : 0);
+
+  useEffect(() => {
+    active.value = withTiming(index === currentIndex ? 1 : 0, { duration: 250 });
+  }, [currentIndex]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    width: active.value ? 20 : 6,
+    opacity: active.value ? 1 : 0.4,
+    backgroundColor: active.value ? COLORS.primary : "#FFFFFF",
+  }));
+
+  return <Animated.View style={[styles.dotTrack, animStyle]} />;
+});
+DotIndicator.displayName = "DotIndicator";
+
+interface ProfileCarouselProps {
   images: string[];
   fullName?: string;
   age?: number | null;
   locationCity?: string;
   showLocation?: boolean;
-  onShowSlider: () => void;
-};
+}
 
-// --------------------
-// CAROUSEL ITEM
-// --------------------
-const ParallaxCarouselItem = memo(
-  ({ item, animationValue }: CarouselItemProps) => {
-    const animatedStyle = useAnimatedStyle(() => {
-      return {
-        transform: [
-          {
-            scale: interpolate(animationValue.value, [-1, 0, 1], [
-              0.9,
-              1,
-              1.03,
-            ]),
-          },
-          {
-            translateY: interpolate(animationValue.value, [-1, 0, 1], [
-              -8,
-              0,
-              6,
-            ]),
-          },
-        ],
-      };
-    });
-
-    return (
-      <Animated.View style={[styles.carouselItem, animatedStyle]}>
-        <Image source={{ uri: item }} style={styles.carouselImage} />
-      </Animated.View>
-    );
-  }
-);
-ParallaxCarouselItem.displayName = "ParallaxCarouselItem";
-
-// --------------------
-// INDICATOR DOT
-// --------------------
-const AnimatedIndicator = memo(
-  ({ index, currentIndex }: IndicatorProps) => {
-    const progress = useSharedValue(currentIndex);
-
-    useEffect(() => {
-      progress.value = withTiming(currentIndex, { duration: 200 });
-    }, [currentIndex]);
-
-    const animatedStyle = useAnimatedStyle(() => {
-      const isActive = index === Math.round(progress.value);
-      return {
-        width: withTiming(isActive ? 22 : 8),
-        backgroundColor: isActive
-          ? COLORS.white
-          : "rgba(255,255,255,0.35)",
-        height: 4,
-        borderRadius: 2,
-        marginHorizontal: 3,
-      };
-    });
-
-    return <Animated.View style={animatedStyle} />;
-  }
-);
-AnimatedIndicator.displayName = "AnimatedIndicator";
-
-// --------------------
-// MAIN COMPONENT
-// --------------------
-const ProfileCarousel: React.FC<ProfileCarouselProps> = ({
+export default function ProfileCarousel({
   images,
   fullName,
   age,
-  onShowSlider,
   locationCity,
   showLocation,
-}) => {
+}: ProfileCarouselProps) {
   const filteredImages = images.filter(Boolean);
   const [currentIndex, setCurrentIndex] = useState(0);
-
-  const insets = useSafeAreaInsets();
-  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
-
-  const carouselHeight = screenHeight * 0.88;
-
-  const isStackMode = filteredImages.length > 1;
-  const carouselMode = isStackMode ? "horizontal-stack" : "parallax";
+  const { width: screenWidth } = useWindowDimensions();
+  
+  // ── MATEMATIKA ZA ZAŠTITU PROPORCIJA ──
+  // Kartica zauzima tačno 90% širine ekrana
+  const carouselWidth = screenWidth * 0.90; 
+  // Visina se računa po formuli za 3:4 portrait odnos (širina * 1.333)
+  const carouselHeight = (carouselWidth * 4) / 3;
 
   const renderItem = useCallback(
-    ({
-      item,
-      animationValue,
-    }: {
-      item: string;
-      animationValue: any;
-    }) => (
-      <ParallaxCarouselItem
-        item={item}
-        animationValue={animationValue}
-      />
-    ),
-    []
+    ({ item }: { item: string }) => <CarouselItem item={item} height={carouselHeight} />,
+    [carouselHeight]
   );
 
   if (filteredImages.length === 0) {
     return (
       <View style={[styles.noImagesContainer, { height: carouselHeight }]}>
-        <Ionicons name="camera-outline" size={80} color="#ccc" />
-        <Text style={styles.noImagesText}>Nema fotografija za prikaz.</Text>
-        <Text style={styles.noImagesSubtext}>
-          Dodajte slike u modu za uređivanje.
-        </Text>
+        <Ionicons name="images-outline" size={36} color="#333" />
+        <Text style={styles.noImagesText}>Nema fotografija</Text>
       </View>
     );
   }
 
   return (
-    <View style={[styles.mainContainer, { height: carouselHeight }]}>
-      {/* Indicator dots */}
-      <View
-        style={[styles.paginationContainer, { top: insets.top + 10 }]}
-      >
-        {filteredImages.map((_, index) => (
-          <AnimatedIndicator
-            key={index}
-            index={index}
-            currentIndex={currentIndex}
-          />
-        ))}
+    <View style={styles.mainWrapper}>
+      
+      {/* Glavni Carousel sa fiksiranom 3:4 visinom */}
+      <View style={{ height: carouselHeight, width: screenWidth }}>
+        <Carousel
+          loop={false}
+          style={styles.carouselStyle}
+          width={screenWidth}
+          height={carouselHeight}
+          snapEnabled={true}
+          pagingEnabled={true}
+          mode="horizontal-stack"
+          modeConfig={{
+            snapDirection: "left",
+            stackInterval: 18, 
+            scaleInterval: 0.08, 
+          }}
+          data={filteredImages}
+          onSnapToItem={setCurrentIndex}
+          renderItem={renderItem}
+        />
       </View>
 
-      {/* CAROUSEL */}
-      <Carousel
-        loop={isStackMode}
-        width={screenWidth}
-        height={carouselHeight}
-        data={filteredImages}
-        onSnapToItem={setCurrentIndex}
-        autoPlay={false}
-        renderItem={renderItem}
-        mode={carouselMode as any}
-        modeConfig={
-          isStackMode
-            ? {
-                snapDirection: "left",
-                stackInterval: screenWidth * 0.12,
-                scaleInterval: 0.08,
-                opacityInterval: 0.15,
-              }
-            : undefined
-        }
-      />
+      {/* Info Panel ispod kartice (Sada ima više mesta i izgleda prozračno) */}
+      <View style={styles.metaContainer}>
+        
+        {/* Indikatori slika */}
+        {filteredImages.length > 1 && (
+          <View style={styles.dotsRow}>
+            {filteredImages.map((_, i) => (
+              <DotIndicator key={i} index={i} currentIndex={currentIndex} />
+            ))}
+          </View>
+        )}
 
-      {/* GRADIENT OVERLAY */}
-      <LinearGradient
-        colors={["transparent", "rgba(0,0,0,0.8)", "rgba(0,0,0,0.95)"]}
-        style={[
-          styles.gradientOverlay,
-          {
-            paddingBottom: 40 + insets.bottom,
-            height: carouselHeight * 0.45,
-          },
-        ]}
-      >
-        <View style={styles.overlayTextContainer}>
-          <Text numberOfLines={1} style={styles.overlayNameText}>
-            {fullName || ""}
-            {age !== null && age !== undefined && (
-              <Text style={styles.overlayAgeText}>{`, ${age}`}</Text>
-            )}
+        {/* Informacije profila */}
+        <View style={styles.infoBlock}>
+          <Text numberOfLines={1} style={styles.nameText}>
+            {fullName || "Neko Poseban"}
+            {age != null && <Text style={styles.ageText}>{`, ${age}`}</Text>}
           </Text>
 
           {showLocation && locationCity && (
-            <View style={styles.locationContainer}>
-              <Ionicons
-                name="location-sharp"
-                size={16}
-                color={COLORS.white}
-                style={{ marginRight: 5 }}
-              />
+            <View style={styles.locationRow}>
+              <View style={styles.livePulse} />
               <Text style={styles.locationText}>{locationCity}</Text>
             </View>
           )}
         </View>
 
-        <TouchableOpacity
-          style={[styles.downArrowButton, { bottom: 5 + insets.bottom }]}
-          onPress={onShowSlider}
-        >
-          <Ionicons name="chevron-down" size={30} color={COLORS.white} />
-        </TouchableOpacity>
-      </LinearGradient>
+      </View>
     </View>
   );
-};
+}
 
-ProfileCarousel.displayName = "ProfileCarousel";
-
-export default ProfileCarousel;
-
-// ----------------------------
-// STYLES
-// ----------------------------
 const styles = StyleSheet.create({
-  mainContainer: {
+  mainWrapper: {
     width: "100%",
-    position: "relative",
-    backgroundColor: COLORS.black,
+    backgroundColor: COLORS.darkBg,
+    paddingTop: 10,
   },
-
-  carouselItem: {
-    flex: 1,
-    borderRadius: 20,
+  carouselStyle: {
+    width: "100%",
+    height: "100%",
+  },
+  carouselCard: {
+    width: "90%", 
+    alignSelf: "center",
+    borderRadius: 28, 
     overflow: "hidden",
-    backgroundColor: "#222",
-    marginHorizontal: 10,
-    elevation: 10,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.08)", 
+    
+    // Premium senka
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 12,
   },
-
   carouselImage: {
     width: "100%",
     height: "100%",
-    resizeMode: "cover",
   },
-
-  paginationContainer: {
-    position: "absolute",
-    width: "100%",
-    zIndex: 20,
+  metaContainer: {
+    paddingHorizontal: 24,
+    marginTop: 20, // Malo više prostora ispod izdužene kartice
+    flexDirection: "column",
+    gap: 12,
+  },
+  dotsRow: {
     flexDirection: "row",
-    justifyContent: "center",
+    alignItems: "center",
+    gap: 6,
   },
-
-  gradientOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "flex-end",
+  dotTrack: {
+    height: 6,
+    borderRadius: 3,
   },
-
-  overlayTextContainer: {
-    paddingHorizontal: 25,
-    marginBottom: 15,
+  infoBlock: {
+    gap: 4,
   },
-
-  overlayNameText: {
-    color: COLORS.white,
-    fontSize: 26,
+  nameText: {
+    color: "#FFFFFF",
+    fontSize: 28,
     fontWeight: "700",
+    letterSpacing: -0.3,
   },
-
-  overlayAgeText: {
-    fontSize: 24,
+  ageText: {
     fontWeight: "300",
+    color: "rgba(255, 255, 255, 0.85)",
   },
-
-  locationContainer: {
+  locationRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginTop: 4,
+    gap: 6,
+    marginTop: 2,
   },
-
+  livePulse: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#10B981", 
+  },
   locationText: {
-    color: COLORS.white,
-    fontSize: 15,
+    color: "rgba(255, 255, 255, 0.6)",
+    fontSize: 14,
+    fontWeight: "500",
+    letterSpacing: 0.2,
   },
-
-  downArrowButton: {
-    position: "absolute",
-    right: 25,
-  },
-
   noImagesContainer: {
-    width: "100%",
+    width: "90%",
+    alignSelf: "center",
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f0f0f0",
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 28,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "rgba(255, 255, 255, 0.05)",
   },
-
   noImagesText: {
-    fontSize: 20,
-    marginTop: 15,
-    color: "#777",
-  },
-
-  noImagesSubtext: {
-    fontSize: 16,
-    color: "#999",
+    fontSize: 15,
+    color: "#444",
+    fontWeight: "600",
   },
 });
