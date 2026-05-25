@@ -24,10 +24,14 @@ import Animated, {
 /* ================= CONSTANTS ================= */
 
 const COLORS = {
-  primary: '#E91E63',
-  textPrimary: '#2c3e50',
+  primary: '#ff7f00',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#999',
   white: '#FFFFFF',
-  placeholderBackground: '#f0f2f5',
+  background: '#fff',
+  border: '#ECECEC',
+  placeholder: '#FAFAFA',
+  shadow: '#ff7f00',
 };
 
 const windowWidth = Dimensions.get('window').width;
@@ -73,7 +77,6 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
   const colSize = cardWidth + CARD_MARGIN;
   const rowSize = (cardWidth * 4) / 3 + CARD_MARGIN;
 
-  // Izračunavamo target koordinate direktno u renderu na osnovu PROPS-a
   const targetX = (index % 3) * colSize;
   const targetY = Math.floor(index / 3) * rowSize;
 
@@ -81,7 +84,6 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
   const translateY = useSharedValue(targetY);
   const isPressed = useSharedValue(false);
 
-  // ✅ Sinhornizacija: Kada roditelj promeni redosled, useEffect pomera karticu
   useEffect(() => {
     if (!isPressed.value) {
       translateX.value = withSpring(targetX, { damping: 20, stiffness: 90 });
@@ -90,15 +92,14 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
   }, [index, targetX, targetY]);
 
   const panGesture = Gesture.Pan()
+    .minDistance(10)
+    .enableTrackpadTwoFingerGesture(false)
     .onBegin(() => {
       if (!uri || mode !== 'edit') return;
       isPressed.value = true;
-      console.log(`[DRAG START] Slot: ${index}, Uri: ${uri?.substring(0, 30)}...`);
     })
     .onUpdate((event) => {
       if (mode !== 'edit' || !uri) return;
-      
-      // Koristimo targetX/Y kao bazu za prevlačenje
       translateX.value = event.translationX + targetX;
       translateY.value = event.translationY + targetY;
     })
@@ -110,17 +111,13 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
       const rawRow = Math.round(translateY.value / rowSize);
 
       const safeCol = Math.max(0, Math.min(2, rawCol));
-      const safeRow = Math.max(0, Math.min(2, rawRow)); // Grid je 3x3 (max 9 polja)
+      const safeRow = Math.max(0, Math.min(2, rawRow));
 
       const newIndex = safeRow * 3 + safeCol;
 
-      console.log(`[DRAG END] Prebacivanje sa ${index} na ${newIndex} (SafeCol: ${safeCol}, SafeRow: ${safeRow})`);
-
       if (!isNaN(newIndex) && newIndex <= maxIndex && newIndex >= 0 && newIndex !== index) {
-        console.log(`✅ USPEŠAN REORDER: ${index} -> ${newIndex}`);
         runOnJS(onReorder)(index, newIndex);
       } else {
-        console.log("❌ REORDER PONIŠTEN: Vraćanje na originalnu poziciju.");
         translateX.value = withSpring(targetX);
         translateY.value = withSpring(targetY);
       }
@@ -133,28 +130,33 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
     position: 'absolute',
     width: cardWidth,
     aspectRatio: 3 / 4,
-    // Slike su uvek iznad placeholdera, a aktivna slika je iznad svih
     zIndex: isPressed.value ? 1000 : (uri ? 10 : 1),
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
-      { scale: withSpring(isPressed.value ? 1.1 : 1) },
+      { scale: withSpring(isPressed.value ? 1.05 : 1) },
     ],
   }));
 
   return (
-    <GestureDetector gesture={panGesture}>
-      <Animated.View style={[styles.card, animatedStyle]}>
+    <GestureDetector gesture={uri ? panGesture : Gesture.Pan().enabled(false)}>
+      <Animated.View style={[animatedStyle]}>
         {uri ? (
-          <View style={{ flex: 1 }}>
+          <View style={styles.imageCard}>
             <Image source={{ uri }} style={styles.image} />
             {mode === 'edit' && onRemoveImage && (
               <TouchableOpacity
                 style={styles.removeBtn}
                 onPress={() => onRemoveImage(index, uri)}
               >
-                <Ionicons name="close-circle" size={26} color={COLORS.white} />
+                <Ionicons name="close-circle" size={24} color="#fff" />
               </TouchableOpacity>
+            )}
+            {/* Badge za prvu sliku */}
+            {index === 0 && (
+              <View style={styles.mainBadge}>
+                <Text style={styles.mainBadgeText}>Main</Text>
+              </View>
             )}
           </View>
         ) : (
@@ -162,13 +164,16 @@ const DraggableCard: React.FC<DraggableCardProps> = ({
             style={styles.placeholderCard}
             onPress={() => onAddImagePress && onAddImagePress(index)}
             disabled={uploadingIndex === index || mode === 'view'}
+            activeOpacity={0.7}
           >
             {uploadingIndex === index ? (
               <ActivityIndicator size="small" color={COLORS.primary} />
             ) : (
-              <View style={{ alignItems: 'center' }}>
-                <Ionicons name="add-circle" size={36} color={COLORS.primary} />
-                <Text style={styles.addText}>Dodaj</Text>
+              <View style={styles.placeholderInner}>
+                <View style={styles.addIconCircle}>
+                  <Ionicons name="add" size={22} color={COLORS.primary} />
+                </View>
+                <Text style={styles.addText}>Add photo</Text>
               </View>
             )}
           </TouchableOpacity>
@@ -191,33 +196,36 @@ const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
   const cardWidth = (windowWidth - HORIZONTAL_PADDING * 2 - CARD_MARGIN * 2) / 3;
   const rowHeight = (cardWidth * 4) / 3 + CARD_MARGIN;
 
-  // Filtriramo samo URL-ove da bismo znali limit pomeranja
   const realImages = images.filter((img): img is string => typeof img === 'string');
 
   const handleReorder = (from: number, to: number) => {
-    console.log(`[HANDLE REORDER] Logika: Splice sa ${from} na ${to}`);
-    
     if (from === to) return;
-
-    // Radimo samo sa "realnim" slikama da ne bismo pomerali "Dodaj sliku" dugmiće
     const updated = [...realImages];
     const [moved] = updated.splice(from, 1);
     updated.splice(to, 0, moved);
-
-    // Popunjavamo nazad do 9 mesta sa null (placeholderi)
     const filled = [...updated, ...Array(9 - updated.length).fill(null)];
-    
-    console.log("[FINAL SEND] Niz spreman za roditelja.");
     onReorderImages(filled);
   };
 
   return (
     <GestureHandlerRootView style={styles.container}>
-      <Text style={styles.photosTitle}>Galerija slika</Text>
+      {/* Header */}
+      <View style={styles.headerRow}>
+        <Text style={styles.photosTitle}>Photos</Text>
+        <Text style={styles.photosSubtitle}>{realImages.length} / 9</Text>
+      </View>
+
+      {/* Hint */}
+      {mode === 'edit' && (
+        <View style={styles.hintRow}>
+          <Ionicons name="information-circle-outline" size={13} color={COLORS.primary} />
+          <Text style={styles.hintText}>Hold & drag to reorder</Text>
+        </View>
+      )}
+
       <View style={[styles.gridContainer, { height: rowHeight * 3 }]}>
         {images.map((uri, index) => (
           <DraggableCard
-            // ✅ STABILAN KLJUČ: Koristimo URI ako postoji, inače fiksni slot
             key={uri ? `img-${uri}` : `empty-slot-${index}`}
             uri={uri}
             index={index}
@@ -236,44 +244,114 @@ const ProfilePhotoGrid: React.FC<ProfilePhotoGridProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: { paddingBottom: 20 },
+  container: {
+    paddingBottom: 24,
+    backgroundColor: '#fff',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: HORIZONTAL_PADDING,
+    marginBottom: 4,
+    marginTop: 8,
+  },
   photosTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    letterSpacing: -0.3,
+  },
+  photosSubtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
+  hintRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginHorizontal: HORIZONTAL_PADDING,
-    marginBottom: 10,
+    marginBottom: 12,
+  },
+  hintText: {
+    fontSize: 11,
+    color: COLORS.primary,
+    fontWeight: '500',
   },
   gridContainer: {
     marginHorizontal: HORIZONTAL_PADDING,
     position: 'relative',
   },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 15,
+  imageCard: {
+    flex: 1,
+    borderRadius: 16,
     overflow: 'hidden',
-    elevation: 4,
+    backgroundColor: COLORS.white,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.10,
+    shadowRadius: 10,
+    elevation: 4,
   },
-  image: { width: '100%', height: '100%', resizeMode: 'cover' },
+  image: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
   removeBtn: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 15,
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    borderRadius: 14,
     zIndex: 20,
+    padding: 1,
+  },
+  mainBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: COLORS.primary,
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  mainBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#fff',
+    letterSpacing: 0.5,
   },
   placeholderCard: {
     flex: 1,
-    backgroundColor: COLORS.placeholderBackground,
+    backgroundColor: COLORS.placeholder,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: COLORS.border,
+    borderStyle: 'dashed',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  addText: { fontSize: 12, color: COLORS.primary, marginTop: 4, fontWeight: '700' },
+  placeholderInner: {
+    alignItems: 'center',
+    gap: 6,
+  },
+  addIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#fff5ec',
+    borderWidth: 1.5,
+    borderColor: '#ffd0a8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  addText: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    fontWeight: '500',
+  },
 });
 
 export default ProfilePhotoGrid;

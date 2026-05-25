@@ -11,6 +11,7 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
+    Platform,
     View,
 } from "react-native";
 import Header from "../../../components/Header";
