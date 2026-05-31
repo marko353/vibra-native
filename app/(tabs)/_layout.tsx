@@ -1,8 +1,6 @@
-// app/(tabs)/_layout.tsx
-
 import React, { useState, useEffect } from 'react';
 import { Tabs, usePathname } from 'expo-router';
-import { Text, Image, View, ActivityIndicator } from 'react-native';
+import { Text, Image, View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
 import {
   Ionicons,
   MaterialIcons,
@@ -10,56 +8,85 @@ import {
   Feather,
 } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import axios from 'axios'; 
-import { useQuery } from '@tanstack/react-query'; 
-
+import axios from 'axios';
+import { useQuery } from '@tanstack/react-query';
 import { useProfileContext } from '../../context/ProfileContext';
 import { useSocketContext } from '../../context/SocketContext';
-import { useAuthContext } from '../../context/AuthContext'; 
+import { useAuthContext } from '../../context/AuthContext';
 import LocationPermissionScreen from '../(auth)/location-permission';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+const ORANGE = '#FF6A00';
+const INACTIVE = '#1C1C1E';
 
 function MainTabsLayout() {
   const pathname = usePathname();
-  const { hasUnread } = useSocketContext();
-  const { user } = useAuthContext(); 
+  const { user } = useAuthContext();
+  const userKey = user?.id || 'me';
 
-  /* 🔴 BROJAČ ZA LIKES */
   const { data: likes = [] } = useQuery({
-    queryKey: ['incoming-likes', user?.id],
-    enabled: !!user?.token && !!user?.id,
+    queryKey: ['incoming-likes', userKey],
+    enabled: !!user?.token,
     queryFn: async () => {
-      const res = await axios.get(
-        `${API_BASE_URL}/api/user/incoming-likes`,
-        {
-          headers: { Authorization: `Bearer ${user?.token}` },
-        }
-      );
+      const res = await axios.get(`${API_BASE_URL}/api/user/incoming-likes`, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
       return res.data?.likes || res.data || [];
     },
   });
+
+  const { data: unreadCount = 0 } = useQuery({
+    queryKey: ['unread-messages-count', userKey],
+    enabled: !!user?.token,
+    queryFn: async () => {
+      const res = await axios.get(`${API_BASE_URL}/api/chats/unread-count`, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+      return res.data?.count || res.data?.unreadCount || 0;
+    },
+  });
+
+  const { data: chatData } = useQuery({
+    queryKey: ['my-matches', userKey],
+    enabled: !!user?.token,
+    queryFn: async () => {
+      const res = await axios.get(`${API_BASE_URL}/api/user/my-matches`, {
+        headers: { Authorization: `Bearer ${user?.token}` },
+      });
+      return res.data || { newMatches: [], conversations: [] };
+    },
+  });
+
+  const unreadMatchCount = (chatData?.newMatches || []).filter((m: any) => m?.has_unread).length;
+  const unreadConversationCount = (chatData?.conversations || []).filter((c: any) => c?.has_unread).length;
+  const chatBadgeCount = Math.max(Number(unreadCount) || 0, unreadMatchCount + unreadConversationCount);
 
   return (
     <Tabs
       initialRouteName="home"
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: '#ff7f00',
+        tabBarActiveTintColor: ORANGE,
+        tabBarInactiveTintColor: INACTIVE,
         tabBarStyle: {
-          borderTopWidth: 0,    // ✅ Uklanja liniju
-          elevation: 0,         // ✅ Uklanja senku (Android)
-          shadowOpacity: 0,     // ✅ Uklanja senku (iOS)
-          backgroundColor: '#fff',
+          borderTopWidth: StyleSheet.hairlineWidth,
+          borderTopColor: '#E5E5EA',
+          elevation: 0,
+          shadowOpacity: 0,
+          backgroundColor: '#FFFFFF',
+        },
+        tabBarLabelStyle: {
+          fontSize: 10,
+          fontWeight: '600',
         },
       }}
     >
-      {/* ---------------- HOME ---------------- */}
+      {/* HOME */}
       <Tabs.Screen
         name="home"
         options={{
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10 }}>Home</Text>
+            <Text style={{ color, fontSize: 10, fontWeight: '600' }}>Home</Text>
           ),
           tabBarIcon: ({ focused }) => (
             <Image
@@ -68,103 +95,111 @@ function MainTabsLayout() {
                 width: 43,
                 height: 43,
                 marginBottom: -5,
-                tintColor: focused ? '#ff7f00' : 'gray',
+                tintColor: focused ? ORANGE : INACTIVE,
               }}
             />
           ),
         }}
       />
 
-      {/* ---------------- EXPLORE ---------------- */}
+      {/* EXPLORE */}
       <Tabs.Screen
         name="explore"
         options={{
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10 }}>Explore</Text>
+            <Text style={{ color, fontSize: 10, fontWeight: '600' }}>Explore</Text>
           ),
-          tabBarIcon: ({ color, size }) => (
-            <Feather name="compass" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? 'compass' : 'compass-outline'}
+              size={28}
+              color={focused ? ORANGE : INACTIVE}
+            />
           ),
         }}
       />
 
-      {/* ---------------- LIKES ---------------- */}
+      {/* LIKES */}
       <Tabs.Screen
         name="likes"
         options={{
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10 }}>Likes</Text>
+            <Text style={{ color, fontSize: 10, fontWeight: '600' }}>Likes</Text>
           ),
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons
-              name="favorite-border"
-              size={size}
-              color={color}
-            />
+          tabBarIcon: ({ focused }) => (
+            <View>
+              <Ionicons
+                name={focused ? 'heart' : 'heart-outline'}
+                size={27}
+                color={focused ? ORANGE : INACTIVE}
+              />
+              {likes.length > 0 && <View style={styles.badgeDot} />}
+            </View>
           ),
-          // ✅ DODAT BROJAČ
-          tabBarBadge: likes.length > 0 ? likes.length : undefined,
-          tabBarBadgeStyle: {
-            backgroundColor: '#ff7f00',
-            color: 'white',
-            fontSize: 10,
-          }
         }}
       />
 
-      {/* ---------------- CHAT ---------------- */}
+      {/* CHAT */}
       <Tabs.Screen
         name="chat-stack"
         options={{
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10 }}>Chat</Text>
+            <Text style={{ color, fontSize: 10, fontWeight: '600' }}>Chat</Text>
           ),
-          tabBarIcon: ({ color, size }) => (
-            <View style={{ position: 'relative' }}>
+          tabBarIcon: ({ focused }) => (
+            <View>
               <Ionicons
-                name="chatbubble-outline"
-                size={size}
-                color={color}
+                name={focused ? 'chatbubble' : 'chatbubble-outline'}
+                size={26}
+                color={focused ? ORANGE : INACTIVE}
               />
-              {hasUnread && (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: -4,
-                    right: -4,
-                    width: 10,
-                    height: 10,
-                    borderRadius: 5,
-                    backgroundColor: 'red',
-                  }}
-                />
-              )}
+              {chatBadgeCount > 0 && <View style={styles.badgeDot} />}
             </View>
           ),
           tabBarStyle: {
             display: pathname.includes('/chat-stack/') ? 'none' : 'flex',
-            borderTopWidth: 0, // ✅ Osigurava da nema linije ni ovde
-            elevation: 0,      // ✅ Bez senke
-            backgroundColor: '#fff',
+            borderTopWidth: StyleSheet.hairlineWidth,
+            borderTopColor: '#E5E5EA',
+            elevation: 0,
+            shadowOpacity: 0,
+            backgroundColor: '#FFFFFF',
           },
         }}
       />
 
-      {/* ---------------- PROFILE ---------------- */}
+      {/* PROFILE */}
       <Tabs.Screen
         name="profile"
         options={{
           tabBarLabel: ({ color }) => (
-            <Text style={{ color, fontSize: 10 }}>Profile</Text>
+            <Text style={{ color, fontSize: 10, fontWeight: '600' }}>Profile</Text>
           ),
-          tabBarIcon: ({ color, size }) => (
-            <FontAwesome5 name="user-circle" size={size} color={color} />
+          tabBarIcon: ({ focused }) => (
+            <Ionicons
+              name={focused ? 'person-circle' : 'person-circle-outline'}
+              size={28}
+              color={focused ? ORANGE : INACTIVE}
+            />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  badgeDot: {
+    position: 'absolute',
+    top: -1,
+    right: -3,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: ORANGE,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+  },
+});
 
 export default function TabsGroupGateLayout() {
   const { profile, isLoading: isProfileLoading } = useProfileContext();
@@ -180,9 +215,13 @@ export default function TabsGroupGateLayout() {
 
   if (isProfileLoading || !profile || locationPromptCompleted === null) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#ffffff' }}>
-        <Image source={require('../../assets/images/1000006401.png')} style={{ width: 200, height: 200 }} resizeMode="contain" />
-        <ActivityIndicator size="small" color="#555" style={{ marginTop: 20 }} />
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#FCFCFD' }}>
+        <Image
+          source={require('../../assets/images/1000006401.png')}
+          style={{ width: 160, height: 160 }}
+          resizeMode="contain"
+        />
+        <ActivityIndicator size="small" color={ORANGE} style={{ marginTop: 20 }} />
       </View>
     );
   }

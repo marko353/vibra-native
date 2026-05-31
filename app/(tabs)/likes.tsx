@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Modal, StyleSheet, Text, View } from "react-native";
-import Icon from "react-native-vector-icons/Ionicons";
+import { Ionicons } from "@expo/vector-icons";
 import { useFilterModal } from "../../context/FilterModalContext";
 
 import Header from "../../components/Header";
@@ -13,6 +13,17 @@ import { useAuthContext } from "../../context/AuthContext";
 import { useSocketContext } from "../../context/SocketContext";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
+
+const COLORS = {
+  primary: "#ff7f00",
+  primaryLight: "#fff5ec",
+  primaryBorder: "#ffd0a8",
+  background: "#F4F5F7",
+  card: "#FFFFFF",
+  textPrimary: "#1a1a1a",
+  textSecondary: "#999",
+  border: "#ECECEC",
+};
 
 export default function LikesTab() {
   const { user } = useAuthContext();
@@ -28,15 +39,11 @@ export default function LikesTab() {
     type: "success" | "error";
   } | null>(null);
 
-  const showToast = useCallback(
-    (message: string, type: "success" | "error") => {
-      setToastMessage({ message, type });
-      setTimeout(() => setToastMessage(null), 3000);
-    },
-    [],
-  );
+  const showToast = useCallback((message: string, type: "success" | "error") => {
+    setToastMessage({ message, type });
+    setTimeout(() => setToastMessage(null), 3000);
+  }, []);
 
-  // 1. Fetch dolaznih lajkova
   const {
     data: likes = [],
     isLoading,
@@ -52,11 +59,9 @@ export default function LikesTab() {
     enabled: !!user?.token && !!user?.id,
   });
 
-  // 2. Socket listeneri
   useEffect(() => {
     if (!socket) return;
     const handleSocketEvent = (data: any) => {
-      console.log("❤️ [LikesTab] likeReceived/newIncomingLike event:", data);
       queryClient.invalidateQueries({ queryKey: ["incoming-likes", user?.id] });
       refetch();
     };
@@ -68,11 +73,9 @@ export default function LikesTab() {
     };
   }, [socket, user?.id, queryClient, refetch]);
 
-  // 3. Handle Skip
   const handleSkip = useCallback(
     async (targetUserId: string) => {
       if (!user?.id) return;
-      console.log("👎 [LikesTab] Skip:", targetUserId);
       queryClient.setQueryData(["incoming-likes", user.id], (prev: any) => {
         const old = Array.isArray(prev) ? prev : [];
         return old.filter((u: any) => (u._id || u.id) !== targetUserId);
@@ -85,17 +88,14 @@ export default function LikesTab() {
         );
         queryClient.invalidateQueries({ queryKey: ["potential-matches"] });
       } catch (error) {
-        console.error("❌ [LikesTab] Greška pri skipovanju:", error);
         refetch();
       }
     },
     [user, queryClient, refetch],
   );
 
-  // 4. Handle Like
   const handleLike = async (targetUserId: string) => {
     if (!user?.id || isProcessing) return;
-    console.log("❤️ [LikesTab] Like:", targetUserId);
     setIsProcessing(true);
     try {
       const response = await axios.post(
@@ -103,12 +103,6 @@ export default function LikesTab() {
         { targetUserId, action: "like" },
         { headers: { Authorization: `Bearer ${user.token}` } },
       );
-
-      console.log("✅ [LikesTab] Swipe response:", {
-        match: response.data.match,
-        conversationId: response.data.conversationId,
-      });
-
       if (response.data.match) {
         setMatchData({
           ...response.data.matchedUser,
@@ -117,7 +111,6 @@ export default function LikesTab() {
         socket?.emit("likeSent", { targetUserId });
         queryClient.invalidateQueries({ queryKey: ["my-matches", user.id] });
       }
-
       queryClient.setQueryData(["incoming-likes", user.id], (prev: any) => {
         const old = Array.isArray(prev) ? prev : [];
         return old.filter((u: any) => (u._id || u.id) !== targetUserId);
@@ -129,72 +122,35 @@ export default function LikesTab() {
     }
   };
 
-  // 5. Handler za poruke — koristi SOCKET umesto HTTP
-  // HTTP POST ne emituje receiveMessage socket event ka primaocu
   const handleSendMessage = useCallback(
     async (message: string) => {
-      console.log("🔥 [LikesTab] handleSendMessage pozvan", {
-        hasMatchData: !!matchData,
-        matchDataId: matchData?._id,
-        conversationId: matchData?.conversationId,
-        hasSocket: !!socket,
-        socketConnected: socket?.connected,
-        message,
-      });
-
       if (!matchData || !user?.id) {
-        console.log("❌ [LikesTab] Nema matchData ili user");
         setMatchData(null);
         return;
       }
-
       const targetUserId = matchData._id;
       const trimmedMessage = message.trim();
-
       if (!trimmedMessage) {
-        console.log("ℹ️ [LikesTab] Prazna poruka, zatvaramo match screen");
-        showToast("Match sačuvan!", "success");
+        showToast("Match saved!", "success");
         setMatchData(null);
         return;
       }
-
-      // Čekamo da socket bude spreman ako nije
       if (!socket?.connected) {
-        console.warn("⚠️ [LikesTab] Socket nije povezan, čekam reconnect...");
         socket?.connect();
         await new Promise<void>((resolve) => {
-          socket?.once("connect", () => {
-            console.log("✅ [LikesTab] Socket reconnected");
-            resolve();
-          });
-          setTimeout(() => {
-            console.warn("⏰ [LikesTab] Socket reconnect timeout");
-            resolve();
-          }, 3000);
+          socket?.once("connect", () => resolve());
+          setTimeout(() => resolve(), 3000);
         });
       }
-
-      console.log("📤 [LikesTab] Emitujem sendMessage via socket", {
-        receiverId: targetUserId,
-        text: trimmedMessage,
-        socketConnected: socket?.connected,
-        socketId: socket?.id,
-      });
-
       socket?.emit(
         "sendMessage",
         { receiverId: targetUserId, text: trimmedMessage },
         (response: any) => {
-          console.log("📨 [LikesTab] sendMessage callback response:", response);
           if (response?.status === "ok") {
-            console.log("✅ [LikesTab] Poruka uspešno poslata:", response.message?._id);
-            showToast("Poruka uspešno poslata!", "success");
-            queryClient.invalidateQueries({
-              queryKey: ["my-matches", user.id],
-            });
+            showToast("Message sent!", "success");
+            queryClient.invalidateQueries({ queryKey: ["my-matches", user.id] });
           } else {
-            console.error("❌ [LikesTab] sendMessage greška:", response);
-            showToast("Greška pri slanju poruke.", "error");
+            showToast("Failed to send message.", "error");
           }
           setMatchData(null);
         },
@@ -205,33 +161,41 @@ export default function LikesTab() {
 
   return (
     <View style={styles.container}>
-      <Header title={`${likes.length} sviđanja`} onFilterClick={showModal} />
+      <Header onFilterClick={showModal} />
 
+      {/* ── LIKES HEADER ── */}
       <View style={styles.likesHeader}>
         <View style={styles.likesBadge}>
+          <Ionicons name="heart" size={15} color={COLORS.primary} />
           <Text style={styles.likesCount}>{likes.length}</Text>
-          <Text style={styles.likesLabel}>sviđanja</Text>
+          <Text style={styles.likesLabel}>
+            {likes.length === 1 ? "like" : "likes"}
+          </Text>
         </View>
       </View>
 
       {isLoading ? (
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#FF6A00" />
+          <ActivityIndicator size="small" color={COLORS.primary} />
+        </View>
+      ) : likes.length === 0 ? (
+        <View style={styles.center}>
+          <View style={styles.emptyIconBox}>
+            <Ionicons name="heart-outline" size={32} color={COLORS.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>No likes yet</Text>
+          <Text style={styles.emptyText}>
+            When someone likes your profile, they&apos;ll appear here.
+          </Text>
         </View>
       ) : (
         <>
-          {likes.length === 0 ? (
-            <View style={styles.center}>
-              <Text style={styles.emptyText}>Još uvek nema novih lajkova.</Text>
-            </View>
-          ) : (
-            <LikesGrid
-              data={likes}
-              isPremium={false}
-              onLike={handleLike}
-              onSkip={handleSkip}
-            />
-          )}
+          <LikesGrid
+            data={likes}
+            isPremium={false}
+            onLike={handleLike}
+            onSkip={handleSkip}
+          />
           <LikesCTA isPremium={false} onPress={() => {}} />
         </>
       )}
@@ -251,21 +215,14 @@ export default function LikesTab() {
       {!!toastMessage && (
         <View
           style={[
-            styles.toastContainer,
-            toastMessage.type === "success"
-              ? styles.toastSuccess
-              : styles.toastError,
+            styles.toast,
+            toastMessage.type === "success" ? styles.toastSuccess : styles.toastError,
           ]}
         >
-          <Icon
-            name={
-              toastMessage.type === "success"
-                ? "checkmark-circle"
-                : "alert-circle"
-            }
-            size={20}
+          <Ionicons
+            name={toastMessage.type === "success" ? "checkmark-circle" : "alert-circle"}
+            size={18}
             color="#fff"
-            style={{ marginRight: 10 }}
           />
           <Text style={styles.toastText}>{toastMessage.message}</Text>
         </View>
@@ -275,49 +232,109 @@ export default function LikesTab() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+
+  // Likes header badge
+  likesHeader: {
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  likesBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 30,
+  },
+  likesCount: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: COLORS.primary,
+    letterSpacing: -0.3,
+  },
+  likesLabel: {
+    fontSize: 14,
+    color: COLORS.primary,
+    fontWeight: "600",
+  },
+
+  // Loading / empty
   center: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingTop: 100,
+    paddingBottom: 60,
+    gap: 12,
   },
-  likesHeader: { alignItems: "center", marginVertical: 12 },
-  likesBadge: {
-    flexDirection: "row",
+  emptyIconBox: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: COLORS.primaryLight,
+    borderWidth: 1,
+    borderColor: COLORS.primaryBorder,
     alignItems: "center",
-    backgroundColor: "#FFE4EA",
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 30,
+    justifyContent: "center",
+    marginBottom: 4,
   },
-  likesCount: {
-    fontSize: 20,
+  emptyTitle: {
+    fontSize: 18,
     fontWeight: "700",
-    color: "#ff3b5c",
-    marginRight: 6,
+    color: COLORS.textPrimary,
+    letterSpacing: -0.3,
   },
-  likesLabel: { fontSize: 15, color: "#ff3b5c", fontWeight: "500" },
-  emptyText: { color: "#666", fontSize: 16, textAlign: "center" },
+  emptyText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 40,
+    lineHeight: 20,
+  },
+
+  // Match modal
   fullScreenMatch: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.92)",
     justifyContent: "center",
     alignItems: "center",
   },
-  toastContainer: {
+
+  // Toast
+  toast: {
     position: "absolute",
-    top: 50,
+    top: 56,
     alignSelf: "center",
-    padding: 15,
-    borderRadius: 8,
     flexDirection: "row",
     alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 14,
     zIndex: 99999,
     elevation: 20,
-    maxWidth: "90%",
+    maxWidth: "88%",
+    shadowColor: "#000",
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
   },
-  toastSuccess: { backgroundColor: "#4CAF50" },
-  toastError: { backgroundColor: "#F44336" },
-  toastText: { color: "#fff", fontWeight: "600", fontSize: 14, flexShrink: 1 },
+  toastSuccess: {
+    backgroundColor: "#10B981",
+  },
+  toastError: {
+    backgroundColor: "#EF4444",
+  },
+  toastText: {
+    color: "#fff",
+    fontWeight: "600",
+    fontSize: 14,
+    flexShrink: 1,
+  },
 });

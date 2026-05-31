@@ -1,18 +1,20 @@
 import React, { useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Animated, ColorValue } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  Animated,
+  ColorValue,
+  Dimensions,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 
-const COLORS = {
-  cardBackground: '#fff',
-  textPrimary: '#222',
-  textSecondary: '#666',
-  buttonText: '#fff',
-  shadowColor: '#000',
-  extraGradient: ['#3B82F6', '#2563EB'] as const,
-  goldGradient: ['#FFD700', '#F2994A'] as const,
-  platinumGradient: ['#E5E4E2', '#BFC0C0'] as const,
-};
+const { width: windowWidth } = Dimensions.get('window');
+const CARD_WIDTH = windowWidth - 80;
+
+type GradientColorArray = readonly [ColorValue, ColorValue, ...ColorValue[]];
 
 interface MonetizationCardProps {
   pkg: {
@@ -20,21 +22,22 @@ interface MonetizationCardProps {
     price: string;
     icon: string;
     color: string;
+    gradient: GradientColorArray;
+    description?: string;
   };
 }
-
-// ✨ DEKLARACIJA TIPA za niz boja koji LinearGradient očekuje
-type GradientColorArray = readonly [ColorValue, ColorValue, ...ColorValue[]];
 
 const MonetizationCard = ({ pkg }: MonetizationCardProps) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
+  if (!pkg) return <View />;
+
   const handlePressIn = () => {
     Animated.spring(scaleValue, {
-      toValue: 0.95,
+      toValue: 0.97,
       useNativeDriver: true,
-      tension: 50,
-      friction: 7,
+      tension: 60,
+      friction: 8,
     }).start();
   };
 
@@ -42,113 +45,158 @@ const MonetizationCard = ({ pkg }: MonetizationCardProps) => {
     Animated.spring(scaleValue, {
       toValue: 1,
       useNativeDriver: true,
-      tension: 50,
-      friction: 7,
+      tension: 60,
+      friction: 8,
     }).start();
   };
 
-  const animatedStyle = {
-    transform: [{ scale: scaleValue }],
-  };
-
-  // ✨ Korišćenje novog tipa prilikom deklaracije promenljive
-  let gradientColors: GradientColorArray = [pkg.color, pkg.color] as GradientColorArray;
-
-  if (pkg.name === 'Extra Paket') {
-    gradientColors = COLORS.extraGradient;
-  } else if (pkg.name === 'Gold Paket') {
-    gradientColors = COLORS.goldGradient;
-  } else if (pkg.name === 'Platinum Paket') {
-    gradientColors = COLORS.platinumGradient;
-  }
+  const priceAmount = pkg.price.includes('/') ? pkg.price.split('/')[0].trim() : pkg.price;
 
   return (
-    <Animated.View style={[styles.card, animatedStyle]}>
-      <TouchableOpacity
-        style={styles.cardTouchable}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        onPress={() => console.log(`Pretplati se na ${pkg.name}`)}
-        activeOpacity={1}
+    <Animated.View style={[styles.card, { transform: [{ scale: scaleValue }] }]}>
+      <LinearGradient
+        colors={['#1a1a2e', '#16213e']}
+        style={styles.darkBg}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
       >
-        <LinearGradient
-          colors={gradientColors}
-          style={styles.iconCircle}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
+        <TouchableOpacity
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          onPress={() => console.log(`Subscribe to ${pkg.name}`)}
+          activeOpacity={1}
+          style={styles.touchable}
         >
-          <Icon name={pkg.icon} size={40} color="#fff" />
-        </LinearGradient>
-        
-        <Text style={styles.packageName}>{pkg.name}</Text>
-        <Text style={styles.packagePrice}>{pkg.price}</Text>
+          {/* Top accent line */}
+          <LinearGradient
+            colors={pkg.gradient}
+            style={styles.accentLine}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          />
 
-        <TouchableOpacity 
-          style={[styles.subscribeButton, { borderColor: pkg.color }]}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.subscribeButtonText, { color: pkg.color }]}>Pretplati se</Text>
+          <View style={styles.topRow}>
+            {/* Icon */}
+            <LinearGradient
+              colors={pkg.gradient}
+              style={styles.iconBox}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <Ionicons name={pkg.icon as any} size={24} color="#fff" />
+            </LinearGradient>
+
+            {/* Name & description */}
+            <View style={styles.nameBlock}>
+              <Text style={styles.name}>{pkg.name}</Text>
+              {pkg.description && (
+                <Text style={styles.description}>{pkg.description}</Text>
+              )}
+            </View>
+
+            {/* Price */}
+            <View style={styles.priceBlock}>
+              <Text style={styles.price}>{priceAmount}</Text>
+              <Text style={styles.priceSub}>/ mo</Text>
+            </View>
+          </View>
+
+          {/* CTA */}
+          <LinearGradient
+            colors={pkg.gradient}
+            style={styles.btn}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+          >
+            <Text style={styles.btnText}>Get started</Text>
+            <Ionicons name="arrow-forward" size={16} color="#fff" />
+          </LinearGradient>
         </TouchableOpacity>
-      </TouchableOpacity>
+      </LinearGradient>
     </Animated.View>
   );
 };
 
-const CARD_WIDTH = 220;
-const CARD_MARGIN = 10;
-
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: 15,
     width: CARD_WIDTH,
-    marginHorizontal: CARD_MARGIN,
-    alignItems: 'center',
-    padding: 15,
-    shadowColor: COLORS.shadowColor,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 8,
+    alignSelf: 'center',
+    borderRadius: 24,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  cardTouchable: {
+  darkBg: {
+    borderRadius: 24,
+  },
+  accentLine: {
+    height: 3,
     width: '100%',
-    alignItems: 'center',
+    marginBottom: 4,
   },
-  iconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    justifyContent: 'center',
+  touchable: {
+    padding: 20,
+  },
+  topRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 14,
     marginBottom: 20,
   },
-  packageName: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 5,
-    textAlign: 'center',
-  },
-  packagePrice: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: COLORS.textPrimary,
-    marginBottom: 25,
-    textAlign: 'center',
-  },
-  subscribeButton: {
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    width: '90%',
+  iconBox: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     alignItems: 'center',
-    borderWidth: 2,
-    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  subscribeButtonText: {
+  nameBlock: {
+    flex: 1,
+  },
+  name: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.3,
+    marginBottom: 3,
+  },
+  description: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    lineHeight: 16,
+  },
+  priceBlock: {
+    alignItems: 'flex-end',
+  },
+  price: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: -0.5,
+  },
+  priceSub: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.45)',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  btn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  btnText: {
+    color: '#fff',
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 15,
+    letterSpacing: 0.2,
   },
 });
 

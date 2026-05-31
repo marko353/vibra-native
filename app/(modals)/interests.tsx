@@ -1,498 +1,440 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
-  ActivityIndicator,
-  KeyboardAvoidingView,
+  FlatList,
   Platform,
-  SafeAreaView,
-  StatusBar,
-  Dimensions,
-  ScrollView,
-  Keyboard,
-  FlatList, // Koristi se FlatList iz originalnog koda
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
-import { useProfileContext } from '../../context/ProfileContext'; // DODATO
+import { useProfileContext } from '../../context/ProfileContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ModalDragHandle, ModalHeader, modalStyles } from '../../components/ModalTemplate';
 
-// Konfiguracija i Konstante
-const API_B = process.env.EXPO_PUBLIC_API_BASE_URL; 
-const { width } = Dimensions.get('window');
-const wp = (percentage: number) => (width * percentage) / 100;
-const RF = (size: number) => size * (width / 375);
+const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-// Podaci o interesovanjima iz vašeg koda:
+const COLORS = {
+  primary: '#ff7f00',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#999',
+  textMuted: '#bbb',
+  border: '#ECECEC',
+  selectedBg: '#fff5ec',
+  selectedBorder: '#ffd0a8',
+  cardBg: '#fff',
+  sectionBg: '#FAFAFA',
+};
+
 const interestsData = [
   {
-    category: 'Društveni sadržaj',
+    category: 'Social',
+    icon: '🤝',
     tags: [
-      'Volontiranje', 'Edukacija', 'Politika', 'Aktivizam', 'Jednakost', 'Inkluzija', 'Zabava',
-      'Podkast', 'Društvene mreže', 'Umetnost', 'Kultura', 'Karijera', 'Mentorstvo',
-      'Networking', 'Kritičko razmišljanje', 'Filantropija', 'Humanitarni rad',
-      'Timski rad', 'Debate', 'Društvene nauke',
+      'Volunteering', 'Education', 'Politics', 'Activism', 'Equality', 'Inclusion', 'Entertainment',
+      'Podcasts', 'Social Media', 'Art', 'Culture', 'Career', 'Mentorship',
+      'Networking', 'Critical Thinking', 'Philanthropy', 'Humanitarian Work',
+      'Teamwork', 'Debates', 'Social Sciences',
     ],
   },
   {
-    category: 'Hrana i piće',
+    category: 'Food & Drinks',
+    icon: '🍽️',
     tags: [
-      'Gurman/ka', 'Bezalkoholni kokteli', 'Slatkiši', 'Suši', 'Kuvarski kursevi',
-      'Veganska kuhinja', 'Kafa', 'Čaj', 'Vino', 'Pivo', 'Zdrava ishrana', 'Fast Food',
-      'Roštilj', 'Kuvanje', 'Pekara', 'Restorani', 'Miksologija', 'Domaća kuhinja',
-      'Egzotična hrana', 'Hrana za dušu',
+      'Foodie', 'Mocktails', 'Desserts', 'Sushi', 'Cooking Classes',
+      'Vegan Cuisine', 'Coffee', 'Tea', 'Wine', 'Beer', 'Healthy Eating', 'Fast Food',
+      'BBQ', 'Cooking', 'Bakery', 'Restaurants', 'Mixology', 'Home Cooking',
+      'Exotic Food', 'Comfort Food',
     ],
   },
   {
-    category: 'Izlasci',
+    category: 'Going Out',
+    icon: '🌆',
     tags: [
-      'Izlasci', 'Barovi', 'Muzeji', 'Pozorište', 'Bioskop', 'Koncerti',
-      'Noćni život', 'Festivali', 'Stand-up komedija', 'Kafane', 'Pubovi',
-      'Karaoke', 'Plesni klubovi', 'Grupni izlasci', 'Spontani izlasci',
-      'Brunch', 'Restorani', 'Umetničke galerije', 'Događaji', 'Žurke',
+      'Nightlife', 'Bars', 'Museums', 'Theater', 'Cinema', 'Concerts',
+      'Clubs', 'Festivals', 'Stand-up Comedy', 'Cafes', 'Pubs',
+      'Karaoke', 'Dance Clubs', 'Group Outings', 'Spontaneous Plans',
+      'Brunch', 'Restaurants', 'Art Galleries', 'Events', 'Parties',
     ],
   },
   {
-    category: 'Kreativnost',
+    category: 'Creativity',
+    icon: '🎨',
     tags: [
-      'Fotografija', 'Moda', 'Patike', 'Slikanje', 'Crtanje', 'Dizajn', 'Pisanje',
-      'Keramika', 'DIY projekti', 'Digitalna umetnost', 'Grafički dizajn', 'Poezija',
-      'Skulptura', 'Arhitektura', 'Web dizajn', 'Video produkcija', 'Animacija',
-      'Tattoo umetnost', 'Kaligrafija', 'Origami',
+      'Photography', 'Fashion', 'Sneakers', 'Painting', 'Drawing', 'Design', 'Writing',
+      'Ceramics', 'DIY Projects', 'Digital Art', 'Graphic Design', 'Poetry',
+      'Sculpture', 'Architecture', 'Web Design', 'Video Production', 'Animation',
+      'Tattoo Art', 'Calligraphy', 'Origami',
     ],
   },
   {
-    category: 'Muzika',
+    category: 'Music',
+    icon: '🎵',
     tags: [
-      'Rock', 'Pop', 'Soul', 'Techno', 'Hip-hop', 'Klasična muzika', 'Jazz',
-      'Blues', 'Elektronska muzika', 'Indie', 'Pravljenje muzike', 'Punk',
-      'Heavy metal', 'R&B', 'Latino', 'Reggae', 'Country', 'Folk', 'EDM',
-      'Akustična muzika',
+      'Rock', 'Pop', 'Soul', 'Techno', 'Hip-hop', 'Classical', 'Jazz',
+      'Blues', 'Electronic', 'Indie', 'Music Production', 'Punk',
+      'Heavy Metal', 'R&B', 'Latin', 'Reggae', 'Country', 'Folk', 'EDM',
+      'Acoustic',
     ],
   },
   {
-    category: 'Ostanak kod kuće',
+    category: 'Staying In',
+    icon: '🏠',
     tags: [
-      'Kućna varijanta', 'Čitanje', 'Kvizovi', 'Online kupovina', 'Društvene igre',
-      'Filmovi i serije', 'Gaming', 'Kuvanje kod kuće', 'Organizacija doma',
-      'Pletenje/Heklanje', 'Pravljenje koktela', 'Opusti se', 'Meditacija',
-      'Slušanje muzike', 'Uređenje vrta', 'Čišćenje', 'Pisanje dnevnika',
-      'Učenje novih veština', 'Pisanje',
+      'Netflix', 'Reading', 'Trivia', 'Online Shopping', 'Board Games',
+      'Movies & Series', 'Gaming', 'Home Cooking', 'Home Organization',
+      'Knitting/Crocheting', 'Cocktail Making', 'Relaxing', 'Meditation',
+      'Listening to Music', 'Gardening', 'Cleaning', 'Journaling',
+      'Learning New Skills', 'Writing',
     ],
   },
   {
-    category: 'Priroda i avantura',
+    category: 'Nature & Adventure',
+    icon: '🏔️',
     tags: [
-      'Priroda i avantura', 'Veslanje', 'Planinarenje', 'Jedrenje', 'Snoubording',
-      'Kampovanje', 'Penjanje', 'Ronjenje', 'Biciklizam', 'Šetnja', 'Vožnja kajakom',
-      'Lov', 'Ribolov', 'Istraživanje', 'Ekstremni sportovi', 'Surfing', 'Skijanje',
-      'Jahanje konja', 'Speleologija', 'Geocaching',
+      'Nature', 'Rowing', 'Hiking', 'Sailing', 'Snowboarding',
+      'Camping', 'Rock Climbing', 'Diving', 'Cycling', 'Walking', 'Kayaking',
+      'Hunting', 'Fishing', 'Exploring', 'Extreme Sports', 'Surfing', 'Skiing',
+      'Horse Riding', 'Caving', 'Geocaching',
     ],
   },
   {
-    category: 'Sport i fitnes',
+    category: 'Sport & Fitness',
+    icon: '💪',
     tags: [
-      'Sport i fitnes', 'Atletika', 'Ragbi', 'Jogiranje', 'Tenis', 'Košarka',
-      'Plivanje', 'Joga', 'Teretana', 'Fudbal', 'Borilačke veštine', 'Ples',
-      'Gimnastika', 'Odbojka', 'Krosfit', 'Pilates', 'Treking', 'Boks',
+      'Athletics', 'Rugby', 'Running', 'Tennis', 'Basketball',
+      'Swimming', 'Yoga', 'Gym', 'Football', 'Martial Arts', 'Dancing',
+      'Gymnastics', 'Volleyball', 'CrossFit', 'Pilates', 'Trekking', 'Boxing',
       'Badminton',
     ],
   },
   {
-    category: 'TV i Filmovi',
+    category: 'TV & Movies',
+    icon: '🎬',
     tags: [
-      'Akcioni', 'Dokumentarci', 'Serije', 'Rijaliti', 'Anime', 'Horor', 'Komedija',
-      'Drama', 'Triler', 'SF', 'Fantazija', 'Crtani filmovi', 'Misterija',
-      'Krimi', 'Romantični', 'Klasični filmovi', 'Špijunski', 'Istorijski',
-      'Western', 'Muzički',
+      'Action', 'Documentaries', 'Series', 'Reality TV', 'Anime', 'Horror', 'Comedy',
+      'Drama', 'Thriller', 'Sci-Fi', 'Fantasy', 'Cartoons', 'Mystery',
+      'Crime', 'Romance', 'Classic Films', 'Spy', 'Historical',
+      'Western', 'Musical',
     ],
   },
   {
-    category: 'Vrednosti i ciljevi',
+    category: 'Values & Goals',
+    icon: '✨',
     tags: [
-      'Mentalno zdravlje', 'Feminizam', 'Pride', 'Samopomoć', 'Lični razvoj',
-      'Spiritualnost', 'Minimalizam', 'Održivi život', 'Zdravlje', 'Fizičko zdravlje',
-      'Terapija', 'Mindfulness', 'Filozofija', 'Politički stavovi', 'Religija',
-      'Prava životinja', 'Ekološka svest', 'Ekonomija', 'Finansijska pismenost',
-      'Sloboda izražavanja',
+      'Mental Health', 'Feminism', 'Pride', 'Self-help', 'Personal Growth',
+      'Spirituality', 'Minimalism', 'Sustainable Living', 'Health', 'Physical Wellness',
+      'Therapy', 'Mindfulness', 'Philosophy', 'Political Views', 'Religion',
+      'Animal Rights', 'Eco Awareness', 'Economics', 'Financial Literacy',
+      'Freedom of Expression',
     ],
   },
   {
-    category: 'Zdravlje i blagostanje',
+    category: 'Health & Wellness',
+    icon: '🧘',
     tags: [
-      'Nega kože', 'Astrologija', 'Svesnost', 'Meditacija', 'Ishrana',
-      'Alternativna medicina', 'Trening snage', 'Fleksibilnost', 'Joga',
-      'Pilates', 'Trčanje', 'Šetnja', 'Kvalitetan san', 'Hidratacija',
-      'Vežbe disanja', 'Dijetologija', 'Dermatologija', 'Masaža',
-      'Psihoterapija', 'Wellness',
+      'Skincare', 'Astrology', 'Awareness', 'Meditation', 'Nutrition',
+      'Alternative Medicine', 'Strength Training', 'Flexibility', 'Yoga',
+      'Pilates', 'Running', 'Walking', 'Quality Sleep', 'Hydration',
+      'Breathing Exercises', 'Dietetics', 'Dermatology', 'Massage',
+      'Psychotherapy', 'Wellness',
     ],
   },
 ];
 
-const MAX_INTERESTS_PER_CATEGORY = 5;
-const MAX_TOTAL_INTERESTS = 15; // Možete postaviti i ukupan limit ako želite
+const MAX_PER_CATEGORY = 5;
+const MAX_TOTAL = 15;
 
-const COLORS = {
-  primary: '#E91E63',
-  textPrimary: '#1A1A1A',
-  textSecondary: '#6B7280',
-  background: '#F8F8F8',
-  cardBackground: '#FFFFFF',
-  border: '#E0E0E0',
-  white: '#FFFFFF',
-  danger: '#DC3545',
-  selectedChip: '#FFEBF1',
-  selectedChipBorder: '#E91E63',
-  headerShadow: 'rgba(0, 0, 0, 0.08)',
-};
-
-// Tipizacija
 interface MutationPayload { field: string; value: any; }
-type UpdateableProfileField = 'languages' | 'bio' | 'interests'; 
-interface UserProfile { interests: string[]; [key: string]: any; } // Dodato za setQueryData
 
 export default function InterestsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
-  const { setProfileField } = useProfileContext(); // Korišćenje za trenutno ažuriranje
+  const { setProfileField } = useProfileContext();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
-  // 1. Inicijalizacija iz params
   const initialInterests: string[] = useMemo(() => {
     if (typeof params.currentInterests === 'string') {
       try {
         const parsed = JSON.parse(params.currentInterests);
-        return Array.isArray(parsed) ? (parsed as string[]).map(String) : [];
-      } catch (e) {
-        console.error("Failed to parse currentInterests param:", e);
-        return [];
-      }
+        return Array.isArray(parsed) ? parsed.map(String) : [];
+      } catch { return []; }
     }
-    if (Array.isArray(params.currentInterests)) {
-      return (params.currentInterests as string[]).map(String);
-    }
+    if (Array.isArray(params.currentInterests)) return params.currentInterests.map(String);
     return [];
   }, [params.currentInterests]);
 
   const [selectedTags, setSelectedTags] = useState<string[]>(initialInterests);
 
-  // 2. Provera promena
   const hasChanges = useMemo(() => {
-    const sortedInitial = [...initialInterests].sort();
-    const sortedSelected = [...selectedTags].sort();
-    return JSON.stringify(sortedInitial) !== JSON.stringify(sortedSelected);
+    return JSON.stringify([...initialInterests].sort()) !== JSON.stringify([...selectedTags].sort());
   }, [initialInterests, selectedTags]);
 
-  // 3. Mutacija sa optimističnim ažuriranjem
-  const updateProfileMutation = useMutation({
+  const mutation = useMutation({
     mutationFn: async (payload: MutationPayload) => {
       if (!user?.token) throw new Error("Token not available");
-      const response = await axios.put(
-        `${API_B}/api/user/update-profile`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${user.token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const response = await axios.put(`${API_B}/api/user/update-profile`, payload, {
+        headers: { Authorization: `Bearer ${user.token}`, 'Content-Type': 'application/json' },
+      });
       return response.data;
     },
-    onSuccess: (data, variables) => {
-      const fieldName = variables.field as UpdateableProfileField;
-      const newValue = variables.value;
-      
-      // KORAK A: DIREKTNO AŽURIRANJE QUERY KEŠA (OPTIMISTIČNO)
-      queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          [fieldName]: newValue,
-        };
-      });
-
-      // KORAK B: AŽURIRANJE LOKALNOG CONTEXTA
-      setProfileField(fieldName, newValue as UserProfile['interests']); 
-
-      // KORAK C: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA (vizuelna potvrda)
-      setSelectedTags(newValue as string[]);
-
-      // KORAK D: Zatvaranje modala
+    onSuccess: (_, variables) => {
+      setProfileField('interests', variables.value);
+      queryClient.setQueryData(['userProfile', user?.id], (old: any) =>
+        old ? { ...old, interests: variables.value } : old
+      );
       router.back();
     },
     onError: (error: any) => {
-      console.error('Greška pri čuvanju interesovanja:', error.response?.data || error.message);
-      Alert.alert('Greška', `Došlo je do greške prilikom čuvanja interesovanja: ${error.response?.data?.message || error.message}`);
+      Alert.alert('Error', error.response?.data?.message || error.message);
     },
   });
 
   const toggleTag = (tag: string, category: string) => {
-    if (updateProfileMutation.isPending) return;
+    if (mutation.isPending) return;
     setSelectedTags((prev) => {
-      const isSelected = prev.includes(tag);
-      let newState: string[];
+      if (prev.includes(tag)) return prev.filter((t) => t !== tag);
 
-      if (isSelected) {
-        newState = prev.filter((t) => t !== tag);
-      } else {
-        // Logika ograničenja po kategoriji
-        const categoryTags = interestsData.find(c => c.category === category)?.tags || [];
-        const selectedInCategory = prev.filter(t => categoryTags.includes(t));
+      const categoryTags = interestsData.find(c => c.category === category)?.tags || [];
+      const selectedInCategory = prev.filter(t => categoryTags.includes(t));
 
-        if (selectedInCategory.length >= MAX_INTERESTS_PER_CATEGORY) {
-          Alert.alert(
-            'Limit je dostignut',
-            `Možete odabrati maksimalno ${MAX_INTERESTS_PER_CATEGORY} interesovanja u kategoriji "${category}".`
-          );
-          return prev;
-        }
-
-        // Provera ukupnog limita
-        if (prev.length >= MAX_TOTAL_INTERESTS) {
-             Alert.alert(
-              'Ukupan limit je dostignut',
-              `Možete odabrati maksimalno ${MAX_TOTAL_INTERESTS} interesovanja ukupno.`
-            );
-            return prev;
-        }
-
-        newState = [...prev, tag];
+      if (selectedInCategory.length >= MAX_PER_CATEGORY) {
+        Alert.alert('Limit reached', `You can select up to ${MAX_PER_CATEGORY} interests per category.`);
+        return prev;
       }
-      return newState;
+      if (prev.length >= MAX_TOTAL) {
+        Alert.alert('Limit reached', `You can select up to ${MAX_TOTAL} interests in total.`);
+        return prev;
+      }
+      return [...prev, tag];
     });
   };
 
   const handleSave = () => {
-    if (!hasChanges || updateProfileMutation.isPending) return;
-    updateProfileMutation.mutate({ field: 'interests', value: selectedTags });
+    if (!hasChanges || mutation.isPending) return;
+    mutation.mutate({ field: 'interests', value: selectedTags });
   };
 
-  const renderTagItem = (tag: string, category: string) => {
-    const isSelected = selectedTags.includes(tag);
-    return (
-      <TouchableOpacity
-        key={tag}
-        style={[
-          styles.interestChip,
-          isSelected && styles.interestChipSelected,
-          updateProfileMutation.isPending && styles.interestChipDisabled
-        ]}
-        onPress={() => toggleTag(tag, category)}
-        disabled={updateProfileMutation.isPending}
-      >
-        <Text
-          style={[
-            styles.chipText,
-            isSelected && styles.chipTextSelected,
-          ]}
-        >
-          {tag}
-        </Text>
-        {isSelected && (
-          <Ionicons name="checkmark-circle-outline" size={RF(18)} color={COLORS.primary} style={styles.chipIcon} />
-        )}
-      </TouchableOpacity>
-    );
-  };
+  const renderCategory = ({ item }: { item: typeof interestsData[0] }) => {
+    const selectedInCategory = selectedTags.filter(t => item.tags.includes(t)).length;
+    const isCategoryFull = selectedInCategory >= MAX_PER_CATEGORY;
 
-  const renderCategory = ({
-    item,
-  }: {
-    item: { category: string; tags: string[] }
-  }) => {
-    const selectedInCategoryCount = selectedTags.filter(t => item.tags.includes(t)).length;
     return (
-      <View key={item.category} style={styles.categorySection}>
+      <View style={styles.categorySection}>
+        {/* Category header */}
         <View style={styles.categoryHeader}>
-          <Text style={styles.categoryTitle}>{item.category}</Text>
-          <Text style={styles.selectedInCategoryCount}>
-            ({selectedInCategoryCount}/{MAX_INTERESTS_PER_CATEGORY})
-          </Text>
+          <View style={styles.categoryTitleRow}>
+            <Text style={styles.categoryIcon}>{item.icon}</Text>
+            <Text style={styles.categoryTitle}>{item.category}</Text>
+          </View>
+          <View style={[styles.countBadge, isCategoryFull && styles.countBadgeFull]}>
+            <Text style={[styles.countBadgeText, isCategoryFull && styles.countBadgeTextFull]}>
+              {selectedInCategory}/{MAX_PER_CATEGORY}
+            </Text>
+          </View>
         </View>
+
+        {/* Divider */}
+        <View style={styles.divider} />
+
+        {/* Tags */}
         <View style={styles.tagsContainer}>
-          {item.tags.map((tag) => renderTagItem(tag, item.category))}
+          {item.tags.map((tag) => {
+            const isSelected = selectedTags.includes(tag);
+            return (
+              <TouchableOpacity
+                key={tag}
+                style={[styles.chip, isSelected && styles.chipSelected]}
+                onPress={() => toggleTag(tag, item.category)}
+                disabled={mutation.isPending}
+                activeOpacity={0.65}
+              >
+                {isSelected && (
+                  <Ionicons
+                    name="checkmark"
+                    size={11}
+                    color={COLORS.primary}
+                    style={styles.chipCheckmark}
+                  />
+                )}
+                <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                  {tag}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.cardBackground} />
+    <View style={[modalStyles.container, { paddingBottom: insets.bottom || 16 }]}>
+      <ModalDragHandle />
+      <ModalHeader
+        title="Interests"
+        onClose={() => router.back()}
+        onSave={handleSave}
+        hasChanges={hasChanges}
+        isPending={mutation.isPending}
+      />
 
-      {/* Header View */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} disabled={updateProfileMutation.isPending}>
-          <Ionicons name="close-outline" size={RF(30)} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Interesovanja</Text>
-        <TouchableOpacity
-          style={styles.saveBtn}
-          onPress={handleSave}
-          disabled={!hasChanges || updateProfileMutation.isPending}
-        >
-          {updateProfileMutation.isPending ? (
-            <ActivityIndicator color={COLORS.primary} />
-          ) : (
-            <Text style={[
-              styles.saveBtnText,
-              { color: (!hasChanges) ? COLORS.textSecondary : COLORS.primary }
-            ]}>
-              Sačuvaj
-            </Text>
-          )}
-        </TouchableOpacity>
+      {/* Counter bar */}
+      <View style={styles.counterBar}>
+        <Text style={styles.counterText}>
+          <Text style={styles.counterNumber}>{selectedTags.length}</Text>
+          <Text style={styles.counterTotal}>/{MAX_TOTAL} selected</Text>
+        </Text>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${(selectedTags.length / MAX_TOTAL) * 100}%` },
+            ]}
+          />
+        </View>
       </View>
 
-      {/* Content View */}
       <FlatList
         data={interestsData}
         renderItem={renderCategory}
         keyExtractor={(item) => item.category}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: COLORS.background,
+  counterBar: {
+    paddingHorizontal: 20,
+    paddingBottom: 16,
+    gap: 8,
   },
-  header: {
+  counterText: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: wp(4),
-    paddingVertical: wp(2.5),
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + wp(2) : wp(2.5),
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.cardBackground,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.headerShadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-    zIndex: 10,
+    alignItems: 'baseline',
   },
-  closeBtn: { padding: wp(1.5) },
-  saveBtn: { padding: wp(1.5) },
-  saveBtnText: {
-    fontSize: RF(16),
-    fontWeight: '600',
+  counterNumber: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
   },
-  headerTitle: {
-    fontSize: RF(18),
-    fontWeight: 'bold',
-    color: COLORS.textPrimary,
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: wp(2),
+  counterTotal: {
+    fontSize: 13,
+    color: COLORS.textMuted,
+    fontWeight: '400',
   },
-  container: {
-    padding: wp(5),
-    paddingBottom: wp(10),
-    backgroundColor: COLORS.background,
+  progressTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  progressFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: COLORS.primary,
+  },
+  listContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+    gap: 10,
   },
   categorySection: {
-    marginBottom: wp(5),
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: RF(12),
-    padding: wp(4),
-    shadowColor: COLORS.textPrimary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
+    backgroundColor: COLORS.cardBg,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingTop: 14,
+    paddingBottom: 16,
+    paddingHorizontal: 14,
+    marginBottom: 10,
   },
   categoryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: wp(3),
+    marginBottom: 10,
+  },
+  categoryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryIcon: {
+    fontSize: 16,
   },
   categoryTitle: {
-    fontSize: RF(18),
+    fontSize: 14,
     fontWeight: '700',
     color: COLORS.textPrimary,
+    letterSpacing: 0.1,
   },
-  selectedInCategoryCount: {
-    fontSize: RF(14),
-    fontWeight: '500',
-    color: COLORS.textSecondary,
+  countBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 20,
+    backgroundColor: '#F5F5F5',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  countBadgeFull: {
+    backgroundColor: COLORS.selectedBg,
+    borderColor: COLORS.selectedBorder,
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: COLORS.textMuted,
+  },
+  countBadgeTextFull: {
+    color: COLORS.primary,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F5F5F5',
+    marginBottom: 12,
   },
   tagsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: wp(2),
+    gap: 7,
   },
-  interestChip: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: RF(20),
-    paddingHorizontal: wp(4),
-    paddingVertical: wp(3),
-    borderWidth: 1,
-    borderColor: COLORS.border,
+  chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.textPrimary,
-        shadowOffset: { width: 0, height: 1 },
-        shadowOpacity: 0.05,
-        shadowRadius: 2,
-      },
-      android: {
-        elevation: 1,
-      },
-    }),
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E8E8E8',
+    backgroundColor: '#FAFAFA',
+    gap: 4,
   },
-  interestChipSelected: {
-    backgroundColor: COLORS.selectedChip,
-    borderColor: COLORS.selectedChipBorder,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.primary,
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.2,
-        shadowRadius: 4,
-      },
-      android: {
-        elevation: 3,
-      },
-    }),
+  chipSelected: {
+    borderColor: COLORS.selectedBorder,
+    backgroundColor: COLORS.selectedBg,
   },
-  interestChipDisabled: {
-    opacity: 0.6,
+  chipCheckmark: {
+    marginRight: 1,
   },
   chipText: {
-    color: COLORS.textPrimary,
-    fontSize: RF(14),
+    fontSize: 12,
     fontWeight: '500',
+    color: COLORS.textSecondary,
+    letterSpacing: 0.1,
   },
   chipTextSelected: {
     color: COLORS.primary,
-    fontWeight: 'bold',
-  },
-  chipIcon: {
-    marginLeft: wp(1.5),
+    fontWeight: '600',
   },
 });

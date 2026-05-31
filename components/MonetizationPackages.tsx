@@ -4,57 +4,51 @@ import Carousel from 'react-native-reanimated-carousel';
 import MonetizationCard from './MonetizationCard';
 
 const { width: windowWidth } = Dimensions.get('window');
-const CARD_MARGIN = 10;
-const CAROUSEL_WIDTH = windowWidth;
 
-const COLORS = {
-  textPrimary: '#222',
-};
-
-interface MonetizationPackage {
-  name: string;
-  price: string;
-  icon: string;
-  color: string;
-}
-
-const packages: MonetizationPackage[] = [
+const packages = [
   {
-    name: 'Extra Paket',
-    price: '9.99€ / mesec',
-    icon: 'star-circle',
+    name: 'Extra',
+    price: '9.99€ / mo',
+    icon: 'flash-outline',
     color: '#3B82F6',
+    gradient: ['#3B82F6', '#2563EB'] as const,
+    description: 'Boost your visibility',
   },
   {
-    name: 'Gold Paket',
-    price: '19.99€ / mesec',
-    icon: 'crown',
-    color: '#FFD700',
+    name: 'Gold',
+    price: '19.99€ / mo',
+    icon: 'star-outline',
+    color: '#F59E0B',
+    gradient: ['#F59E0B', '#D97706'] as const,
+    description: 'Gold badge & priority search',
   },
   {
-    name: 'Platinum Paket',
-    price: '29.99€ / mesec',
-    icon: 'diamond',
-    color: '#E5E4E2',
+    name: 'Platinum',
+    price: '29.99€ / mo',
+    icon: 'diamond-outline',
+    color: '#8B5CF6',
+    gradient: ['#8B5CF6', '#7C3AED'] as const,
+    description: 'All features, unlimited',
   },
 ];
 
 const MonetizationPackages = () => {
   return (
     <View style={styles.container}>
-      <Text style={styles.sectionTitle}>Nadogradi svoj profil</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Upgrade your profile</Text>
+        <Text style={styles.subtitle}>Unlock premium features</Text>
+      </View>
       <Carousel
         loop
-        width={CAROUSEL_WIDTH} // Koristi punu širinu ekrana
-        height={220}
-        autoPlay={true}
-        autoPlayInterval={3000}
-        data={packages}
+        width={windowWidth}
+        height={200}
+        autoPlay
+        autoPlayInterval={3500}
+        scrollAnimationDuration={900}
         pagingEnabled={false}
-        scrollAnimationDuration={1000}
-        renderItem={({ item, index }) => (
-          <MonetizationCard key={index} pkg={item} />
-        )}
+        data={packages}
+        renderItem={({ item }) => <MonetizationCard pkg={item} />}
       />
     </View>
   );
@@ -63,15 +57,24 @@ const MonetizationPackages = () => {
 const styles = StyleSheet.create({
   container: {
     width: '100%',
-    marginBottom: 40,
+    marginBottom: 16,
+    marginLeft: -20, // kompenzuje padding parenta
   },
-  sectionTitle: {
-    fontSize: 20,
+  headerRow: {
+    paddingHorizontal: 20,
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 18,
     fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 20,
-    textAlign: 'center',
-    paddingHorizontal: 24, // ✨ Dodali smo padding ovde
+    color: '#1a1a1a',
+    letterSpacing: -0.3,
+    marginBottom: 2,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#999',
+    fontWeight: '400',
   },
 });
 

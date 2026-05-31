@@ -8,9 +8,8 @@ import React, {
 import { io, Socket } from 'socket.io-client';
 import { useAuthContext } from './AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
-declare const process: {
-  env: { [key: string]: string | undefined };
-};
+import messaging from '@react-native-firebase/messaging';
+import { showMatchNotification } from '../hooks/usePushNotifications';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 
@@ -63,22 +62,23 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
      * ✅ BEDŽ SAMO ZA USERA KOJI NIJE TRIGEROVAO MATCH
      */
     socket.on('match', (payload) => {
-      console.log('🔥 [Socket] Match:', payload);
+      console.log('🔥 [Socket] Match received:', payload);
 
-      const { initiatorId } = payload;
+      // Prikaz notifikacije
+      showMatchNotification({
+        fullName: payload.matchedUser.fullName,
+        avatar: payload.matchedUser.avatar,
+        chatId: payload.chatId,
+        userId: payload.matchedUser?._id,
+      });
 
-      // ako JA nisam kliknuo poslednji → pali bedž
-      if (initiatorId !== user.id) {
-        console.log('🔔 [Socket] Palim bedž (User A)');
-        setHasUnread(true);
-      }
-
+      // Osvježavanje podataka
       queryClient.invalidateQueries({
-        queryKey: ['incoming-likes', user.id],
+        queryKey: ['my-matches'],
       });
 
       queryClient.invalidateQueries({
-        queryKey: ['my-matches', user.id],
+        queryKey: ['unread-messages-count'],
       });
     });
 
@@ -91,7 +91,11 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       setHasUnread(true);
 
       queryClient.invalidateQueries({
-        queryKey: ['my-matches', user.id],
+        queryKey: ['my-matches'],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['unread-messages-count'],
       });
     });
 
@@ -105,11 +109,15 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       setHasUnread(false);
 
       queryClient.invalidateQueries({
-        queryKey: ['incoming-likes', user.id],
+        queryKey: ['incoming-likes'],
       });
 
       queryClient.invalidateQueries({
-        queryKey: ['my-matches', user.id],
+        queryKey: ['my-matches'],
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: ['unread-messages-count'],
       });
     });
 
@@ -119,8 +127,18 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
+      setIsConnected(false); // Resetovanje isConnected stanja
     };
   }, [user?.token, user?.id]);
+
+  useEffect(() => {
+    const getToken = async () => {
+      const token = await messaging().getToken();
+      console.log("🔥 FCM TOKEN (EMULATOR):", token);
+    };
+
+    getToken();
+  }, []);
 
   return (
     <SocketContext.Provider

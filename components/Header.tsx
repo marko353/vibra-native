@@ -3,10 +3,8 @@ import React from "react";
 import { Image, StyleSheet, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Definišemo novi, logičniji prop
 interface HeaderProps {
   withShadow?: boolean;
-  title?: string;
   onFilterClick?: () => void;
 }
 
@@ -16,35 +14,39 @@ export default function Header({ withShadow, onFilterClick }: HeaderProps) {
       edges={["top"]}
       style={[styles.container, withShadow && styles.shadow]}
     >
-      <Image
-        source={require("../assets/images/1000006380.png")}
-        style={styles.logo}
-        resizeMode="contain"
-        accessibilityLabel="Logo"
-      />
+      <View style={styles.logoWrapper}>
+        <Image
+          source={require("../assets/images/1000006380.png")}
+          style={styles.logo}
+          resizeMode="contain"
+          accessibilityLabel="Logo"
+        />
+      </View>
+
       <View style={styles.buttons}>
         {onFilterClick && (
           <TouchableOpacity
             onPress={onFilterClick}
-            accessibilityLabel="Filter dugme"
+            accessibilityLabel="Filter"
             style={styles.iconButton}
           >
             <MaterialCommunityIcons
               name="tune-variant"
-              size={28}
-              color="#FF6B6B"
+              size={20}
+              color="#1C1C1E"
             />
           </TouchableOpacity>
         )}
+
         <TouchableOpacity
-          onPress={() => console.log("Otvorena pogodnost")}
-          accessibilityLabel="Pogodnost dugme"
-          style={styles.iconButton}
+          onPress={() => console.log("Premium")}
+          accessibilityLabel="Premium"
+          style={styles.premiumButton}
         >
           <MaterialCommunityIcons
             name="star-four-points"
-            size={28}
-            color="#FF6B6B"
+            size={20}
+            color="#FF6A00"
           />
         </TouchableOpacity>
       </View>
@@ -54,30 +56,55 @@ export default function Header({ withShadow, onFilterClick }: HeaderProps) {
 
 const styles = StyleSheet.create({
   container: {
-    height: 100,
-    backgroundColor: "#fff",
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    height: 84,
+    paddingTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 25,
   },
   shadow: {
+    shadowColor: '#000000',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 4,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
+  },
+  logoWrapper: {
+    height: '100%',
+    justifyContent: 'center',
   },
   logo: {
-    width: 100,
-    height: 100,
+    width: 110,
+    height: 80,
+    marginVertical: -20,
+    transform: [{ scale: 1.05 }],
   },
   buttons: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
   iconButton: {
-    padding: 8,
-    marginLeft: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F5F5F7',
+    borderWidth: 1,
+    borderColor: '#EBEBF0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  premiumButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFF3EC',
+    borderWidth: 1,
+    borderColor: '#FFD0A8',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

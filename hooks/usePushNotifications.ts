@@ -14,6 +14,7 @@ import {
   requestPermission,
   AuthorizationStatus,
 } from "@react-native-firebase/messaging";
+import { useQueryClient } from "@tanstack/react-query"; // ✅ Uvezen Query Client za osvežavanje tab bedža
 import Constants from "expo-constants";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -46,31 +47,6 @@ async function getOrCreateChannel(id: string, name: string) {
   });
 }
 
-async function displayMatchNotification(title: string, body: string, data: any) {
-  const channelId = await getOrCreateChannel("match", "Vibra Match");
-  await notifee.displayNotification({
-    title: `<b>${title}</b>`,
-    body,
-    data,
-    android: {
-      channelId,
-      smallIcon: "ic_notification",
-      color: "#FF6A00",
-      importance: AndroidImportance.HIGH,
-      pressAction: { id: "default" },
-      showTimestamp: true,
-      largeIcon: validAvatar(data.userAvatar),
-      circularLargeIcon: true,
-      style: {
-        type: AndroidStyle.BIGTEXT,
-        text: body,
-        title: `💘 ${title}`,
-        summary: "Vibra Match",
-      },
-    },
-  });
-}
-
 async function displayMessageNotification(title: string, body: string, data: any) {
   const currentChatId = await AsyncStorage.getItem("currentChatId");
 
@@ -86,6 +62,9 @@ async function displayMessageNotification(title: string, body: string, data: any
   const channelId = await getOrCreateChannel("messages", "Vibra Poruke");
 
   try {
+    // Povećavamo sistemski bedž na ikonici telefona
+    await notifee.incrementBadgeCount();
+
     await notifee.displayNotification({
       title: `<b>${data.userName || title}</b>`,
       body,
@@ -114,19 +93,69 @@ async function displayMessageNotification(title: string, body: string, data: any
 
 async function displayDefaultNotification(title: string, body: string, data: any) {
   const channelId = await getOrCreateChannel("default", "Vibra Notifications");
-  await notifee.displayNotification({
-    title,
-    body,
-    data,
-    android: {
-      channelId,
-      smallIcon: "ic_notification",
-      color: "#FF6A00",
-      importance: AndroidImportance.HIGH,
-      pressAction: { id: "default" },
-      showTimestamp: true,
-    },
-  });
+  try {
+    await notifee.incrementBadgeCount();
+    await notifee.displayNotification({
+      title,
+      body,
+      data,
+      android: {
+        channelId,
+        smallIcon: "ic_notification",
+        color: "#FF6A00",
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: "default" },
+        showTimestamp: true,
+      },
+    });
+  } catch (e) {
+    console.error("❌ [displayDefault] Error:", e);
+  }
+}
+
+export async function showMatchNotification(payload: {
+  fullName?: string;
+  avatar?: string;
+  chatId?: string;
+  userId?: string;
+}) {
+  const title = payload.fullName || "Imas novi match!";
+  const body = "Otvorite chat i zapocnite razgovor.";
+  const data = {
+    type: "MATCH",
+    chatId: String(payload.chatId || ""),
+    userId: String(payload.userId || ""),
+    userName: String(payload.fullName || "User"),
+    userAvatar: String(payload.avatar || ""),
+  };
+
+  const channelId = await getOrCreateChannel("match", "Vibra Match");
+  try {
+    await notifee.incrementBadgeCount();
+    await notifee.displayNotification({
+      title: `<b>${title}</b>`,
+      body,
+      data,
+      android: {
+        channelId,
+        smallIcon: "ic_notification",
+        color: "#FF6A00",
+        importance: AndroidImportance.HIGH,
+        pressAction: { id: "default" },
+        showTimestamp: true,
+        largeIcon: validAvatar(payload.avatar),
+        circularLargeIcon: true,
+        style: {
+          type: AndroidStyle.BIGTEXT,
+          text: body,
+          title: `<b>${title}</b>`,
+          summary: "Vibra Match",
+        },
+      },
+    });
+  } catch (e) {
+    console.error("❌ [showMatchNotification] Error:", e);
+  }
 }
 
 const requestNotificationPermission = async (): Promise<boolean> => {
@@ -149,7 +178,6 @@ const navigateToChat = (router: any, data: any) => {
     return;
   }
   
-  // userId je uvek pošiljalac poruke — to je osoba sa kojom pričaš
   const receiverId = String(data.userId || "");
   
   router.push({
@@ -158,7 +186,7 @@ const navigateToChat = (router: any, data: any) => {
       chatId: String(data.chatId),
       userName: String(data.userName || "User"),
       userAvatar: String(data.userAvatar || ""),
-      receiverId,  // ← uvek userId (pošiljalac), ne receiverId
+      receiverId,  
     },
   });
 };
@@ -169,6 +197,7 @@ export const usePushNotifications = (
 ) => {
   const [fcmToken, setFcmToken] = useState<string | null>(null);
   const router = useRouter();
+  const queryClient = useQueryClient(); // ✅ Inicijalizovan Query Client unutar kuke
 
   const saveFcmTokenToBackend = async (token: string, jwt: string) => {
     if (isTokenSentGlobal) return;
@@ -246,6 +275,7 @@ export const usePushNotifications = (
     });
 
     const unsubMessage = onMessage(messagingInstance, async (remoteMessage) => {
+      console.log("🌞 [PUSH FOREGROUND] Primljen paket:", remoteMessage);
       const data = remoteMessage.data;
       if (!data) return;
 
@@ -261,7 +291,16 @@ export const usePushNotifications = (
         });
         return;
       } else if (data.type === "MESSAGE") {
+        // 1. Prikazujemo lokalni baner preko Notifee-a
         await displayMessageNotification(title, body, data);
+
+        // 2. ✅ INVALIDIRAMO KASU ZA TAB BEDŽ (Okida re-fetch u tabs/_layout.tsx)
+        queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
+        queryClient.invalidateQueries({ queryKey: ['my-matches'] });
+        queryClient.invalidateQueries({ queryKey: ['incoming-likes'] }); // opciono osvežava i lajkove ako zatreba
+      } else if (data.type === "MATCH") {
+        queryClient.invalidateQueries({ queryKey: ['my-matches'] });
+        queryClient.invalidateQueries({ queryKey: ['unread-messages-count'] });
       } else {
         await displayDefaultNotification(title, body, data);
       }
@@ -271,7 +310,7 @@ export const usePushNotifications = (
       unsubRefresh();
       unsubMessage();
     };
-  }, [userJwtToken, onMatchReceived]);
+  }, [userJwtToken, onMatchReceived, queryClient]);
 
   // 4. Background FCM click
   useEffect(() => {
