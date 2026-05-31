@@ -1,37 +1,36 @@
 import { Ionicons } from "@expo/vector-icons";
 import MultiSlider from "@ptomasroos/react-native-multi-slider";
-import React, { useEffect, useRef, useState } from "react";
+// Ako koristiš običan React Native CLI, zameni sa: import { BlurView } from "@react-native-community/blur";
+import { BlurView } from "expo-blur"; 
+import React, { useEffect, useState } from "react";
 import {
-  Animated,
-  Easing,
   Modal,
-  Platform,
-  SafeAreaView,
   StyleSheet,
   Switch,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   View,
+  useWindowDimensions,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
-  primary: "#E91E63",
-  accent: "#007AFF",
-  textPrimary: "#1A1A1A",
-  textSecondary: "#6B7280",
-  background: "#FAFAFA",
-  divider: "#E0E0E0",
-  border: "#E0E0E0",
-  disabled: "#F3B6C4",
-  thumb: "#FFFFFF",
-  thumbBorder: "#E91E63",
-  sliderInactive: "#E5E5E5",
+  primary: "#FF7F00",             // Vibra prepoznatljiva narandžasta
+  white: "#FFFFFF",
+  textPrimary: "#0F172A",         // Premium tamni tekst za kontrast na staklu
+  textSecondary: "#475569",       
+  cardBg: "rgba(255, 255, 255, 0.45)",     // Ultra prozirne svetle kartice koje propuštaju home screen pozadinu
+  cardBorder: "rgba(255, 255, 255, 0.4)",  // Efekat staklene ivice (Frosty glass)
+  sliderInactive: "rgba(15, 23, 42, 0.1)",
+  // Veoma nežan tint koji ne skriva sliku ispod, već je samo priprema za blur
+  backdropTint: "rgba(255, 255, 255, 0.2)", 
 };
 
 const GENDER_OPTIONS = [
-  { label: "Žene", value: "female" },
-  { label: "Muškarci", value: "male" },
-  { label: "Svi", value: "any" },
+  { label: "Women", value: "female" },
+  { label: "Men", value: "male" },
+  { label: "Everyone", value: "any" },
 ];
 
 interface LikeFilterModalProps {
@@ -57,405 +56,390 @@ export default function LikeFilterModal({
   onApply,
   initialFilters,
 }: LikeFilterModalProps) {
-  const [ageRange, setAgeRange] = useState<[number, number]>(
-    initialFilters?.ageRange && initialFilters.ageRange.length === 2
-      ? initialFilters.ageRange
-      : [18, 99]
-  );
-  const [distance, setDistance] = useState(initialFilters?.distance || 50);
-  const [gender, setGender] = useState(initialFilters?.gender || "any");
-  const [withPhotos, setWithPhotos] = useState(
-    initialFilters?.withPhotos || false
-  );
-  const [isLoading, setIsLoading] = useState(false);
+  const [ageRange, setAgeRange] = useState<[number, number]>([18, 45]);
+  const [distance, setDistance] = useState(50);
+  const [gender, setGender] = useState("any");
+  const [withPhotos, setWithPhotos] = useState(false);
+  
+  const { width: screenWidth } = useWindowDimensions();
+  const [sliderWidth, setSliderWidth] = useState(screenWidth - 80);
 
-  // Animation for modal slide up
-  const slideAnim = useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
 
   useEffect(() => {
-    if (initialFilters) {
-      if (initialFilters.ageRange && initialFilters.ageRange.length === 2) {
+    if (visible && initialFilters) {
+      if (initialFilters.ageRange?.length === 2) {
         setAgeRange(initialFilters.ageRange as [number, number]);
-      } else {
-        setAgeRange([18, 99]);
       }
       setDistance(initialFilters.distance ?? 50);
       setGender(initialFilters.gender ?? "any");
-      setWithPhotos(initialFilters.withPhotos || false);
+      setWithPhotos(initialFilters.withPhotos ?? false);
     }
-  }, [initialFilters]);
+  }, [visible, initialFilters]);
 
-  useEffect(() => {
-    if (visible) {
-      slideAnim.setValue(0);
-      Animated.timing(slideAnim, {
-        toValue: 1,
-        duration: 320,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    } else {
-      slideAnim.setValue(0);
-    }
-  }, [visible, slideAnim]);
-
-  const handleApply = () => {
-    setIsLoading(true);
-    onApply({ ageRange, distance, gender, withPhotos });
-    setIsLoading(false);
+  const handleReset = () => {
+    setAgeRange([18, 45]);
+    setDistance(50);
+    setGender("any");
+    setWithPhotos(false);
   };
 
   return (
-    <Modal visible={visible} animationType="fade" transparent>
-      <View style={styles.overlay}>
-        <Animated.View
-          style={[
-            styles.animatedModal,
-            {
-              transform: [
-                {
-                  translateY: slideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [60, 0],
-                  }),
-                },
-              ],
-              opacity: slideAnim,
-            },
-          ]}
-        >
-          <SafeAreaView style={styles.modalContainer}>
-            <View style={styles.dragIndicatorContainer}>
-              <View style={styles.dragIndicator} />
-            </View>
-            {/* Header */}
-            <View style={styles.headerFlat}>
-              <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-                <Ionicons
-                  name="arrow-back"
-                  size={28}
-                  color={COLORS.textPrimary}
-                />
-              </TouchableOpacity>
-              <Text style={styles.headerTitleFlat}>Podešavanja pretrage</Text>
-              <View style={{ width: 36 }} />
-            </View>
-            {/* Starosni raspon */}
-            <View style={styles.sectionFlat}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.sectionTitleFlat}>Starosni raspon</Text>
-                <Text style={styles.valueTextFlat}>
-                  {ageRange[0]} – {ageRange[1]}
-                </Text>
-              </View>
-              <View style={styles.sliderContainer}>
-                <MultiSlider
-                  values={ageRange}
-                  min={18}
-                  max={99}
-                  step={1}
-                  sliderLength={260}
-                  onValuesChange={(values: number[]) => {
-                    if (values.length === 2)
-                      setAgeRange([values[0], values[1]]);
+    <Modal
+      visible={visible}
+      animationType="slide"
+      transparent={true}
+      statusBarTranslucent
+      onRequestClose={onClose}
+    >
+      {/* Ceo kontejner modala pretvaramo u živu zamućenu površinu */}
+      <BlurView 
+        intensity={35} // Jačina zamućenja (savršeno balansirano da se naslućuje profil iza)
+        tint="light" 
+        style={styles.absoluteBlur}
+      >
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.backdropOverlay}>
+            <TouchableWithoutFeedback>
+              
+              {/* Donji panel koji izranja iz dna ekrana */}
+              <View style={[styles.sheetContainer, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+                
+                {/* Handlebar na vrhu */}
+                <View style={styles.handleRow}>
+                  <View style={styles.handle} />
+                </View>
+
+                {/* Header */}
+                <View style={styles.header}>
+                  <TouchableOpacity onPress={onClose} style={styles.closeBtn} activeOpacity={0.7}>
+                    <Ionicons name="close" size={24} color={COLORS.textPrimary} />
+                  </TouchableOpacity>
+                  <Text style={styles.headerTitle}>Filters</Text>
+                  <TouchableOpacity onPress={handleReset} activeOpacity={0.7} style={styles.resetBtn}>
+                    <Text style={styles.resetText}>Reset</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* PANEL 1: Age & Distance */}
+                <View 
+                  style={styles.glassCard}
+                  onLayout={(e) => {
+                    const { width } = e.nativeEvent.layout;
+                    setSliderWidth(width - 40); 
                   }}
-                  selectedStyle={{ backgroundColor: COLORS.primary }}
-                  unselectedStyle={{ backgroundColor: COLORS.sliderInactive }}
-                  markerStyle={styles.sliderThumbFlat}
-                />
-              </View>
-            </View>
-            <View style={styles.divider} />
-            {/* Udaljenost */}
-            <View style={styles.sectionFlat}>
-              <View style={styles.rowBetween}>
-                <Text style={styles.sectionTitleFlat}>Udaljenost</Text>
-                <Text style={styles.valueTextFlat}>{distance} km</Text>
-              </View>
-              <View style={styles.sliderContainer}>
-                <MultiSlider
-                  values={[distance]}
-                  min={1}
-                  max={200}
-                  step={1}
-                  sliderLength={260}
-                  onValuesChange={(values: number[]) => {
-                    if (values.length === 1) setDistance(values[0]);
-                  }}
-                  selectedStyle={{ backgroundColor: COLORS.primary }}
-                  unselectedStyle={{ backgroundColor: COLORS.sliderInactive }}
-                  markerStyle={styles.sliderThumbFlat}
-                  allowOverlap={false}
-                  snapped
-                />
-              </View>
-            </View>
-            <View style={styles.divider} />
-            {/* Interesuju te */}
-            <View style={styles.sectionFlat}>
-              <Text style={styles.sectionTitleFlat}>Interesuju te</Text>
-              <View style={styles.segmentRowFlat}>
-                {GENDER_OPTIONS.map((opt) => {
-                  let iconName:
-                    | "female-outline"
-                    | "male-outline"
-                    | "people-outline";
-                  if (opt.value === "female") iconName = "female-outline";
-                  else if (opt.value === "male") iconName = "male-outline";
-                  else iconName = "people-outline";
-                  const isActive = gender === opt.value;
-                  return (
-                    <TouchableOpacity
-                      key={opt.value}
-                      style={[
-                        styles.segmentBtnFlat,
-                        isActive && styles.segmentBtnFlatActive,
-                      ]}
-                      onPress={() => setGender(opt.value)}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons
-                        name={iconName}
-                        size={22}
-                        color={isActive ? COLORS.primary : COLORS.textSecondary}
-                        style={{ marginBottom: 2 }}
+                >
+                  {/* Age Section */}
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionLabel}>Age Range</Text>
+                      <Text style={styles.valueText}>{ageRange[0]} – {ageRange[1]}</Text>
+                    </View>
+                    <View style={styles.sliderWrap}>
+                      <MultiSlider
+                        values={ageRange}
+                        min={18}
+                        max={70}
+                        step={1}
+                        sliderLength={sliderWidth}
+                        onValuesChange={(values) => setAgeRange([values[0], values[1]])}
+                        selectedStyle={{ backgroundColor: COLORS.primary, height: 4 }}
+                        unselectedStyle={{ backgroundColor: COLORS.sliderInactive, height: 4 }}
+                        trackStyle={{ height: 4, borderRadius: 2 }}
+                        markerStyle={styles.premiumThumb}
+                        pressedMarkerStyle={styles.premiumThumbPressed}
                       />
-                      <Text
-                        style={[
-                          styles.segmentTextFlat,
-                          isActive && styles.segmentTextFlatActive,
-                        ]}
-                      >
-                        {opt.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                    </View>
+                  </View>
+
+                  <View style={styles.innerDivider} />
+
+                  {/* Distance Section */}
+                  <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                      <Text style={styles.sectionLabel}>Maximum Distance</Text>
+                      <Text style={styles.valueText}>{distance} km</Text>
+                    </View>
+                    <View style={styles.sliderWrap}>
+                      <MultiSlider
+                        values={[distance]}
+                        min={2}
+                        max={150}
+                        step={1}
+                        sliderLength={sliderWidth}
+                        onValuesChange={(values) => setDistance(values[0])}
+                        selectedStyle={{ backgroundColor: COLORS.primary, height: 4 }}
+                        unselectedStyle={{ backgroundColor: COLORS.sliderInactive, height: 4 }}
+                        trackStyle={{ height: 4, borderRadius: 2 }}
+                        markerStyle={styles.premiumThumb}
+                        pressedMarkerStyle={styles.premiumThumbPressed}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* PANEL 2: Gender Segmented */}
+                <View style={styles.glassCard}>
+                  <Text style={styles.cardLabel}>Show Me</Text>
+                  <View style={styles.segmentedControl}>
+                    {GENDER_OPTIONS.map((opt) => {
+                      const isActive = gender === opt.value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          onPress={() => setGender(opt.value)}
+                          activeOpacity={1}
+                          style={[styles.segment, isActive && styles.segmentActive]}
+                        >
+                          <Text style={[styles.segmentText, isActive && styles.segmentTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* PANEL 3: Toggle Switch */}
+                <View style={styles.glassCardRow}>
+                  <View style={styles.toggleTextContainer}>
+                    <Text style={styles.toggleLabel}>Verified Profiles Only</Text>
+                    <Text style={styles.toggleSub}>Show only users with a verified profile photo</Text>
+                  </View>
+                  <Switch
+                    value={withPhotos}
+                    onValueChange={setWithPhotos}
+                    trackColor={{ false: "rgba(15, 23, 42, 0.08)", true: COLORS.primary }}
+                    thumbColor={COLORS.white}
+                    style={{ transform: [{ scaleX: 0.95 }, { scaleY: 0.95 }] }}
+                  />
+                </View>
+
+                {/* Main Action CTA */}
+                <View style={styles.footer}>
+                  <TouchableOpacity
+                    onPress={() => onApply({ ageRange, distance, gender, withPhotos })}
+                    activeOpacity={0.88}
+                    style={styles.applyBtn}
+                  >
+                    <Text style={styles.applyText}>Apply Filters</Text>
+                  </TouchableOpacity>
+                </View>
+
               </View>
-            </View>
-            <View style={styles.divider} />
-            {/* Samo sa fotografijama */}
-            <View style={styles.sectionFlat}>
-              <View style={styles.toggleRowFlat}>
-                <Text style={styles.toggleLabelFlat}>
-                  Samo sa fotografijama
-                </Text>
-                <Switch
-                  value={withPhotos}
-                  onValueChange={setWithPhotos}
-                  trackColor={{
-                    false: COLORS.sliderInactive,
-                    true: COLORS.primary,
-                  }}
-                  thumbColor={withPhotos ? COLORS.primary : COLORS.thumb}
-                />
-              </View>
-            </View>
-            {/* Dugme Primeni */}
-            <View style={styles.applyContainerFlat}>
-              <TouchableOpacity
-                style={[
-                  styles.applyBtnFlat,
-                  isLoading && styles.applyBtnDisabledFlat,
-                ]}
-                onPress={handleApply}
-                disabled={isLoading}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.applyTextFlat}>Primeni</Text>
-              </TouchableOpacity>
-            </View>
-          </SafeAreaView>
-        </Animated.View>
-      </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </BlurView>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  absoluteBlur: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  backdropOverlay: {
+    flex: 1,
+    backgroundColor: COLORS.backdropTint,
     justifyContent: "flex-end",
+  },
+  sheetContainer: {
+    backgroundColor: "rgba(255, 255, 255, 0.85)", // Sam panel je blago proziran dajući ultra-premium ton
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.6)",
+    paddingTop: 6,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -12 },
+    shadowOpacity: 0.08,
+    shadowRadius: 24,
+    elevation: 15,
+  },
+  handleRow: {
     alignItems: "center",
+    paddingVertical: 12,
   },
-  modalContainer: {
-    width: "100%",
-    maxWidth: 480,
-    alignSelf: "center",
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    minHeight: 520,
-    paddingBottom: 0,
-    paddingTop: 0,
-    paddingHorizontal: 0,
-  },
-  dragIndicatorContainer: {
-    alignItems: "center",
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  dragIndicator: {
-    width: 44,
+  handle: {
+    width: 42,
     height: 5,
-    borderRadius: 3,
-    backgroundColor: "#D1D5DB",
-    opacity: 0.7,
+    borderRadius: 2.5,
+    backgroundColor: "rgba(15, 23, 42, 0.15)",
   },
-  headerFlat: {
+  header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingTop: Platform.OS === "android" ? 10 : 0,
-    paddingBottom: 12,
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    paddingHorizontal: 24,
+    paddingBottom: 22,
   },
-  headerBtn: {
-    padding: 8,
-    width: 36,
+  closeBtn: {
+    width: 80,
     alignItems: "flex-start",
   },
-  headerTitleFlat: {
-    fontSize: 21,
-    fontWeight: "bold",
-    color: COLORS.textPrimary,
-    textAlign: "center",
-    flex: 1,
-  },
-  sectionFlat: {
-    paddingHorizontal: 32,
-    paddingVertical: 10,
-    backgroundColor: COLORS.background,
-  },
-  sectionTitleFlat: {
-    fontSize: 14,
+  headerTitle: {
+    fontSize: 19,
     fontWeight: "700",
     color: COLORS.textPrimary,
-    marginBottom: 0,
+    letterSpacing: -0.3,
   },
-  valueTextFlat: {
+  resetBtn: {
+    width: 80,
+    alignItems: "flex-end",
+  },
+  resetText: {
     fontSize: 14,
     color: COLORS.primary,
-    fontWeight: "700",
+    fontWeight: "600",
   },
-  rowBetween: {
+
+  // Premium Frosted Glass Paneli
+  glassCard: {
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    borderRadius: 24,
+    marginHorizontal: 18,
+    marginBottom: 12,
+    paddingVertical: 4,
+  },
+  glassCardRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    backgroundColor: COLORS.cardBg,
+    borderWidth: 1,
+    borderColor: COLORS.cardBorder,
+    borderRadius: 24,
+    marginHorizontal: 18,
+    padding: 20,
+    marginBottom: 24,
   },
-  sliderContainer: {
-    marginTop: 8,
-    marginBottom: 0,
+  section: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  sectionHeader: {
+    flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 12,
+    justifyContent: "space-between",
+    marginBottom: 14,
   },
-  sliderThumbFlat: {
+  sectionLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+  },
+  valueText: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: COLORS.textPrimary,
+  },
+  innerDivider: {
+    height: 1,
+    backgroundColor: "rgba(15, 23, 42, 0.06)",
+    marginHorizontal: 20,
+  },
+  sliderWrap: {
+    alignItems: "center",
+    height: 30,
+    justifyContent: "center",
+  },
+  
+  // Narandžasti moderni klizač sa belim centrom
+  premiumThumb: {
+    height: 24,
+    width: 24,
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    borderWidth: 5,
+    borderColor: COLORS.primary,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  premiumThumbPressed: {
     height: 26,
     width: 26,
     borderRadius: 13,
-    backgroundColor: COLORS.thumb,
-    borderWidth: 2,
-    borderColor: COLORS.thumbBorder,
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 2,
+    borderWidth: 7,
   },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.divider,
-    marginHorizontal: 16,
-    opacity: 0.7,
+
+  cardLabel: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
+    marginBottom: 12,
   },
-  segmentRowFlat: {
+  segmentedControl: {
     flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 8,
-    marginBottom: 2,
-    gap: 14,
+    backgroundColor: "rgba(15, 23, 42, 0.06)",
+    borderRadius: 16,
+    padding: 3,
   },
-  segmentBtnFlat: {
+  segment: {
     flex: 1,
-    flexDirection: "column",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 7,
-    marginHorizontal: 2,
-    borderRadius: 10,
-    backgroundColor: "#F3F4F6",
-    borderWidth: 0,
-    minWidth: 0,
-    minHeight: 36,
+    paddingVertical: 10,
+    borderRadius: 13,
   },
-  segmentBtnFlatActive: {
-    backgroundColor: "#FCE4EC",
-    borderWidth: 1,
-    borderColor: COLORS.primary,
+  segmentActive: {
+    backgroundColor: COLORS.white,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  segmentTextFlat: {
-    color: COLORS.textSecondary,
+  segmentText: {
+    fontSize: 14,
     fontWeight: "600",
-    fontSize: 15,
-    marginTop: 2,
+    color: COLORS.textSecondary,
   },
-  segmentTextFlatActive: {
-    color: COLORS.primary,
+  segmentTextActive: {
+    color: COLORS.textPrimary,
     fontWeight: "700",
   },
-  toggleRowFlat: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginTop: 0,
+
+  toggleTextContainer: {
+    flex: 1,
+    marginRight: 16,
   },
-  toggleLabelFlat: {
-    fontSize: 16,
+  toggleLabel: {
+    fontSize: 15,
+    fontWeight: "600",
     color: COLORS.textPrimary,
   },
-  applyContainerFlat: {
-    width: "100%",
-    backgroundColor: COLORS.background,
-    paddingHorizontal: 36,
-    paddingVertical: 24,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.divider,
-    alignItems: "center",
-    justifyContent: "center",
+  toggleSub: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+    lineHeight: 16,
   },
-  applyBtnFlat: {
+
+  footer: {
+    paddingHorizontal: 18,
+  },
+  applyBtn: {
     width: "100%",
-    maxWidth: 420,
-    backgroundColor: COLORS.primary,
+    paddingVertical: 16,
     borderRadius: 22,
-    paddingVertical: 13,
+    backgroundColor: COLORS.primary,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 4,
   },
-  applyBtnDisabledFlat: {
-    backgroundColor: COLORS.disabled,
-  },
-  applyTextFlat: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  animatedModal: {
-    width: "100%",
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
+  applyText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

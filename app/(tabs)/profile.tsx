@@ -1,26 +1,24 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useFocusEffect, useRouter } from "expo-router";
-import React, { useCallback } from "react";
+import { useRouter } from "expo-router";
+import React from "react";
 import {
-    ActivityIndicator,
-    Image,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Image,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import Icon from "react-native-vector-icons/MaterialIcons";
+import { AntDesign, Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BenefitMarquee from "../../components/BenefitMarquee";
 import Header from "../../components/Header";
 import MonetizationPackages from "../../components/MonetizationPackages";
 import { useAuthContext } from "../../context/AuthContext";
 import { useFilterModal } from "../../context/FilterModalContext";
-// ✨ 1. DODATO: Uvozimo `useProfileContext`
 import { useProfileContext } from "../../context/ProfileContext";
 
-// ... (calculateAge funkcija ostaje ista)
 const calculateAge = (birthDateString?: string | null): number | null => {
   if (!birthDateString) return null;
   const birthDate = new Date(birthDateString);
@@ -28,20 +26,37 @@ const calculateAge = (birthDateString?: string | null): number | null => {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const m = today.getMonth() - birthDate.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
-    age--;
-  }
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) age--;
   return age;
 };
 
+const calculateCompletion = (profile: NonNullable<ReturnType<typeof useProfileContext>["profile"]>): number => {
+  const fields: boolean[] = [
+    !!profile.fullName,
+    (profile.profilePictures?.length ?? 0) > 0,
+    !!profile.bio,
+    !!profile.jobTitle,
+    !!profile.height,
+    !!profile.horoscope,
+    !!profile.workout,
+    !!profile.diet,
+    !!profile.relationshipType,
+    (profile.interests?.length ?? 0) > 0,
+    (profile.languages?.length ?? 0) > 0,
+  ];
+  return Math.round((fields.filter(Boolean).length / fields.length) * 100);
+};
+
 const COLORS = {
-  primary: "#E91E63",
-  background: "#fefefe",
-  textPrimary: "#222",
-  textSecondary: "#555",
-  cardBackground: "#fff",
-  shadowColor: "#000",
-  editButton: "#E91E63",
+  primary: "#ff7f00",
+  background: "#F4F5F7",
+  card: "#FFFFFF",
+  textPrimary: "#1a1a1a",
+  textSecondary: "#999",
+  textPlaceholder: "#C8C8C8",
+  border: "#ECECEC",
+  iconBg: "#fff5ec",
+  iconBorder: "#ffd0a8",
 };
 
 export default function ProfileScreen() {
@@ -49,177 +64,141 @@ export default function ProfileScreen() {
   const { user } = useAuthContext();
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { profile, isLoading: isProfileLoading } = useProfileContext();
+  const insets = useSafeAreaInsets();
 
-  // ✨ 2. KLJUČNA IZMENA: Koristimo podatke direktno iz Contexta!
-  const {
-    profile,
-    isLoading: isProfileLoading,
-    isRefetching,
-  } = useProfileContext();
-
-  // ✨ 3. UKLONJENO: Ceo `useQuery` blok koji je bio ovde je obrisan.
-
-  useFocusEffect(
-    useCallback(() => {
-      // Ovaj deo je i dalje koristan, on osvežava podatke kada se vratimo na ekran
-      if (user?.id) {
-        queryClient.invalidateQueries({ queryKey: ["userProfile", user.id] });
-      }
-    }, [user, queryClient])
-  );
-
-  if (isProfileLoading || isRefetching) {
+  // Prikazujemo loader samo pri prvom učitavanju, ne pri svakom fokusu
+  if (isProfileLoading && !profile) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={{ color: COLORS.textSecondary, marginTop: 10 }}>
-          Učitavanje profila...
-        </Text>
-      </SafeAreaView>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="small" color={COLORS.primary} />
+      </View>
     );
   }
 
   if (!profile) {
     return (
-      <SafeAreaView style={styles.loadingContainer}>
-        <Text style={{ color: COLORS.textSecondary }}>
-          Došlo je do greške pri učitavanju profila.
-        </Text>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.errorText}>Failed to load profile.</Text>
         <TouchableOpacity
-          style={styles.retryButton}
+          style={styles.retryBtn}
           onPress={() =>
-            queryClient.invalidateQueries({
-              queryKey: ["userProfile", user?.id],
-            })
+            queryClient.invalidateQueries({ queryKey: ["userProfile", user?.id] })
           }
         >
-          <Text style={{ color: COLORS.textPrimary }}>Pokušaj ponovo</Text>
+          <Text style={styles.retryBtnText}>Try again</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </View>
     );
   }
 
   const age = calculateAge(profile.birthDate);
   const avatarSource =
-    profile.profilePictures && profile.profilePictures.length > 0
-      ? { uri: profile.profilePictures[0] }
-      : null;
+    profile.profilePictures?.[0] ? { uri: profile.profilePictures[0] } : null;
+  const completion = calculateCompletion(profile);
 
   return (
-    <SafeAreaView style={styles.mainContainer}>
+    <View style={styles.container}>
       <Header onFilterClick={showModal} />
-      <ScrollView contentContainerStyle={styles.scrollContentContainer}>
-        <View style={styles.profileHeaderSection}>
-          {avatarSource ? (
-            <Image source={avatarSource} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder]}>
-              <Text style={styles.avatarPlaceholderText}>
-                {profile.fullName?.[0] || "?"}
-              </Text>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}
+      >
+        {/* ── HERO CARD ─────────────────────────────── */}
+        <View style={styles.heroCard}>
+          <View style={styles.heroTop}>
+            <View style={styles.avatarContainer}>
+              {avatarSource ? (
+                <Image source={avatarSource} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.avatarEmpty]}>
+                  <Ionicons name="person-outline" size={32} color={COLORS.textPlaceholder} />
+                </View>
+              )}
+              <View style={styles.onlineDot} />
             </View>
-          )}
-          <View style={styles.nameContainer}>
-            <Text style={styles.name}>
-              {profile.fullName}
-              {age !== null ? `, ${age}` : ""}
-            </Text>
-            <TouchableOpacity
-              activeOpacity={0.8}
-              style={styles.editButton}
-              onPress={() => router.push("/profile/editProfile")}
-            >
-              <Icon
-                name="edit"
-                size={18}
-                color="#fff"
-                style={{ marginRight: 6 }}
-              />
-              <Text style={styles.editButtonText}>Izmeni profil</Text>
-            </TouchableOpacity>
+
+            <View style={styles.heroInfo}>
+              <Text style={styles.heroName} numberOfLines={1}>
+                {profile.fullName}
+                {age !== null && <Text style={styles.heroAge}>, {age}</Text>}
+              </Text>
+              <View style={styles.premiumBadge}>
+                <Ionicons name="flash" size={11} color={COLORS.primary} />
+                <Text style={styles.premiumBadgeText}>VibrA Premium</Text>
+              </View>
+            </View>
           </View>
+
+          <View style={styles.divider} />
+
+          <View style={styles.completionRow}>
+            <View style={styles.completionInfo}>
+              <Text style={styles.completionLabel}>Profile completion</Text>
+              <Text style={styles.completionValue}>{completion}%</Text>
+            </View>
+            <View style={styles.progressTrack}>
+              <View style={[styles.progressFill, { width: `${completion}%` as any }]} />
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.editBtn}
+            onPress={() => router.push("/profile/editProfile")}
+            activeOpacity={0.8}
+          >
+            <AntDesign name="edit" size={15} color="#fff" />
+            <Text style={styles.editBtnText}>Edit Profile</Text>
+          </TouchableOpacity>
         </View>
 
         <MonetizationPackages />
-        <BenefitMarquee />
+        <View style={{ marginHorizontal: -20 }}>
+          <BenefitMarquee />
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  mainContainer: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  scrollContentContainer: {
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.background,
-  },
-  retryButton: {
-    marginTop: 20,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: "#eee",
-    borderRadius: 25,
-  },
-  profileHeaderSection: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 20,
-    marginBottom: 40,
-  },
-  avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#ddd",
-  },
-  avatarPlaceholder: {
-    justifyContent: "center",
-    alignItems: "center",
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scroll: { paddingHorizontal: 20, paddingTop: 8 },
+  loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: COLORS.background },
+  errorText: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 12 },
+  retryBtn: { paddingVertical: 10, paddingHorizontal: 20, backgroundColor: COLORS.card, borderRadius: 12, borderWidth: 1, borderColor: COLORS.border },
+  retryBtnText: { fontSize: 14, fontWeight: "600", color: COLORS.textPrimary },
+  heroCard: {
+    backgroundColor: COLORS.card,
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 16,
     borderWidth: 1,
-    borderColor: "#ccc",
-  },
-  avatarPlaceholderText: {
-    fontSize: 40,
-    color: "#999",
-    fontWeight: "700",
-  },
-  nameContainer: {
-    marginLeft: 20,
-    flex: 1,
-  },
-  name: {
-    fontSize: 28,
-    fontWeight: "700",
-    color: COLORS.textPrimary,
-    marginBottom: 12,
-  },
-  editButton: {
-    flexDirection: "row",
-    backgroundColor: COLORS.editButton,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    borderRadius: 25,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "flex-start",
-    shadowColor: COLORS.editButton,
+    borderColor: COLORS.border,
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 6,
+    elevation: 3,
   },
-  editButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "600",
-  },
+  heroTop: { flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 },
+  avatarContainer: { position: "relative" },
+  avatar: { width: 76, height: 76, borderRadius: 38, borderWidth: 2.5, borderColor: COLORS.iconBorder },
+  avatarEmpty: { backgroundColor: COLORS.iconBg, alignItems: "center", justifyContent: "center" },
+  onlineDot: { position: "absolute", bottom: 2, right: 2, width: 14, height: 14, borderRadius: 7, backgroundColor: "#10B981", borderWidth: 2, borderColor: "#fff" },
+  heroInfo: { flex: 1, gap: 6 },
+  heroName: { fontSize: 22, fontWeight: "700", color: COLORS.textPrimary, letterSpacing: -0.5 },
+  heroAge: { fontWeight: "300", color: COLORS.textSecondary },
+  premiumBadge: { flexDirection: "row", alignItems: "center", gap: 4, alignSelf: "flex-start", backgroundColor: COLORS.iconBg, borderWidth: 1, borderColor: COLORS.iconBorder, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+  premiumBadgeText: { fontSize: 11, fontWeight: "700", color: COLORS.primary, letterSpacing: 0.3 },
+  divider: { height: 1, backgroundColor: COLORS.border, marginBottom: 16 },
+  completionRow: { marginBottom: 16, gap: 8 },
+  completionInfo: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  completionLabel: { fontSize: 13, fontWeight: "600", color: COLORS.textSecondary },
+  completionValue: { fontSize: 13, fontWeight: "700", color: COLORS.primary },
+  progressTrack: { height: 6, backgroundColor: COLORS.border, borderRadius: 3, overflow: "hidden" },
+  progressFill: { height: "100%", backgroundColor: COLORS.primary, borderRadius: 3 },
+  editBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: COLORS.primary, paddingVertical: 13, borderRadius: 14, shadowColor: COLORS.primary, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 4 },
+  editBtnText: { fontSize: 15, fontWeight: "700", color: "#fff", letterSpacing: 0.2 },
 });

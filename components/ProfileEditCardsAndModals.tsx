@@ -47,7 +47,7 @@ const screens = {
   smokes: "/(modals)/smokes",
   workout: "/(modals)/workout",
   sexualOrientation: "/(modals)/sexualOrientation",
-  religion: "/(modals)/religion",
+  
 };
 
 interface ProfileEditCardsAndModalsProps {
@@ -74,7 +74,7 @@ const SECTIONS = [
   },
   {
     title: 'Background',
-    items: ['education', 'job', 'horoscope', 'religion'],
+    items: ['education', 'job', 'horoscope'],
   },
   {
     title: 'Location',
@@ -120,7 +120,6 @@ const ProfileEditCardsAndModals = ({
       case 'education': return { title: 'Education', value: profile.education?.length ? profile.education.join(', ') : null, screenKey: 'education', params: { currentEducation: JSON.stringify(profile.education) }, icon: 'school-outline' };
       case 'job': return { title: 'Job', value: profile.jobTitle || null, screenKey: 'job', params: { currentJobTitle: profile.jobTitle || '' }, icon: 'briefcase-outline' };
       case 'horoscope': return { title: 'Horoscope', value: profile.horoscope || null, screenKey: 'horoscope', params: { currentHoroscope: profile.horoscope || '' }, icon: 'planet-outline' };
-      case 'religion': return { title: 'Religion', value: (profile as any).religion || null, screenKey: 'religion', params: {}, icon: 'sparkles-outline' };
       default: return null;
     }
   };

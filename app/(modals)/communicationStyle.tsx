@@ -1,303 +1,272 @@
-// app/(modals)/communication-style.tsx - Implementacija kao standardni ekran (bez react-native-modal)
-
 import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Platform,
   FlatList,
-  StatusBar,
-  Dimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { AntDesign } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useAuthContext } from '../../context/AuthContext';
-import { useProfileContext } from '../../context/ProfileContext'; // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
+import { useProfileContext } from '../../context/ProfileContext';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const API_B = process.env.EXPO_PUBLIC_API_BASE_URL;
 
-const { width } = Dimensions.get('window');
-const wp = (percentage: number) => (width * percentage) / 100;
-const RF = (size: number) => size * (width / 375);
-
 const COLORS = {
-  primary: '#E91E63', // Akcentna ružičasta
-  textPrimary: '#1A1A1A', // Tamni tekst
-  textSecondary: '#6B7280', // Sekundarni sivi tekst
-  background: '#F8F8F8', // Svetlo siva pozadina (opšti background)
-  cardBackground: '#FFFFFF', // Bela pozadina za kartice/modale
-  border: '#E0E0E0', // Svetla ivica
-  white: '#FFFFFF', // Bela
-  danger: '#DC3545', // Crvena za greške
-  selectedChip: '#FFEBF1', // Svetlija nijansa primary boje za selektovane čipove
-  selectedChipBorder: '#E91E63',
-  headerShadow: 'rgba(0, 0, 0, 0.08)', // Definisana senka za header
+  primary: '#ff7f00',
+  textPrimary: '#1a1a1a',
+  textSecondary: '#999',
+  textPlaceholder: '#C8C8C8',
+  background: '#fff',
+  border: '#ECECEC',
+  selectedBg: '#fff5ec',
+  selectedBorder: '#ffd0a8',
+  iconBg: '#fff5ec',
+  iconBorder: '#ffd0a8',
 };
 
-const communicationStyles = [
-  { style: 'Ležerno i opušteno', description: 'Opušteno ćaskanje i neobavezni razgovori.' },
-  { style: 'Intelektualno i duboko', description: 'Duboki razgovori o idejama, umetnosti i životu.' },
-  { style: 'Duhovito i šaljivo', description: 'Komunikacija puna šala, humora i zabavnih dosetki.' },
-  { style: 'Direktno i iskreno', description: 'Jasna, direktna komunikacija bez okolišanja.' },
-  { style: 'Emotivno i podržavajuće', description: 'Komunikacija usmerena na deljenje osećanja i podršku.' },
-  { style: 'Organizovano i precizno', description: 'Preferira planirane, strukturirane razgovore.' },
+const OPTIONS = [
+  { value: 'Casual and relaxed', emoji: '😊', description: 'Laid-back chats and easygoing conversations.' },
+  { value: 'Intellectual and deep', emoji: '🧠', description: 'Deep discussions about ideas, art, and life.' },
+  { value: 'Witty and playful', emoji: '😄', description: 'Full of jokes, humor, and fun exchanges.' },
+  { value: 'Direct and honest', emoji: '🎯', description: 'Clear, straightforward communication with no beating around the bush.' },
+  { value: 'Emotional and supportive', emoji: '💛', description: 'Focused on sharing feelings and offering support.' },
+  { value: 'Organized and precise', emoji: '📋', description: 'Prefers planned, structured conversations.' },
 ];
-
-// Tipizacija
-interface MutationPayload { field: string; value: any; }
-type UpdateableProfileField = 'communicationStyle';
-interface UserProfile { communicationStyle: string | null; [key: string]: any; }
-
 
 export default function CommunicationStyleScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { user } = useAuthContext();
-  const { setProfileField } = useProfileContext(); // <-- DODATO ZA AŽURIRANJE LOKALNOG CONTEXTA
+  const { setProfileField } = useProfileContext();
   const queryClient = useQueryClient();
+  const insets = useSafeAreaInsets();
 
-  // Učitavanje početnog stila komunikacije iz params-a
-  const initialStyle: string = useMemo(() => {
-    // Ako params.currentStyle postoji i string je, koristi ga, inače prazan string.
-    return typeof params.currentStyle === 'string' ? params.currentStyle : '';
-  }, [params.currentStyle]);
+  const initialStyle = typeof params.currentStyle === 'string' ? params.currentStyle : '';
+  const [selected, setSelected] = useState(initialStyle);
+  const hasChanges = selected !== initialStyle;
 
-  const [selectedStyle, setSelectedStyle] = useState<string>(initialStyle);
+  useEffect(() => { setSelected(initialStyle); }, [initialStyle]);
 
-  // Proverava da li je došlo do promene u odnosu na početni stil
-  const hasChanges = useMemo(() => selectedStyle !== initialStyle, [selectedStyle, initialStyle]);
-
-  // Resetuje stanje kada se ekran inicijalizuje ili kada se initialStyle promeni (mada se ne bi trebalo menjati)
-  useEffect(() => {
-    setSelectedStyle(initialStyle);
-  }, [initialStyle]);
-
-
-  const updateProfileMutation = useMutation({
-    mutationFn: async (payload: MutationPayload) => {
+  const mutation = useMutation({
+    mutationFn: async (payload: { field: string; value: any }) => {
       if (!user?.token) throw new Error("Token not available");
-      const response = await axios.put(
-        `${API_B}/api/user/update-profile`,
-        payload,
-        {
-          headers: {
-            'Authorization': `Bearer ${user.token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      return response.data;
-    },
-    onSuccess: (data, variables) => {
-      const fieldName = 'communicationStyle' as const;
-      const newValue = variables.value;
-
-      // KORAK A: AŽURIRANJE LOKALNOG CONTEXTA (Brza sinhronizacija)
-      setProfileField(fieldName, newValue);
-
-      // KORAK B: DIREKTNO AŽURIRANJE QUERY KEŠA (Optimistično ažuriranje)
-      queryClient.setQueryData(['userProfile', user?.id], (oldData: any) => {
-        if (!oldData) return oldData;
-        return {
-          ...oldData,
-          [fieldName]: newValue,
-        };
+      return await axios.put(`${API_B}/api/user/update-profile`, payload, {
+        headers: { Authorization: `Bearer ${user.token}` },
       });
-      
-      // KORAK C: TRENUTNO AŽURIRANJE LOKALNOG STANJA MODALA (Vizuelna potvrda)
-      setSelectedStyle(newValue);
-
-      // KORAK D: Zatvaranje modala
+    },
+    onSuccess: (_, variables) => {
+      setProfileField('communicationStyle', variables.value);
+      queryClient.setQueryData(['userProfile', user?.id], (old: any) =>
+        old ? { ...old, communicationStyle: variables.value } : old
+      );
       router.back();
     },
     onError: (error: any) => {
-      console.error('Greška pri čuvanju stila komunikacije:', error.response?.data || error.message);
-      Alert.alert('Greška', `Došlo je do greške prilikom čuvanja stila komunikacije: ${error.response?.data?.message || error.message}`);
+      Alert.alert('Error', error.response?.data?.message || error.message);
     },
   });
 
   const handleSave = () => {
-    if (!selectedStyle) {
-      Alert.alert('Greška', 'Molimo odaberite stil komunikacije pre nego što sačuvate.');
-      return;
-    }
-    if (!hasChanges || updateProfileMutation.isPending) return;
-    updateProfileMutation.mutate({ field: 'communicationStyle', value: selectedStyle });
+    if (!selected || !hasChanges || mutation.isPending) return;
+    mutation.mutate({ field: 'communicationStyle', value: selected });
   };
 
-  const renderItem = ({ item }: { item: { style: string; description: string } }) => {
-    const isSelected = item.style === selectedStyle;
+  const renderItem = ({ item }: { item: typeof OPTIONS[0] }) => {
+    const isSelected = item.value === selected;
     return (
       <TouchableOpacity
-        style={[
-          styles.itemContainer,
-          isSelected && styles.itemContainerSelected,
-          updateProfileMutation.isPending && styles.itemContainerDisabled // Onemogući vizuelno tokom čuvanja
-        ]}
-        onPress={() => setSelectedStyle(item.style)}
-        disabled={updateProfileMutation.isPending} // Onemogući klik tokom čuvanja
+        style={[styles.option, isSelected && styles.optionSelected]}
+        onPress={() => setSelected(item.value)}
+        disabled={mutation.isPending}
+        activeOpacity={0.7}
       >
-        <Text style={[styles.itemTitle, isSelected && styles.itemTitleSelected]}>
-          {item.style}
-        </Text>
-        <Text style={[styles.itemDescription, isSelected && styles.itemDescriptionSelected]}>
-          {item.description}
-        </Text>
+        <View style={[styles.optionEmoji, isSelected && styles.optionEmojiSelected]}>
+          <Text style={styles.emojiText}>{item.emoji}</Text>
+        </View>
+        <View style={styles.optionContent}>
+          <Text style={[styles.optionTitle, isSelected && styles.optionTitleSelected]}>
+            {item.value}
+          </Text>
+          <Text style={styles.optionDescription}>{item.description}</Text>
+        </View>
         {isSelected && (
-          <Ionicons
-            name="checkmark-circle"
-            size={RF(24)} // Responzivna veličina ikone
-            color={COLORS.primary}
-            style={styles.checkmarkIcon}
-          />
+          <Ionicons name="checkmark-circle" size={22} color={COLORS.primary} />
         )}
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.cardBackground} />
+    <View style={[styles.container, { paddingBottom: insets.bottom || 16 }]}>
 
-      {/* Header View */}
+      {/* Drag handle */}
+      <View style={styles.dragHandle} />
+
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} disabled={updateProfileMutation.isPending}>
-          <Ionicons name="close-outline" size={RF(30)} color={COLORS.textPrimary} />
+        <TouchableOpacity style={styles.closeBtn} onPress={() => router.back()} disabled={mutation.isPending}>
+          <AntDesign name="close" size={20} color="#1a1a1a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Stil komunikacije</Text>
+        <Text style={styles.headerTitle}>Communication style</Text>
         <TouchableOpacity
-          style={styles.saveBtn}
+          style={[styles.saveBtn, hasChanges && selected && styles.saveBtnActive]}
           onPress={handleSave}
-          disabled={!hasChanges || updateProfileMutation.isPending || !selectedStyle} // Dodatno onemogućeno ako nema stila
+          disabled={!hasChanges || !selected || mutation.isPending}
+          activeOpacity={0.8}
         >
-          {updateProfileMutation.isPending ? (
-            <ActivityIndicator color={COLORS.primary} />
+          {mutation.isPending ? (
+            <ActivityIndicator color="#fff" size="small" />
           ) : (
-            <Text style={[
-              styles.saveBtnText,
-              { color: (!hasChanges || !selectedStyle) ? COLORS.textSecondary : COLORS.primary } // Boja teksta
-            ]}>
-              Sačuvaj
+            <Text style={[styles.saveBtnText, hasChanges && selected && styles.saveBtnTextActive]}>
+              Save
             </Text>
           )}
         </TouchableOpacity>
       </View>
 
-      {/* Content View */}
+      {/* Subtitle */}
+      <Text style={styles.subtitle}>How do you prefer to communicate?</Text>
+
+      {/* List */}
       <FlatList
-        data={communicationStyles}
+        data={OPTIONS}
         renderItem={renderItem}
-        keyExtractor={(item) => item.style}
-        contentContainerStyle={styles.container}
+        keyExtractor={(item) => item.value}
+        contentContainerStyle={styles.list}
         showsVerticalScrollIndicator={false}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  container: {
     flex: 1,
-    backgroundColor: COLORS.background, // Pozadina celog ekrana
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#E0E0E0',
+    alignSelf: 'center',
+    marginTop: 12,
+    marginBottom: 8,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: wp(4),
-    paddingVertical: wp(2.5),
-    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) + wp(2) : wp(2.5),
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.cardBackground,
-    ...Platform.select({
-      ios: {
-        shadowColor: COLORS.headerShadow,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.2,
-        shadowRadius: 5,
-      },
-      android: {
-        elevation: 6,
-      },
-    }),
-    zIndex: 10,
+    marginBottom: 16,
   },
   closeBtn: {
-    padding: wp(1.5),
-  },
-  saveBtn: {
-    padding: wp(1.5),
-  },
-  saveBtnText: {
-    fontSize: RF(16),
-    fontWeight: '600',
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerTitle: {
-    fontSize: RF(18),
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '700',
     color: COLORS.textPrimary,
-    flex: 1,
-    textAlign: 'center',
-    marginHorizontal: wp(2),
+    letterSpacing: -0.3,
   },
-  container: {
-    padding: wp(5), // Responzivni padding
-    paddingBottom: wp(10), // Malo više paddinga na dnu za FlatList
-    backgroundColor: COLORS.background,
+  saveBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#F5F5F5',
   },
-  itemContainer: {
-    backgroundColor: COLORS.cardBackground,
-    borderRadius: RF(15), // Responzivni border radius
-    padding: wp(5), // Responzivni padding
-    marginBottom: wp(3), // Responzivni margin
-    borderWidth: 1,
+  saveBtnActive: {
+    backgroundColor: COLORS.primary,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  saveBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.textPlaceholder,
+  },
+  saveBtnTextActive: {
+    color: '#fff',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+  },
+  list: {
+    paddingBottom: 24,
+  },
+  option: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
     borderColor: COLORS.border,
-    position: 'relative',
-    shadowColor: '#000', // Diskretna senka
-    shadowOffset: { width: 0, height: RF(1) },
-    shadowOpacity: 0.05,
-    shadowRadius: RF(3),
+    backgroundColor: '#fff',
+    marginBottom: 10,
+    gap: 12,
+  },
+  optionSelected: {
+    borderColor: COLORS.selectedBorder,
+    backgroundColor: COLORS.selectedBg,
+    shadowColor: COLORS.primary,
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  itemContainerSelected: {
-    borderColor: COLORS.selectedChipBorder,
-    backgroundColor: COLORS.selectedChip,
-    shadowColor: COLORS.selectedChipBorder,
-    shadowOffset: { width: 0, height: RF(4) }, // Jača senka
-    shadowOpacity: 0.1,
-    shadowRadius: RF(10),
-    elevation: 5,
+  optionEmoji: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  itemContainerDisabled: {
-    opacity: 0.6, // Smanjena neprozirnost kada je onemogućeno
+  optionEmojiSelected: {
+    backgroundColor: COLORS.iconBg,
+    borderWidth: 1,
+    borderColor: COLORS.iconBorder,
   },
-  itemTitle: {
-    fontSize: RF(18), // Responzivni font size
-    fontWeight: 'bold',
+  emojiText: {
+    fontSize: 20,
+  },
+  optionContent: {
+    flex: 1,
+  },
+  optionTitle: {
+    fontSize: 15,
+    fontWeight: '600',
     color: COLORS.textPrimary,
+    marginBottom: 2,
   },
-  itemTitleSelected: {
+  optionTitleSelected: {
     color: COLORS.primary,
   },
-  itemDescription: {
-    fontSize: RF(14), // Responzivni font size
-    color: COLORS.textSecondary, // Sekundarna boja za opis
-    marginTop: wp(1), // Responzivni margin
-  },
-  itemDescriptionSelected: {
-    color: COLORS.textSecondary, // Ostaje ista boja za opis i kada je selektovano
-  },
-  checkmarkIcon: {
-    position: 'absolute',
-    right: wp(4), // Responzivna pozicija
-    top: wp(4), // Responzivna pozicija
+  optionDescription: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    lineHeight: 16,
   },
 });

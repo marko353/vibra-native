@@ -11,12 +11,12 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    Platform,
     View,
 } from "react-native";
 import Header from "../../../components/Header";
 import { useAuthContext } from "../../../context/AuthContext";
 import { useSocketContext } from "../../../context/SocketContext";
+import { showMatchNotification } from "../../../hooks/usePushNotifications";
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL;
 const DEFAULT_AVATAR = "https://placekitten.com/70/70";
@@ -47,6 +47,8 @@ interface ApiData {
   newMatches: Match[];
   conversations: Conversation[];
 }
+
+export type { ApiData, Match };
 
 const formatTimestamp = (isoString?: string): string | null => {
   if (!isoString) return null;

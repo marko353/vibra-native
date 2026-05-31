@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApps, initializeApp } from "@react-native-firebase/app";
+import notifee from "@notifee/react-native"; // 💡 Dodat notifee za resetovanje bedža
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Slot, useRouter, useSegments } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -20,8 +21,6 @@ import { useMatchToast } from "../hooks/useMatchToast";
 import { usePushNotifications } from "../hooks/usePushNotifications";
 import AnimatedSplash from "./AnimatedSplash";
 
-declare const global: typeof globalThis;
-
 if (!getApps().length) {
   initializeApp(firebaseConfig);
 }
@@ -32,13 +31,21 @@ function AppContent() {
   const { user, loading, token } = useAuthContext();
   const router = useRouter();
   const segments = useSegments();
-  const { toastData, visible, showMatchToast, hideMatchToast } =
-    useMatchToast();
+  const { toastData, visible, showMatchToast, hideMatchToast } = useMatchToast();
   const appState = useRef(AppState.currentState);
   const isNavigatingToReset = useRef(false);
   const [isResolvingInitialUrl, setIsResolvingInitialUrl] = useState(true);
 
   usePushNotifications(token, showMatchToast);
+
+  // ─── 💡 LOGIKA ZA RESET BEDŽA KADA SE APLIKACIJA OTRE ILI PROMENI EKRAN ───
+  useEffect(() => {
+    if (user) {
+      notifee.setBadgeCount(0)
+        .then(() => console.log("🧼 [Notifee] Crveni bedž resetovan na 0."))
+        .catch(err => console.error("❌ [Notifee] Greška pri resetu bedža:", err));
+    }
+  }, [user, segments]); // Okida se na promenu tabova / navigaciju
 
   // ─── Deep link handler ────────────────────────────────────────
   useEffect(() => {
@@ -68,7 +75,6 @@ function AppContent() {
       }
     };
 
-    // Proveri initial URL (cold start)
     Linking.getInitialURL().then((url) => {
       console.log("🔗 [Linking] Initial URL:", url);
       handleUrl(url);
@@ -78,7 +84,6 @@ function AppContent() {
       setIsResolvingInitialUrl(false);
     });
 
-    // Slušaj URL events (app u backgroundu)
     const subscription = Linking.addEventListener("url", ({ url }) =>
       handleUrl(url),
     );
@@ -115,15 +120,6 @@ function AppContent() {
     if (isOnResetPassword || isNavigatingToReset.current) return;
 
     const handleNavigation = async () => {
-      console.log(
-        "🔍 [handleNavigation] user:",
-        !!user,
-        "| inAuthFlow:",
-        inAuthFlow,
-        "| segments:",
-        segments,
-      );
-
       if (!user) {
         if (!inAuthFlow && !inSignupFlow) router.replace("/(auth)/login");
         return;
@@ -172,7 +168,13 @@ function AppContent() {
       async (nextState) => {
         const wasBackground = appState.current === "background";
         appState.current = nextState;
+        
         if (wasBackground && nextState === "active") {
+          // 💡 Kada se aplikacija vrati iz pozadine u aktivno stanje, obriši bedž
+          try {
+            await notifee.setBadgeCount(0);
+          } catch (err) {}
+
           try {
             const raw = await AsyncStorage.getItem("pendingNotificationData");
             if (raw) {

@@ -31,19 +31,19 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
     <View style={[styles.toggleContainer, isView && styles.toggleContainerView]}>
       <TouchableOpacity
         onPress={() => setMode('edit')}
-        style={[styles.toggleBtn, mode === 'edit' && styles.toggleBtnActive]}
+        style={[styles.toggleBtn, mode === 'view' && styles.toggleBtnActive]}
         activeOpacity={0.8}
       >
-        <Text style={[styles.toggleText, mode === 'edit' && styles.toggleTextActive]}>
+        <Text style={[styles.toggleText, mode === 'view' && styles.toggleTextActive]}>
           Edit
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
         onPress={() => setMode('view')}
-        style={[styles.toggleBtn, mode === 'view' && styles.toggleBtnActive]}
+        style={[styles.toggleBtn, mode === 'edit' && styles.toggleBtnActive]}
         activeOpacity={0.8}
       >
-        <Text style={[styles.toggleText, mode === 'view' && styles.toggleTextActive]}>
+        <Text style={[styles.toggleText, mode === 'edit' && styles.toggleTextActive]}>
           Preview
         </Text>
       </TouchableOpacity>
@@ -51,10 +51,9 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
   );
 
   return (
-    <SafeAreaView style={styles.safeArea} edges={['top']}>
+<SafeAreaView style={[styles.safeArea, { backgroundColor: mode === 'view' ? 'transparent' : 'transparent' }]}>
       <View style={styles.header}>
 
-        {/* Back button */}
         <View style={styles.sideContainer}>
           <TouchableOpacity
             style={[styles.backBtn, isView && styles.backBtnView]}
@@ -65,12 +64,10 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
           </TouchableOpacity>
         </View>
 
-        {/* Center toggle */}
         <View style={styles.centerContainer}>
           {mode === 'edit' && <ToggleButtons />}
         </View>
 
-        {/* Right side */}
         <View style={[styles.sideContainer, styles.alignRight]}>
           {mode === 'edit' ? (
             <TouchableOpacity
@@ -93,12 +90,14 @@ const ProfileHeader: React.FC<ProfileHeaderProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     width: '100%',
+    backgroundColor: 'transparent',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
+    paddingTop: 0,
     height: 56,
   },
   sideContainer: {

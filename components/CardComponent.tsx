@@ -18,7 +18,6 @@ import {
   TapGestureHandlerStateChangeEvent,
 } from "react-native-gesture-handler";
 import Animated, {
-  Extrapolate,
   interpolate,
   runOnJS,
   useAnimatedStyle,
@@ -27,18 +26,18 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import Icon from "react-native-vector-icons/Ionicons";
-// Koristimo centralnu definiciju tipa
 import { UserProfile } from "../context/ProfileContext";
 
 const { width, height } = Dimensions.get("window");
-const CARD_WIDTH = width * 1;
-const SWIPE_THRESHOLD = width * 0.25;
+const CARD_WIDTH = width;
+const SWIPE_THRESHOLD = width * 0.27;
 
-// Definisanje strukture za pojedinačnu info stavku
+const ORANGE = "#FF6A00";
+
 interface InfoItemData {
   icon: string;
   text: string | number;
-  label?: string; // Koristi se za Interesovanja / Languages
+  label?: string;
 }
 
 interface CardProps {
@@ -51,18 +50,18 @@ interface CardProps {
   cardStyle?: StyleProp<ViewStyle>;
 }
 
-// Komponenta za prikaz pojedinačne informacije (jedna ikonica + tekst)
 const InfoItem = ({ icon, text }: { icon: string; text: string | number }) => (
-  <View style={styles.infoItem}>
-    <Icon name={icon} size={18} color="#fff" />
-    <Text style={styles.infoText}>{text}</Text>
+  <View style={styles.infoBadge}>
+    <Icon name={icon} size={13} color="rgba(255,255,255,0.9)" />
+    <Text style={styles.infoBadgeText} numberOfLines={1}>
+      {text}
+    </Text>
   </View>
 );
 
-// Komponenta za prikaz grupisanih tabova (za Interesovanja)
 const TabItem = ({ text }: { text: string | number }) => (
-  <View style={styles.tabItem}>
-    <Text style={styles.tabText}>{text}</Text>
+  <View style={styles.interestBadge}>
+    <Text style={styles.interestBadgeText}>{text}</Text>
   </View>
 );
 
@@ -80,8 +79,6 @@ const Card: React.FC<CardProps> = ({
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
   const scaleOnTap = useSharedValue(1);
-
-  const [prevImageUri, setPrevImageUri] = useState<string | null>(null);
   const imageOpacity = useSharedValue(1);
   const prevImageOpacity = useSharedValue(0);
 
@@ -97,25 +94,18 @@ const Card: React.FC<CardProps> = ({
   };
 
   const age = calculateAge(user.birthDate);
-  const imageUri =
-    user.profilePictures?.[currentImageIndex] ||
-    "https://placehold.co/500x700?text=No+Image";
+  const imageUri = user.profilePictures?.[currentImageIndex] || "https://placehold.co/500x700?text=No+Image";
+  const [prevImageUri, setPrevImageUri] = useState<string | null>(imageUri);
 
-  // 🔥 Crossfade između slika
   useEffect(() => {
-    if (imageUri) {
-      setPrevImageUri((prev) => {
-        if (prev === imageUri) return prev;
-        return prev ? prev : imageUri;
-      });
-
-      prevImageOpacity.value = 1;
-      imageOpacity.value = 0;
-
-      prevImageOpacity.value = withTiming(0, { duration: 350 });
-      imageOpacity.value = withTiming(1, { duration: 350 });
-    }
-  }, [currentImageIndex, imageUri]); // Dodata imageUri u dependencies
+    if (!imageUri || prevImageUri === imageUri) return;
+    prevImageOpacity.value = 1;
+    imageOpacity.value = 0;
+    prevImageOpacity.value = withTiming(0, { duration: 280 });
+    imageOpacity.value = withTiming(1, { duration: 280 }, () => {
+      runOnJS(setPrevImageUri)(imageUri);
+    });
+  }, [currentImageIndex, imageUri]);
 
   const onGestureEvent = (event: PanGestureHandlerGestureEvent) => {
     "worklet";
@@ -129,25 +119,20 @@ const Card: React.FC<CardProps> = ({
       const { state, translationX, velocityX } = event.nativeEvent;
       if (state === State.END) {
         const swipeSpeed = Math.abs(velocityX);
-        const shouldSwipeRight =
-          translationX > SWIPE_THRESHOLD ||
-          (translationX > 0 && swipeSpeed > 800);
-        const shouldSwipeLeft =
-          translationX < -SWIPE_THRESHOLD ||
-          (translationX < 0 && swipeSpeed > 800);
+        const shouldSwipeRight = translationX > SWIPE_THRESHOLD || (translationX > 0 && swipeSpeed > 800);
+        const shouldSwipeLeft = translationX < -SWIPE_THRESHOLD || (translationX < 0 && swipeSpeed > 800);
+
         if (shouldSwipeRight || shouldSwipeLeft) {
           const direction = shouldSwipeRight ? "right" : "left";
           const userId = user._id || "";
           translateX.value = withTiming(
             width * (direction === "right" ? 1.5 : -1.5),
-            { duration: 300 },
-            () => {
-              runOnJS(onSwipe)(userId, direction);
-            }
+            { duration: 250 },
+            () => { runOnJS(onSwipe)(userId, direction); }
           );
         } else {
-          translateX.value = withSpring(0);
-          translateY.value = withSpring(0);
+          translateX.value = withSpring(0, { damping: 15 });
+          translateY.value = withSpring(0, { damping: 15 });
         }
       }
     },
@@ -160,8 +145,8 @@ const Card: React.FC<CardProps> = ({
       if (event.nativeEvent.state === State.ACTIVE) {
         const isLeftTap = event.nativeEvent.x < CARD_WIDTH / 2;
         runOnJS(onImageChange)(isLeftTap ? "left" : "right");
-        scaleOnTap.value = withTiming(0.97, { duration: 100 }, () => {
-          scaleOnTap.value = withTiming(1, { duration: 100 });
+        scaleOnTap.value = withTiming(0.985, { duration: 80 }, () => {
+          scaleOnTap.value = withTiming(1, { duration: 120 });
         });
       }
     },
@@ -169,18 +154,8 @@ const Card: React.FC<CardProps> = ({
   );
 
   const animatedStyle = useAnimatedStyle(() => {
-    const rotateZ = interpolate(
-      translateX.value,
-      [-width / 2, width / 2],
-      [-15, 15],
-      Extrapolate.CLAMP
-    );
-    const scale = interpolate(
-      Math.abs(translateX.value),
-      [0, width / 2],
-      [1, 0.95],
-      Extrapolate.CLAMP
-    );
+    const rotateZ = interpolate(translateX.value, [-width / 2, width / 2], [-10, 10], "clamp");
+    const scale = interpolate(Math.abs(translateX.value), [0, width / 2], [1, 0.96], "clamp");
     return {
       transform: [
         { translateX: translateX.value },
@@ -191,179 +166,168 @@ const Card: React.FC<CardProps> = ({
     };
   });
 
-  const animatedImageStyle = useAnimatedStyle(() => ({
-    opacity: imageOpacity.value,
+  const animatedImageStyle = useAnimatedStyle(() => ({ opacity: imageOpacity.value }));
+  const animatedPrevImageStyle = useAnimatedStyle(() => ({ opacity: prevImageOpacity.value }));
+
+  const likeOpacity = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [20, 100], [0, 1], "clamp"),
   }));
-  const animatedPrevImageStyle = useAnimatedStyle(() => ({
-    opacity: prevImageOpacity.value,
+  const nopeOpacity = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [-20, -100], [0, 1], "clamp"),
   }));
 
-  // --- NOVA LOGIKA ZA DINAMIČKI PRIKAZ INFORMACIJA ---
+  // Info bedževi
   const allAvailableInfo: InfoItemData[][] = [];
-
-  // Helper za dodavanje pojedinačne stavke (koja se prikazuje kao InfoItem)
-  // Ispravljeno: Dodat 'null' u listu dozvoljenih tipova za ulazni argument 'text'
-  const addSingleInfo = (
-    icon: string,
-    text: string | number | undefined | null
-  ) => {
-    // Proverava da li je vrednost validna (nije undefined, null, ili prazan string)
-    if (text) {
-      // Svaka stavka je array od jednog elementa za InfoRow
-      allAvailableInfo.push([{ icon, text }]);
-    }
+  const addSingleInfo = (icon: string, text: string | number | undefined | null) => {
+    if (text) allAvailableInfo.push([{ icon, text }]);
   };
 
-  // 1. Prioritet: Lokacija (prikaz samo ako je showLocation uključen)
   if (user.showLocation && user.location?.locationCity) {
     addSingleInfo("location-outline", user.location.locationCity);
   }
-
-  // 2. Prioritet: Tip veze
   addSingleInfo("heart-outline", user.relationshipType);
-
-  // 3. Prioritet: Posao/Zanimanje
   addSingleInfo("briefcase-outline", user.jobTitle);
 
-  // 4. Prioritet: Jezici (prikazuje se kao jedna linija)
   if (user.languages?.length) {
-    allAvailableInfo.push([
-      {
-        icon: "language-outline",
-        // Spajamo sve jezike u jedan string
-        text: user.languages.join(", "),
-      },
-    ]);
+    allAvailableInfo.push([{ icon: "language-outline", text: user.languages.join(", ") }]);
   }
 
-  // 5. Prioritet: Interesovanja (Specijalni slučaj: Prikazuje se do 6 tabova)
-  const validInterests = (user.interests || []).slice(0, 6);
+  const validInterests = (user.interests || []).slice(0, 5);
   if (validInterests.length > 0) {
-    // Dodajemo poseban "slot" za interesovanja
     allAvailableInfo.push([
-      // Prvi element je labela, ostali su tabovi
-      { icon: "sparkles-outline", text: "Interesovanja", label: "header" },
+      { icon: "sparkles", text: "Interesovanja", label: "header" },
       ...validInterests.map((i) => ({ icon: "", text: i, label: "tab" })),
     ]);
   }
-  // --- KRAJ LOGIKE ZA INFO LISTU ---
 
-  // Odabir seta informacija za trenutnu sliku (rotacija)
   const infoCount = allAvailableInfo.length;
+  const visibleInfoSet = currentImageIndex < infoCount ? allAvailableInfo[currentImageIndex] : [];
+  const isInterestsSet = visibleInfoSet.length > 0 && visibleInfoSet[0].label === "header";
 
-  // Prikazuje se samo ako je currentImageIndex manji od infoCount.
-  const visibleInfoSet =
-    currentImageIndex < infoCount ? allAvailableInfo[currentImageIndex] : [];
-
-  // Proveravamo da li je trenutni set Interesovanja
-  const isInterestsSet =
-    visibleInfoSet.length > 0 && visibleInfoSet[0].label === "header";
+  const totalImages = (user.profilePictures || []).length;
 
   const CardView = () => (
     <View style={styles.card}>
-      {/* Pozadinski blur sloj */}
-      <Image
-        source={{ uri: imageUri }}
-        style={styles.imageBackground}
-        blurRadius={20}
+      {/* Blurred background */}
+      <Image source={{ uri: imageUri }} style={styles.imageBackground} blurRadius={20} />
+
+      {/* Crossfade images */}
+      {prevImageUri && (
+        <Animated.Image source={{ uri: prevImageUri }} style={[styles.imageMain, animatedPrevImageStyle]} />
+      )}
+      <Animated.Image source={{ uri: imageUri }} style={[styles.imageMain, animatedImageStyle]} />
+
+      {/* Top gradient — za vidljivost indikatora */}
+      <LinearGradient
+        colors={["rgba(0,0,0,0.35)", "transparent"]}
+        style={styles.gradientTop}
       />
 
-      {/* Prethodna slika (fade out) */}
-      {prevImageUri && (
-        <Animated.Image
-          source={{ uri: prevImageUri }}
-          style={[styles.imageMain, animatedPrevImageStyle]}
-        />
+      {/* Like/Nope overlays */}
+      {isTopCard && (
+        <>
+          <Animated.View style={[styles.swipeOverlay, styles.likeOverlay, likeOpacity]}>
+            <View style={styles.swipeBadge}>
+              <Icon name="heart" size={22} color="#4ADE80" />
+              <Text style={[styles.swipeBadgeText, { color: "#4ADE80" }]}>LIKE</Text>
+            </View>
+          </Animated.View>
+          <Animated.View style={[styles.swipeOverlay, styles.nopeOverlay, nopeOpacity]}>
+            <View style={styles.swipeBadge}>
+              <Icon name="close" size={22} color="#FF4757" />
+              <Text style={[styles.swipeBadgeText, { color: "#FF4757" }]}>NOPE</Text>
+            </View>
+          </Animated.View>
+        </>
       )}
 
-      {/* Nova slika (fade in) */}
-      <Animated.Image
-        source={{ uri: imageUri }}
-        style={[styles.imageMain, animatedImageStyle]}
-      />
-
+      {/* Bottom gradient */}
       <LinearGradient
-        colors={["transparent", "rgba(0,0,0,0.5)", "rgba(0,0,0,0.9)"]}
+        colors={[
+          "transparent",
+          "rgba(0,0,0,0.1)",
+          "rgba(0,0,0,0.65)",
+          "rgba(0,0,0,0.95)",
+        ]}
+        locations={[0, 0.45, 0.72, 1]}
         style={styles.gradientBottom}
       />
 
-      {/* Indikatori */}
-      <View style={styles.indicators}>
-        {(user.profilePictures || []).map((_, index) => (
-          <View
-            key={index}
-            style={[
-              styles.indicator,
-              currentImageIndex === index && styles.indicatorActive,
-            ]}
-          />
-        ))}
-      </View>
-
-      {/* Info sekcija */}
-      <View style={styles.infoSection}>
-        <Text style={styles.name}>
-          {user.fullName} {age ? `${age}` : ""}
-        </Text>
-
-        {/* Prikazivanje Interesovanja (kao tabovi) ili jedne Info Stavke */}
-        <View style={styles.infoRow}>
-          {isInterestsSet ? (
-            <>
-              {/* Naslov za interesovanja */}
-              <Text style={styles.infoGroupHeader}>
-                {visibleInfoSet[0].text}:
-              </Text>
-              {/* Tabovi za interesovanja, počevši od drugog elementa u setu */}
-              {visibleInfoSet.slice(1).map((item, i) => (
-                <TabItem key={i} text={item.text} />
-              ))}
-            </>
-          ) : (
-            // Prikaz jedne standardne info stavke
-            visibleInfoSet.map((item, i) => (
-              <InfoItem key={i} icon={item.icon} text={item.text} />
-            ))
-          )}
+      {/* Photo indicators */}
+      {totalImages > 1 && (
+        <View style={styles.indicators}>
+          {user.profilePictures!.map((_, index) => (
+            <View
+              key={index}
+              style={[
+                styles.indicator,
+                currentImageIndex === index && styles.indicatorActive,
+              ]}
+            />
+          ))}
         </View>
-      </View>
+      )}
 
-      <TouchableOpacity
-        style={styles.infoButton}
-        onPress={() => onInfoPress(user)}
-      >
-        <Icon name="information-circle-outline" size={32} color="#fff" />
-      </TouchableOpacity>
+      {/* Bottom info */}
+      <View style={styles.infoSection}>
+        <View style={styles.titleRow}>
+          <Text style={styles.name} numberOfLines={1}>
+            {user.fullName}
+            <Text style={styles.age}>  {age}</Text>
+          </Text>
+        </View>
+
+        {visibleInfoSet.length > 0 && (
+          <View style={styles.infoRow}>
+            {isInterestsSet ? (
+              <>
+                <View style={styles.interestHeaderIcon}>
+                  <Icon name="sparkles" size={13} color={ORANGE} />
+                </View>
+                {visibleInfoSet.slice(1).map((item, i) => (
+                  <TabItem key={i} text={item.text} />
+                ))}
+              </>
+            ) : (
+              visibleInfoSet.map((item, i) => (
+                <InfoItem key={i} icon={item.icon} text={item.text} />
+              ))
+            )}
+          </View>
+        )}
+      </View>
     </View>
+  );
+
+  const InfoButton = () => (
+    <TouchableOpacity
+      style={styles.infoButton}
+      onPress={() => onInfoPress(user)}
+      activeOpacity={0.75}
+    >
+      <View style={styles.infoButtonInner}>
+        <Icon name="information-circle-outline" size={24} color="rgba(255,255,255,0.95)" />
+      </View>
+    </TouchableOpacity>
   );
 
   if (!isTopCard) {
     return (
-      <View
-        style={[
-          styles.cardWrapper,
-          { transform: [{ scale: 0.92 }], opacity: 0.9 },
-          cardStyle,
-        ]}
-      >
+      <View style={[styles.cardWrapper, styles.backCardStyle, cardStyle]}>
         <CardView />
       </View>
     );
   }
 
   return (
-    <PanGestureHandler
-      onGestureEvent={onGestureEvent}
-      onHandlerStateChange={onPanHandlerStateChange}
-    >
+    <PanGestureHandler onGestureEvent={onGestureEvent} onHandlerStateChange={onPanHandlerStateChange}>
       <Animated.View style={[styles.cardWrapper, animatedStyle, cardStyle]}>
         <TapGestureHandler onHandlerStateChange={onTapHandlerStateChange}>
-          <Animated.View
-            style={{ flex: 1, borderRadius: 25, overflow: "hidden" }}
-          >
+          <Animated.View style={styles.innerCardContainer}>
             <CardView />
           </Animated.View>
         </TapGestureHandler>
+        <InfoButton />
       </Animated.View>
     </PanGestureHandler>
   );
@@ -374,28 +338,34 @@ export default Card;
 const styles = StyleSheet.create({
   cardWrapper: {
     width: CARD_WIDTH,
-
-    height: height * 0.78,
-    borderRadius: 25,
+    height: "100%",
+    borderRadius: 24,
     position: "absolute",
     alignSelf: "center",
-
-    // Dodaj senku da kartica ne izgleda ravno na pravom ekranu
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 10, // Za Android
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  backCardStyle: {
+    transform: [{ scale: 0.94 }, { translateY: 10 }],
+    opacity: 0.8,
+  },
+  innerCardContainer: {
+    flex: 1,
+    borderRadius: 24,
+    overflow: "hidden",
   },
   card: {
     flex: 1,
-    borderRadius: 25,
-    backgroundColor: "#000",
+    borderRadius: 24,
+    backgroundColor: "#0f172a",
     overflow: "hidden",
   },
   imageBackground: {
     ...StyleSheet.absoluteFillObject,
-    opacity: 0.5,
+    opacity: 0.35,
   },
   imageMain: {
     width: "100%",
@@ -403,90 +373,158 @@ const styles = StyleSheet.create({
     resizeMode: "cover",
     position: "absolute",
   },
+  gradientTop: {
+    position: "absolute",
+    top: 0,
+    height: "18%",
+    width: "100%",
+    zIndex: 10,
+  },
   gradientBottom: {
     position: "absolute",
     bottom: 0,
-    height: "50%",
+    height: "65%",
     width: "100%",
+  },
+  swipeOverlay: {
+    position: "absolute",
+    top: 52,
+    zIndex: 30,
+  },
+  likeOverlay: { left: 20 },
+  nopeOverlay: { right: 20 },
+  swipeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderWidth: 2,
+    borderColor: "currentColor",
+  },
+  swipeBadgeText: {
+    fontSize: 15,
+    fontWeight: "800",
+    letterSpacing: 1,
   },
   indicators: {
     position: "absolute",
-    top: 10,
-    left: 15,
-    right: 15,
+    top: 0,
+    left: 0,
+    right: 0,
     flexDirection: "row",
+    gap: 3,
+    zIndex: 25,
+    paddingHorizontal: 8,
+    paddingTop: 10,
+    paddingBottom: 28,
+    backgroundColor: "transparent",
   },
   indicator: {
     flex: 1,
     height: 3,
     borderRadius: 2,
-    backgroundColor: "rgba(255,255,255,0.4)",
-    marginHorizontal: 3,
+    backgroundColor: "rgba(255,255,255,0.3)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.8,
+    shadowRadius: 3,
+    elevation: 4,
   },
   indicatorActive: {
-    backgroundColor: "#c2aeaeff",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 4,
+    elevation: 5,
   },
   infoSection: {
     position: "absolute",
-    bottom: 70,
-    left: 20,
-    right: 20,
+    bottom: 40,
+    left: 18,
+    right: 68,
+    zIndex: 10,
+  },
+  titleRow: {
+    marginBottom: 10,
   },
   name: {
-    fontSize: 34, // Malo veći font za bolji naglasak
-    fontWeight: "800", // Jači bold
-    color: "#fff",
-    marginBottom: 8, // Dodat razmak
-    textShadowColor: "rgba(0, 0, 0, 0.7)",
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
+    fontSize: 28,
+    fontWeight: "800",
+    color: "#FFFFFF",
+    letterSpacing: -0.5,
+    textShadowColor: "rgba(0,0,0,0.4)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  age: {
+    fontSize: 22,
+    fontWeight: "300",
+    color: "rgba(255,255,255,0.82)",
+    letterSpacing: 0,
   },
   infoRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    marginTop: 8,
+    gap: 6,
+    alignItems: "center",
   },
-  infoItem: {
+  infoBadge: {
     flexDirection: "row",
     alignItems: "center",
-    // Sada je cela stavka samostalna, bez marginRight-a
-    marginRight: 12,
-    marginBottom: 6,
-  },
-  infoText: {
-    color: "#fff",
-    fontSize: 18, // Malo veći font za samostalnu stavku
-    fontWeight: "600",
-    marginLeft: 10, // Veći razmak od ikonice
-  },
-  infoGroupHeader: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    marginRight: 10,
-    marginBottom: 10,
-  },
-  tabItem: {
-    backgroundColor: "rgba(255, 255, 255, 0.25)", // Poluprovidna pozadina za tab
-    borderRadius: 15,
-    paddingHorizontal: 10,
+    gap: 5,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderRadius: 20,
+    paddingHorizontal: 11,
     paddingVertical: 5,
-    marginRight: 8,
-    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: "rgba(255,106,0,0.5)",
   },
-  tabText: {
-    color: "#fff",
-    fontSize: 14,
+  infoBadgeText: {
+    color: "rgba(255,255,255,0.92)",
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.1,
+  },
+  interestHeaderIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 9,
+    backgroundColor: "rgba(255,106,0,0.2)",
+    borderWidth: 1,
+    borderColor: "rgba(255,106,0,0.35)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  interestBadge: {
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderRadius: 20,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: "rgba(255,106,0,0.5)",
+  },
+  interestBadgeText: {
+    color: "rgba(255,255,255,0.88)",
+    fontSize: 12,
     fontWeight: "600",
   },
   infoButton: {
     position: "absolute",
-    top: 40,
-    right: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    bottom: 40,
+    right: 16,
+    zIndex: 20,
+  },
+  infoButtonInner: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "rgba(0,0,0,0.3)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.28)",
     justifyContent: "center",
     alignItems: "center",
   },

@@ -6,45 +6,35 @@ import {
   TouchableOpacity,
   Dimensions,
 } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
 
-/* ================= TYPES ================= */
-
 interface LikesCTAProps {
   isPremium: boolean;
-  onPress?: () => void; // otvara paywall / premium modal
+  onPress?: () => void;
 }
 
-/* ================= COMPONENT ================= */
-
 const LikesCTA: React.FC<LikesCTAProps> = ({ isPremium, onPress }) => {
-  // ✅ Ako user ima premium – CTA se uopšte ne prikazuje
   if (isPremium) return null;
 
   return (
     <View style={styles.wrapper}>
-      <TouchableOpacity activeOpacity={0.9} onPress={onPress}>
-        <LinearGradient
-          colors={['#f9d976', '#f39f86', '#f76b1c']} // Tinder Gold vibe
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-          style={styles.button}
-        >
-          <Text style={styles.title}>Vidi kome se sviđaš</Text>
-          <Text style={styles.subtitle}>
-            Otkrij sve lajkove uz Premium
-          </Text>
-        </LinearGradient>
+      <TouchableOpacity activeOpacity={0.88} onPress={onPress} style={styles.button}>
+        <View style={styles.iconBox}>
+          <Ionicons name="flash" size={16} color="#ff7f00" />
+        </View>
+        <View style={styles.textBlock}>
+          <Text style={styles.title}>See who likes you</Text>
+          <Text style={styles.subtitle}>Unlock all likes with Premium</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={18} color="rgba(255,127,0,0.5)" />
       </TouchableOpacity>
     </View>
   );
 };
 
 export default LikesCTA;
-
-/* ================= STYLES ================= */
 
 const styles = StyleSheet.create({
   wrapper: {
@@ -55,27 +45,45 @@ const styles = StyleSheet.create({
     zIndex: 100,
   },
   button: {
-    width: width * 0.85,
-    borderRadius: 30,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
+    width: width * 0.88,
+    flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+    gap: 12,
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: '#ffd0a8',
+    shadowColor: '#ff7f00',
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
     elevation: 6,
   },
+  iconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#fff5ec',
+    borderWidth: 1,
+    borderColor: '#ffd0a8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  textBlock: {
+    flex: 1,
+  },
   title: {
-    color: '#1c1c1c',
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1a1a1a',
+    letterSpacing: -0.2,
   },
   subtitle: {
-    marginTop: 4,
-    color: '#1c1c1c',
-    fontSize: 13,
-    fontWeight: '600',
-    opacity: 0.85,
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '500',
+    marginTop: 1,
   },
 });

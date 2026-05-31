@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { Image } from "expo-image";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const COLORS = {
   white: "#FFFFFF",
@@ -22,17 +23,17 @@ const COLORS = {
   cardBg: "#16161A",
 };
 
-type CarouselItemProps = { item: string; height: number };
+type CarouselItemProps = { item: string; width: number; height: number };
 type IndicatorProps = { index: number; currentIndex: number };
 
 // Premium kartica sa unutrašnjim ivicama
-const CarouselItem = memo(({ item, height }: CarouselItemProps) => (
-  <View style={[styles.carouselCard, { height: height }]}>
+const CarouselItem = memo(({ item, width, height }: CarouselItemProps) => (
+  <View style={[styles.carouselCard, { width: width, height: height }]}>
     <Image 
       source={{ uri: item }} 
       style={styles.carouselImage} 
       contentFit="cover"
-      contentPosition="center" // Sada radi savršeno jer je kontejner u 3:4 proporciji
+      contentPosition="center"
       transition={300}
     />
   </View>
@@ -76,102 +77,147 @@ export default function ProfileCarousel({
   const [currentIndex, setCurrentIndex] = useState(0);
   const { width: screenWidth } = useWindowDimensions();
   
+  // Dinamičko preuzimanje bezbednih margina uređaja
+  const insets = useSafeAreaInsets();
+  
   // ── MATEMATIKA ZA ZAŠTITU PROPORCIJA ──
-  // Kartica zauzima tačno 90% širine ekrana
-  const carouselWidth = screenWidth * 0.90; 
-  // Visina se računa po formuli za 3:4 portrait odnos (širina * 1.333)
-  const carouselHeight = (carouselWidth * 4) / 3;
+  const cardWidth = screenWidth * 0.90; 
+  const cardHeight = (cardWidth * 4) / 3;
 
   const renderItem = useCallback(
-    ({ item }: { item: string }) => <CarouselItem item={item} height={carouselHeight} />,
-    [carouselHeight]
+    ({ item }: { item: string }) => (
+      <CarouselItem item={item} width={cardWidth} height={cardHeight} />
+    ),
+    [cardWidth, cardHeight]
   );
 
+  // Kombinovani stil koji dinamički dodaje bezbedan gornji prostor
+  const dynamicWrapperStyle = [
+    styles.mainWrapper,
+    { 
+      paddingTop: Math.max(insets.top, 20),
+      paddingBottom: Math.max(insets.bottom, 20) 
+    }
+  ];
+
+  // Slučaj 1: Nema slika uopšte
   if (filteredImages.length === 0) {
     return (
-      <View style={[styles.noImagesContainer, { height: carouselHeight }]}>
-        <Ionicons name="images-outline" size={36} color="#333" />
-        <Text style={styles.noImagesText}>Nema fotografija</Text>
+      <View style={dynamicWrapperStyle}>
+        <View style={[styles.noImagesContainer, { width: cardWidth, height: cardHeight }]}>
+          <Ionicons name="images-outline" size={36} color="#444" />
+          <Text style={styles.noImagesText}>Nema fotografija</Text>
+        </View>
+        <RenderProfileInfo 
+          fullName={fullName} 
+          age={age} 
+          showLocation={showLocation} 
+          locationCity={locationCity} 
+          filteredImages={filteredImages} 
+          currentIndex={currentIndex} 
+        />
       </View>
     );
   }
 
   return (
-    <View style={styles.mainWrapper}>
+    <View style={dynamicWrapperStyle}>
       
-      {/* Glavni Carousel sa fiksiranom 3:4 visinom */}
-      <View style={{ height: carouselHeight, width: screenWidth }}>
-        <Carousel
-          loop={false}
-          style={styles.carouselStyle}
-          width={screenWidth}
-          height={carouselHeight}
-          snapEnabled={true}
-          pagingEnabled={true}
-          mode="horizontal-stack"
-          modeConfig={{
-            snapDirection: "left",
-            stackInterval: 18, 
-            scaleInterval: 0.08, 
-          }}
-          data={filteredImages}
-          onSnapToItem={setCurrentIndex}
-          renderItem={renderItem}
-        />
-      </View>
-
-      {/* Info Panel ispod kartice (Sada ima više mesta i izgleda prozračno) */}
-      <View style={styles.metaContainer}>
-        
-        {/* Indikatori slika */}
-        {filteredImages.length > 1 && (
-          <View style={styles.dotsRow}>
-            {filteredImages.map((_, i) => (
-              <DotIndicator key={i} index={i} currentIndex={currentIndex} />
-            ))}
-          </View>
+      {/* Glavni vizuelni kontejner */}
+      <View style={[styles.centerAligner, { height: cardHeight }]}>
+        {filteredImages.length === 1 ? (
+          // Slučaj 2: Tačno jedna slika (Izbegavamo bagoviti Stack Carousel)
+          <CarouselItem item={filteredImages[0]} width={cardWidth} height={cardHeight} />
+        ) : (
+          // Slučaj 3: Više slika (Carousel radi bezbedno i fluidno)
+          <Carousel
+            loop={false}
+            style={{ width: cardWidth, height: cardHeight }}
+            width={cardWidth}
+            height={cardHeight}
+            snapEnabled={true}
+            pagingEnabled={true}
+            mode="horizontal-stack"
+            modeConfig={{
+              snapDirection: "left",
+              stackInterval: 18, 
+              scaleInterval: 0.08, 
+            }}
+            data={filteredImages}
+            onSnapToItem={setCurrentIndex}
+            renderItem={renderItem}
+          />
         )}
-
-        {/* Informacije profila */}
-        <View style={styles.infoBlock}>
-          <Text numberOfLines={1} style={styles.nameText}>
-            {fullName || "Neko Poseban"}
-            {age != null && <Text style={styles.ageText}>{`, ${age}`}</Text>}
-          </Text>
-
-          {showLocation && locationCity && (
-            <View style={styles.locationRow}>
-              <View style={styles.livePulse} />
-              <Text style={styles.locationText}>{locationCity}</Text>
-            </View>
-          )}
-        </View>
-
       </View>
+
+      {/* Info Panel ispod kartice */}
+      <RenderProfileInfo 
+        fullName={fullName} 
+        age={age} 
+        showLocation={showLocation} 
+        locationCity={locationCity} 
+        filteredImages={filteredImages} 
+        currentIndex={currentIndex} 
+      />
     </View>
   );
 }
 
+interface InfoProps extends Omit<ProfileCarouselProps, 'images'> {
+  filteredImages: string[];
+  currentIndex: number;
+}
+
+const RenderProfileInfo = ({ fullName, age, showLocation, locationCity, filteredImages, currentIndex }: InfoProps) => (
+  <View style={styles.metaContainer}>
+    
+    {/* Indikatori slika (Prikazuju se samo ako ima više od 1 slike) */}
+    {filteredImages.length > 1 && (
+      <View style={styles.dotsRow}>
+        {filteredImages.map((_, i) => (
+          <DotIndicator key={i} index={i} currentIndex={currentIndex} />
+        ))}
+      </View>
+    )}
+
+    {/* Informacije profila */}
+    <View style={styles.infoBlock}>
+      <Text numberOfLines={1} style={styles.nameText}>
+        {fullName || "Neko Poseban"}
+        {age != null && <Text style={styles.ageText}>{`, ${age}`}</Text>}
+      </Text>
+
+      {showLocation && locationCity && (
+        <View style={styles.locationRow}>
+          <View style={styles.livePulse} />
+          <Text style={styles.locationText}>{locationCity}</Text>
+        </View>
+      )}
+    </View>
+  </View>
+);
+
 const styles = StyleSheet.create({
   mainWrapper: {
+    flex: 1,
     width: "100%",
     backgroundColor: COLORS.darkBg,
-    paddingTop: 10,
+    justifyContent: "center", // Savršeno vertikalno centriranje na svim rezolucijama
   },
-  carouselStyle: {
+  centerAligner: {
     width: "100%",
-    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 60,
   },
   carouselCard: {
-    width: "90%", 
-    alignSelf: "center",
     borderRadius: 28, 
     overflow: "hidden",
     backgroundColor: COLORS.cardBg,
     borderWidth: 1,
     borderColor: "rgba(255, 255, 255, 0.08)", 
     
-    // Premium senka
+    // Premium senka (sada radi stabilno na Androidu i iOS-u)
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.4,
@@ -184,7 +230,7 @@ const styles = StyleSheet.create({
   },
   metaContainer: {
     paddingHorizontal: 24,
-    marginTop: 20, // Malo više prostora ispod izdužene kartice
+    marginTop: 20,
     flexDirection: "column",
     gap: 12,
   },
@@ -229,7 +275,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.2,
   },
   noImagesContainer: {
-    width: "90%",
     alignSelf: "center",
     justifyContent: "center",
     alignItems: "center",
