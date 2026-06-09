@@ -1,3 +1,11 @@
+const orig = Object.defineProperty;
+Object.defineProperty = function(obj, prop, descriptor) {
+  if (prop === 'NONE') {
+    console.log('🔴 NONE defined by:', new Error().stack);
+  }
+  return orig(obj, prop, descriptor);
+};
+
 import { registerRootComponent } from "expo";
 import { ExpoRoot } from "expo-router";
 import notifee, {
